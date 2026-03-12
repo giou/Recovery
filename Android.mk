@@ -609,6 +609,10 @@ TWRP_REQUIRED_MODULES += \
 endif
 
 TWRP_REQUIRED_MODULES += \
+    hwservicemanager \
+    hwservicemanager.rc \
+    vndservicemanager \
+    vndservicemanager.rc \
     plat_service_contexts \
     servicemanager \
     servicemanager.rc
