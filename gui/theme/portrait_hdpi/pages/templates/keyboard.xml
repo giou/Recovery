@@ -2,35 +2,6 @@
 <recovery>
 	<templates>
 		<template name="keyboardterminaltemplate">
-			<image>
-				<condition var1="key_numbar" op="!=" var2="1"/>
-				<condition var1="tw_hide_kb" var2="0"/>
-				<placement x="0" y="%keyboard_terminal_y%" placement="2"/>
-				<image resource="nav_shadow"/>
-				<condition var1="show_shadow" var2="1"/>
-			</image>
-			<image>
-				<condition var1="key_numbar" var2="1"/>
-				<condition var1="tw_hide_kb" var2="0"/>
-				<placement x="0" y="%keyboard_term_num_y%" placement="2"/>
-				<image resource="nav_shadow"/>
-				<condition var1="show_shadow" var2="1"/>
-			</image>
-
-			<fill color="%linecolor%">
-				<condition var1="show_shadow" var2="2"/>
-				<condition var1="key_numbar" var2="1"/>
-				<condition var1="tw_hide_kb" var2="0"/>
-				<placement x="0" y="%keyboard_term_num_y%" w="1080" h="2"/>
-			</fill>
-			
-			<fill color="%linecolor%">
-				<condition var1="show_shadow" var2="2"/>
-				<condition var1="key_numbar" op="!=" var2="1"/>
-				<condition var1="tw_hide_kb" var2="0"/>
-				<placement x="0" y="%keyboard_terminal_y%" w="1080" h="2"/>
-			</fill>
-			
 			<keyboard>
 				<condition var1="key_numbar" op="!=" var2="1"/>
 				<condition var1="tw_hide_kb" var2="0"/>
@@ -78,36 +49,6 @@
 		</template>
 		
 		<template name="keyboardtemplate">
-			<image>
-				<condition var1="key_numbar" op="!=" var2="1"/>
-				<condition var1="tw_hide_kb" var2="0"/>
-				<placement x="0" y="%keyboard_y%" placement="2"/>
-				<image resource="nav_shadow"/>
-				<condition var1="show_shadow" var2="1"/>
-			</image>
-			
-			<image>
-				<condition var1="key_numbar" var2="1"/>
-				<condition var1="tw_hide_kb" var2="0"/>
-				<placement x="0" y="%keyboard_num_y%" placement="2"/>
-				<image resource="nav_shadow"/>
-				<condition var1="show_shadow" var2="1"/>
-			</image>
-			
-			<fill color="%linecolor%">
-				<condition var1="show_shadow" var2="2"/>
-				<condition var1="key_numbar" var2="1"/>
-				<condition var1="tw_hide_kb" var2="0"/>
-				<placement x="0" y="%keyboard_num_y%" w="1080" h="2"/>
-			</fill>
-			
-			<fill color="%linecolor%">
-				<condition var1="show_shadow" var2="2"/>
-				<condition var1="key_numbar" op="!=" var2="1"/>
-				<condition var1="tw_hide_kb" var2="0"/>
-				<placement x="0" y="%keyboard_y%" w="1080" h="2"/>
-			</fill>
-			
 			<keyboard>
 				<condition var1="key_numbar" var2="1"/>
 				<condition var1="tw_hide_kb" var2="0"/>
@@ -172,35 +113,13 @@
 				</layout4>
 			</keyboard>
 
-			<template name="navbar_bkg_nobg"/>
-
-			<fill color="%keyboard_dark_bg%">
-				<condition var1="tw_hide_kb" var2="0"/>
-				<condition var1="navbar_bkg" var2="1"/>
-				<placement x="0" y="%row_nav_y%" w="%screen_w%" h="%nav_h%"/>
-			</fill>
-
 			<fill color="%keyboard_bg%">
 				<condition var1="tw_hide_kb" var2="0"/>
-				<condition var1="navbar_bkg" var2="0"/>
 				<placement x="0" y="%row_nav_y%" w="%screen_w%" h="%nav_h%"/>
 			</fill>
 		</template>
 		
 		<template name="keyboardnum">
-			<image>
-				<condition var1="tw_hide_kb" var2="0"/>
-				<placement x="0" y="%keyboard_y%" placement="2"/>
-				<image resource="nav_shadow"/>
-				<condition var1="show_shadow" var2="1"/>
-			</image>
-			
-			<fill color="%linecolor%">
-				<condition var1="show_shadow" var2="2"/>
-				<condition var1="tw_hide_kb" var2="0"/>
-				<placement x="0" y="%keyboard_y%" w="1080" h="2"/>
-			</fill>
-			
 			<keyboard>
 				<condition var1="tw_hide_kb" var2="0"/>
 				<placement x="0" y="%keyboard_y%"/>
@@ -219,17 +138,8 @@
 				</layout1>
 			</keyboard>
 
-			<template name="navbar_bkg_nobg"/>
-
-			<fill color="%keyboard_dark_bg%">
-				<condition var1="tw_hide_kb" var2="0"/>
-				<condition var1="navbar_bkg" var2="1"/>
-				<placement x="0" y="%row_nav_y%" w="%screen_w%" h="%nav_h%"/>
-			</fill>
-
 			<fill color="%keyboard_bg%">
 				<condition var1="tw_hide_kb" var2="0"/>
-				<condition var1="navbar_bkg" var2="0"/>
 				<placement x="0" y="%row_nav_y%" w="%screen_w%" h="%nav_h%"/>
 			</fill>
 		</template>

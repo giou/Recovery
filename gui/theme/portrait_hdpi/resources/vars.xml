@@ -21,8 +21,8 @@
 		<variable name="rmm_path" value="/data/adb/modules"/>
 
 		<!-- Lockscreen -->
-		<variable name="clock_style" value="0" persist="1"/>
-		<variable name="lock_action" value="1" persist="1"/>
+		<variable name="clock_style" value="1" persist="1"/>
+		<variable name="lock_action" value="0" persist="1"/>
 		<variable name="lock_info" value="1" persist="1"/>
 		<!--variable name="lock_btn" value="0" persist="1"/-->
 		<variable name="lock_btn" persist="1"/>
@@ -57,30 +57,25 @@
 		
 		<!-- Design -->
 		<variable name="enable_battery" value="1" persist="1"/>
-		<variable name="navbar_bkg" value="1" persist="1"/>
-		<variable name="nougat" value="3" persist="1"/>
+		<variable name="navbar_style" value="1" persist="1"/>
 		<variable name="key_buttons" value="1" persist="1"/>
 		<variable name="key_numbar" value="0" persist="1"/>
 		<variable name="use_fixed_font" value="1" persist="1"/>
 		<variable name="show_cpu_temp" value="1" persist="1"/>
-		<variable name="list_font" value="0" persist="1"/>
+		<variable name="list_font" value="1" persist="1"/>
 		<variable name="navbar_sams" value="0" persist="1"/>
-		<variable name="navbar_accent" value="1" persist="1"/>
-		<variable name="darker_ui" value="1" persist="1"/>
 		<variable name="show_slideout" value="1" persist="1"/>
-		<variable name="separate_status" value="1" persist="1"/>
-		<variable name="style_battery" value="0" persist="1"/>
-		<variable name="show_shadow" value="1" persist="1"/>
+		<variable name="style_battery" value="2" persist="1"/>
 		<variable name="hide_notch" value="0" persist="1"/> 
-		<variable name="auto_show_btns" value="0" persist="1"/> 
-		<variable name="instant_apply" value="0" persist="1"/> 
-		<variable name="key_allow_swipe" value="0" persist="1"/> 
-		<variable name="ota_new_screen" value="1" persist="1"/> 
-		<variable name="new_nav_panel_des" value="1" persist="1"/> 
+		<variable name="auto_show_btns" value="1" persist="1"/>
+		<variable name="instant_apply" value="1" persist="1"/>
+		<variable name="key_allow_swipe" value="1" persist="1"/>
+		<variable name="ota_new_screen" value="1" persist="1"/>
+		<variable name="floating_panel" value="1" persist="1"/>
 
-		<variable name="gst_back_left" value="0" persist="1"/> 
-		<variable name="gst_back_right" value="0" persist="1"/> 
-		<variable name="gst_console" value="0" persist="1"/> 
+		<variable name="gst_back_left" value="1" persist="1"/>
+		<variable name="gst_back_right" value="1" persist="1"/>
+		<variable name="gst_console" value="1" persist="1"/>
 		
 		<!-- Other... -->
 		<variable name="of_hide_data_hint" value="0" persist="1"/>
@@ -128,6 +123,7 @@
 		<variable name="ota_update_log_y" value="%center_y%+600"/>
 		
 		<!-- FAB above NavPanel -->
+		<variable name="btn_float_size" value="168"/>
 		<variable name="btn_float_x" value="948"/>
 		<variable name="btn_float_y" value="%screen_h%-294"/>
 		<variable name="btn_float_nav_y" value="%screen_h%-444"/>
@@ -137,32 +133,38 @@
 		
 		<!-- NavPanel -->
 		<variable name="nav_item_w" value="270"/>
-		<variable name="nav_panel_h" value="312"/> <!-- 168+navbar -->
+		<variable name="nav_panel_h" value="216"/>
+		<variable name="nav_panel_full_h" value="%screen_w%-360"/>
 		<variable name="nav_panel_id" value="0"/>
-		<variable name="nav_panel_y" value="%screen_h%-312"/>
-		<variable name="nav_icon_a_y" value="%screen_h%-228"/>
-		<variable name="ee_y" value="%screen_h%-486"/>
-		<variable name="nav_icon_y" value="%screen_h%-256"/>
-		<variable name="nav_text_y" value="%screen_h%-193"/>
-		<variable name="nav_item_y" value="%screen_h%-228"/>
-		<variable name="nav_item_1" value="135"/>
-		<variable name="nav_item_2" value="405"/>
-		<variable name="nav_item_3" value="675"/>
-		<variable name="nav_item_4" value="945"/>
+		<variable name="nav_panel_w" value="%screen_w%-96"/>
+		<variable name="nav_panel_x" value="48"/>
+		<variable name="nav_panel_y" value="%screen_h%-360"/>
+		<variable name="nav_icon_y" value="%screen_h%-282"/>
+		<variable name="nav_text_y" value="%screen_h%-202"/>
+		<variable name="nav_item_y" value="%screen_h%-252"/>
+		<variable name="nav_item_1" value="171"/>
+		<variable name="nav_item_2" value="417"/>
+		<variable name="nav_item_3" value="663"/>
+		<variable name="nav_item_4" value="909"/>
 		<variable name="nav_path_w" value="648"/>
+
+		
+		<variable name="np_pill_w" value="192"/>
+		<variable name="np_pill_h" value="96"/>
+		<variable name="np_pill_y" value="%screen_h%-330"/>
+		<variable name="np_pill_x1" value="75"/> <!-- 48 + 27 -->
+		<variable name="np_pill_x2" value="321"/> <!-- 48 + 27 + np_pill_w + 27 + 27 -->
+		<variable name="np_pill_x3" value="567"/>
+		<variable name="np_pill_x4" value="813"/>
 		
 		<!-- File Selector w/ NavPanel -->
-		<variable name="files_np_w" value="%screen_min_cut%-552"/>
+		<variable name="files_np_w" value="%screen_min_cut%-600"/>
 		<variable name="files_np_mm_y" value="408+%cutout_w%"/>
 		
 		<!-- UI w/ NavPanel -->
-		<variable name="row_btn2_np_y" value="%screen_h%-768"/>
-		<variable name="slider_np_y" value="%screen_h%-486"/>
-		<variable name="slider_text_np_y" value="%screen_h%-594"/>
+		<variable name="slider_np_y" value="%screen_h%-534"/>
+		<variable name="slider_text_np_y" value="%screen_h%-642"/>
 		<variable name="slider_text_y_l" value="%screen_original_h%-281"/>
-		
-		<!-- NavPanel colors -->
-		<variable name="color_disable" value="#5F6368"/>
 		
 		<!-- Wait screens -->
 		<variable name="busy_text" value="%screen_original_h%-144"/>
@@ -174,19 +176,19 @@
 		<variable name="part_list_btns_h" value="%screen_min_cut%-1446"/> <!-- Backup parts -->
 		<variable name="part_backup_info_y" value="%screen_h%-678"/>
 		<variable name="part_backup_line_y" value="%screen_h%-696"/>
-		<variable name="part_list_btns_9_h" value="%screen_min_cut%-1140"/> <!-- Mount parts -->
-		<variable name="part_list_mount_h" value="%screen_min_cut%-654"/> <!-- Wipe parts -->
+		<variable name="part_list_btns_9_h" value="%screen_min_cut%-1188"/> <!-- Wipe parts -->
+		<variable name="part_list_mount_h" value="%screen_min_cut%-654"/> <!-- Mount parts -->
 		
 		<!--variable name="flash_img_part_expanded" value="%screen_min_cut%-1122"/-->
 		<variable name="flash_img_part" value="%screen_min_cut%-1396"/>
-		<variable name="restore_part" value="%screen_min_cut%-1426"/>
+		<variable name="restore_part" value="%screen_min_cut%-1506"/>
 
 		<!-- Workshop -->
 		<variable name="ws_cards_y1" value="%cutout_w%+488"/>
 		<variable name="ws_cards_y2" value="%cutout_w%+848"/>
-		<variable name="ws_cards_y3" value="%cutout_w%+1104"/>
-		<variable name="ws_cards_y4" value="%cutout_w%+1360"/>
-		<variable name="ws_cards_y5" value="%cutout_w%+1500"/>
+		<variable name="ws_cards_y3" value="%cutout_w%+1208"/>
+		<variable name="ws_cards_y4" value="%cutout_w%+1464"/>
+		<variable name="ws_cards_y5" value="%cutout_w%+1720"/>
 		<variable name="ws_cards_x1" value="156"/>
 		<variable name="ws_cards_x2" value="412"/>
 		<variable name="ws_cards_x3" value="668"/>
@@ -224,10 +226,11 @@
 		<variable name="col1_x" value="48"/>
 		<variable name="col1_x_neg" value="1032"/>
 		<variable name="col1_x_indent" value="216"/>
+		<variable name="col1_x_small_indent" value="150"/>
 
 		<variable name="col1_x_caption" value="216"/>
-		<variable name="input_w" value="816"/>
-		<variable name="input_backup_w" value="708"/>
+		<variable name="input_w" value="984"/>
+		<variable name="input_backup_w" value="905"/>
 		
 		<variable name="col_col_center_x" value="386"/>
 		<variable name="col_x_color3" value="724"/>
@@ -259,8 +262,9 @@
 		<variable name="down_menu_btn_y" value="%screen_h%-576"/>
 		<variable name="down_menu_btn2_y" value="%screen_h%-432"/>
 		<variable name="down_menu_btn2_caption_y" value="%screen_h%-448"/>
-		<variable name="down_menu_y" value="%screen_h%-1008"/>
-		
+		<variable name="down_menu_y" value="%screen_h%-998"/>
+		<variable name="down_menu_y_pre" value="%screen_h%-1050"/>
+
 		<!-- chmod -->
 		<variable name="ch_r_x" value="315"/>
 		<variable name="ch_w_x" value="513"/>
@@ -335,13 +339,14 @@
 		<!-- NavBar -->
 		<variable name="row_nav_text_y" value="%row_nav_y%+%bs_text_offset%"/>
 		<variable name="row_nav_y" value="%screen_h%-144"/>
+		<variable name="row_navbtn_w" value="318"/>
 		<variable name="row_navbtn_y" value="%screen_h%-72"/>
 		<variable name="back_button_x" value="237"/>
 		<variable name="slideout_button_x" value="843"/>
 		<variable name="nav_h" value="144"/>
 		
 		<!-- Status Bar -->
-		<variable name="status_right_x" value="1080-%status_indent_right%"/>
+		<variable name="status_right_x" value="1060-%status_indent_right%"/>
 		
 		<!-- Big invisible button -->
 		<variable name="mb_h_hide" value="120"/>
@@ -363,13 +368,28 @@
 		<variable name="lb_l13" value="1170"/>
 		<variable name="lb_l14" value="1260"/>
 		<variable name="lb_l15" value="1350"/>
-		
+
+		<variable name="lb_group_l1" value="170"/>
+		<variable name="lb_group_l2" value="260"/>
+		<variable name="lb_group_l3" value="350"/>
+		<variable name="lb_group_l4" value="440"/>
+		<variable name="lb_group_l5" value="530"/>
+		<variable name="lb_group_l6" value="620"/>
+		<variable name="lb_group_l7" value="710"/>
+		<variable name="lb_group_l8" value="800"/>
+		<variable name="lb_group_l9" value="890"/>
+		<variable name="lb_group_l10" value="980"/>
+
 		<!-- Battery -->
 		<variable name="battery_12_x" value="880-%status_indent_right%"/>
 		<variable name="battery_24_x" value="940-%status_indent_right%"/>
+		<variable name="battery_2_12_x" value="900-%status_indent_right%"/>
+		<variable name="battery_2_24_x" value="960-%status_indent_right%"/>
+
 		<variable name="battery_y" value="%status_info_y%+6"/>
+		<variable name="battery_2_y" value="%status_info_y%+10"/>
 		<variable name="battery_circle_y" value="%status_info_y%+4"/>
-		
+
 		<!-- File list -->
 		<variable name="fileselector_width" value="%screen_w%"/>
 		<variable name="fileselector_terminal_height" value="%screen_min_cut%-600"/>
@@ -377,10 +397,13 @@
 		<variable name="fileselector_spacing" value="0"/>
 		
 		<!-- Title / Title buttons -->
-		<variable name="search_files_h" value="%screen_min_cut%-674"/>
+		<variable name="search_files_h" value="%screen_min_cut%-722"/>
 		<variable name="search_files_y" value="360+%cutout_w%"/>
 		<variable name="search_bar_y" value="72+%cutout_w%"/>
-		<variable name="path_y" value="268+%cutout_w%"/>
+		<variable name="search_bar_bg_y" value="96+%cutout_w%"/>
+		<variable name="search_bar_line_y" value="238+%cutout_w%"/>
+		<variable name="path_text_y" value="268+%cutout_w%"/>
+		<variable name="path_y" value="240+%cutout_w%"/>
 		<variable name="path_arrow_y" value="300+%cutout_w%"/>
 		<variable name="ab_search_y" value="168+%cutout_w%"/>
 		<variable name="ab_search_text_y" value="138+%cutout_w%"/>
@@ -394,8 +417,12 @@
 		<variable name="ab_btn1_x" value="996"/>
 		<variable name="ab_btn2_x" value="852"/>
 		<variable name="ab_btn3_x" value="708"/>
+		<variable name="ab_btn01_x" value="468"/>
+		<variable name="ab_btn02_x" value="612"/>
+		
 		<variable name="ab_back_x" value="84"/>
 		<variable name="ab_bc_y" value="115+%cutout_w%"/>
+		<variable name="ab_bc_fox_y" value="115+%cutout_w%"/>
 		<variable name="ab_bc_search_y" value="128+%cutout_w%"/>
 		<variable name="ab_bc2_y" value="282+%cutout_w%"/>
 		<variable name="ab_bc3_y" value="500+%cutout_w%"/>
@@ -404,6 +431,14 @@
 		<variable name="row_ab_ex_y" value="456+%cutout_w%"/>
 		<variable name="ab_btn_h" value="168"/>
 		
+		<variable name="tab_w" value="312"/>
+		<variable name="tab_h" value="8"/>
+
+		<variable name="main_switch_icon_x" value="946"/>
+
+		<!-- Advanced -->
+		<variable name="adv_additions_h" value="%screen_w%-200"/>
+
 		<!-- Sort menu -->
 		<variable name="ab_menu_y" value="72+%cutout_w%"/>
 		<variable name="ab_menu_x" value="972"/>
@@ -443,6 +478,9 @@
 		<variable name="row_btn3_y" value="%screen_h%-729"/>
 		<variable name="btn_raised_left_x" value="48"/>
 		<variable name="btn_raised_right_x" value="1032"/>
+		<variable name="btn_w" value="471"/>
+		<variable name="btn_half_w" value="207"/>
+		<variable name="btn_h" value="108"/>
 		
 		<!-- Progress -->
 		<variable name="progressbar_x" value="0"/>
@@ -470,11 +508,11 @@
 		<variable name="console_action_height_fm" value="%screen_min_cut%-696"/>
 		<variable name="console_y" value="504+%cutout_w%"/>
 		<variable name="console_ab_y" value="288+%cutout_w%"/>
-		<variable name="terminal_y" value="280+%cutout_w%"/>
+		<variable name="terminal_y" value="90+%cutout_w%"/>
 		<variable name="terminal_width" value="1032"/>
-		<variable name="terminal_height" value="%screen_min_cut%-1210"/>
-		<variable name="terminal_num_height" value="%screen_min_cut%-1322"/>
-		<variable name="terminal_nokb_height" value="%screen_min_cut%-460"/>
+		<variable name="terminal_height" value="%screen_min_cut%-1020"/>
+		<variable name="terminal_num_height" value="%screen_min_cut%-1132"/>
+		<variable name="terminal_nokb_height" value="%screen_min_cut%-270"/>
 		<variable name="console_brightness_y" value="%screen_h%-325"/>
 		<variable name="console_flash_y" value="%screen_h%-228"/>
 		
@@ -603,5 +641,11 @@
 		<variable name="row8_3_y" value="1680+%cutout_w%"/>
 		<variable name="row8_3a_y" value="1710+%cutout_w%"/>
 		<variable name="row9_1_y" value="1740+%cutout_w%"/>
+		
+		<!-- Group list -->
+		<variable name="gl_text_x" value="60"/>
+
+		<!-- New top switcher text -->
+		<variable name="switch_text_x" value="110"/>
 	</variables>
 </recovery>

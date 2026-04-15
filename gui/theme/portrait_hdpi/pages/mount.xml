@@ -2,33 +2,24 @@
 <recovery>
 	<pages>
 		<page name="mount">
-			<fill color="%accent%">
+			<!-- Enabled -->
+			<image>
 				<condition var1="tw_mtp_enabled" var2="1"/>
 				<condition var1="tw_has_mtp" var2="1"/>
-				<placement x="0" y="%ab_h%" w="%screen_w%" h="%ab_btn_h%"/>
-			</fill>
-			
-			<fill color="%unactive_title%">
-				<condition var1="tw_mtp_enabled" var2="0"/>
-				<condition var1="tw_has_mtp" var2="1"/>
-				<placement x="0" y="%ab_h%" w="%screen_w%" h="%ab_btn_h%"/>
-			</fill>
-
-			<image style="switch_off">
-				<condition var1="tw_mtp_enabled" var2="0"/>
-				<condition var1="tw_has_mtp" var2="1"/>
-				<placement x="%ab_btn1_x%" y="%ab2_y%" placement="4"/>
+				<placement x="40" y="%ab_h%"/>
+				<image resource="main_switch_card_active" />
 			</image>
-			
+
 			<image style="switch_on">
 				<condition var1="tw_mtp_enabled" var2="1"/>
 				<condition var1="tw_has_mtp" var2="1"/>
-				<placement x="%ab_btn1_x%" y="%ab2_y%" placement="4"/>
+				<placement x="%main_switch_icon_x%" y="%ab2_y%" placement="4"/>
 			</image>
 
-			<text style="text_ab_switch">
+			<text style="text_ab_switch_on">
+				<condition var1="tw_mtp_enabled" var2="1"/>
 				<condition var1="tw_has_mtp" var2="1"/>
-				<placement x="%col1_x_indent%" y="%ab_bc2_y%"/>
+				<placement x="%switch_text_x%" y="%ab_bc2_y%"/>
 				<text>{@enable_mtp_btn}</text>
 			</text>
 
@@ -39,8 +30,29 @@
 				<action function="stopmtp"/>
 			</button>
 
+			<!-- Disabled -->
+			<image>
+				<condition var1="tw_mtp_enabled" op="!=" var2="1"/>
+				<condition var1="tw_has_mtp" var2="1"/>
+				<placement x="40" y="%ab_h%"/>
+				<image resource="main_switch_card_not_active" />
+			</image>
+
+			<image style="switch_off">
+				<condition var1="tw_mtp_enabled" op="!=" var2="1"/>
+				<condition var1="tw_has_mtp" var2="1"/>
+				<placement x="%main_switch_icon_x%" y="%ab2_y%" placement="4"/>
+			</image>
+
+			<text style="text_ab_switch_off">
+				<condition var1="tw_mtp_enabled" op="!=" var2="1"/>
+				<condition var1="tw_has_mtp" var2="1"/>
+				<placement x="%gl_text_x%" y="%ab_bc2_y%"/>
+				<text>{@enable_mtp_btn}</text>
+			</text>
+
 			<button style="bs_btn">
-				<condition var1="tw_mtp_enabled" var2="0"/>
+				<condition var1="tw_mtp_enabled" op="!=" var2="1"/>
 				<condition var1="tw_has_mtp" var2="1"/>
 				<placement x="0" y="%ab_h%" w="%screen_w%" h="%ab_btn_h%"/>
 				<action function="startmtp"/>
@@ -65,7 +77,7 @@
 			</image>
 
 			<text style="caption">
-				<placement x="%col1_x_caption%" y="%row1_3a_y%"/>
+				<placement x="%gl_text_x%" y="%row1_3a_y%"/>
 				<text>{@partitions}</text>
 			</text>
 
@@ -115,7 +127,7 @@
 			</text>
 
 			<image>
-				<image resource="usb"/>
+				<image resource="ws_usb"/>
 				<placement x="%center_x%" y="%center_y%" placement="4"/>
 			</image>
 			
@@ -229,9 +241,8 @@
 			<template name="body_ct"/>
 			<template name="keyboardtemplate"/>
 			<template name="decrypt_page"/>
-			<!-- <template name="navbar_bkg"/> -->
 
-			<listbox style="btn_list">
+			<listbox style="group_list">
 				<placement x="0" y="%row3_3a_y%" w="%screen_w%" h="%bl_h1%"/>
 				<listitem name="{@pass_pin}">
 					<icon res="dialpad"/>
@@ -250,13 +261,12 @@
 			<template name="body_ct"/>
 			<template name="keyboardnum"/>
 			<template name="decrypt_page"/>
-			<!-- <template name="navbar_bkg"/> -->
 
-			<listbox style="btn_list">
+			<listbox style="group_list">
 				<condition var1="tw_crypto_pwtype" op="!=" var2="3"/>
 				<placement x="0" y="%row3_3a_y%" w="%screen_w%" h="%bl_h1%"/>
 				<listitem name="{@pass_classic}">
-					<icon res="pass_classic"/>
+					<icon res="keyboard"/>
 					<action function="set">of_show_pass=0</action>
 					<action function="page">decrypt</action>
 				</listitem>
@@ -480,9 +490,9 @@
 		</page>
 
 		<page name="decrypt_users2">
-			<listbox style="btn_list">
+			<listbox style="group_list">
 				<placement x="0" y="%ab_h%" w="%screen_w%" h="%bl_fullscreen_h%"/>
-				<icon selected="user" unselected="user" />
+				<icon selected="group" unselected="group" />
 				<data name="tw_crypto_user_id_list" />
 			</listbox>
 

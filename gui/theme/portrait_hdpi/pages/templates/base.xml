@@ -9,22 +9,6 @@
 		</template>
 
         <template name="tabs">
-			<fill color="%title_solid_bg%">
-				<condition var1="darker_ui" var2="1"/>
-				<placement x="0" y="0" w="%screen_w%" h="%tab_title_h%"/>
-			</fill>
-
-			<image>
-				<image resource="actionbar_shadow"/>
-				<condition var1="show_shadow" var2="1"/>
-				<placement x="0" y="%tab_title_h%"/>
-			</image>
-			
-			<fill color="%linecolor%">
-				<condition var1="show_shadow" var2="2"/>
-				<placement x="0" y="%tab_title_h%" w="1080" h="2"/>
-			</fill>
-
 			<template name="status_bg"/>
 			<template name="statusbarinfo"/>
 		</template>
@@ -75,13 +59,13 @@
 			
 			<text style="text_ab_title">
 				<condition var1="tw_operation_status" op="!=" var2="0"/>
-				<placement x="%col1_x_indent%" y="%row1_2_y%" placement="2"/>
+				<placement x="%col1_x%" y="%row1_2_y%" placement="2"/>
 				<text>{@failed}</text>
 			</text>
 
 			<text style="text_ab_title">
 				<condition var1="tw_operation_status" var2="0"/>
-				<placement x="%col1_x_indent%" y="%row1_2_y%" placement="2"/>
+				<placement x="%col1_x%" y="%row1_2_y%" placement="2"/>
 				<text>{@successful}</text>
 			</text>
 
@@ -111,22 +95,57 @@
 			<template name="ab_main"/>
 			<template name="base_nav_basic"/>
 			
-			<template name="navbar_bkg_nobg"/>
 			<template name="navbar_home"/>
 			<template name="navbar_console"/>
-			<template name="navbar_back_cls"/>
+			<template name="navbar_back_classic"/>
 		</template>
 
         <template name="base_nav_basic">
 			<template name="statusbarinfo"/>
-			<fill color="%title_solid_bg%">
-				<condition var1="darker_ui" var2="1"/>
-				<placement x="0" y="%nav_panel_y%" w="%screen_w%" h="%nav_panel_h%"/>
+			<image>
+				<condition var1="floating_panel" var2="1"/>
+				<placement x="%nav_panel_x%" y="%nav_panel_y%"/>
+				<image resource="nav_bg" />
+			</image>
+
+			<fill color="%cards_bg%">
+				<condition var1="floating_panel" op="!=" var2="1"/>
+				<placement x="0" y="%nav_panel_y%" w="%screen_w%" h="%nav_panel_full_h%"/>
 			</fill>
+
+			<image>
+				<condition var1="nav_panel_id" var2="0"/>
+				<placement x="%np_pill_x1%" y="%np_pill_y%" />
+				<image resource="nav_pill"/>
+			</image>
+
+			<image>
+				<condition var1="nav_panel_id" var2="1"/>
+				<placement x="%np_pill_x2%" y="%np_pill_y%" />
+				<image resource="nav_pill"/>
+			</image>
+
+			<image>
+				<condition var1="nav_panel_id" var2="2"/>
+				<placement x="%np_pill_x3%" y="%np_pill_y%" />
+				<image resource="nav_pill"/>
+			</image>
+
+			<image>
+				<condition var1="nav_panel_id" var2="3"/>
+				<placement x="%np_pill_x4%" y="%np_pill_y%"/>
+				<image resource="nav_pill"/>
+			</image>
 			
 			<image>
-				<image resource="nav_files"/>
 				<condition var1="nav_panel_id" var2="0"/>
+				<image resource="nav_files"/>
+				<placement x="%nav_item_1%" y="%nav_icon_y%" placement="4"/>
+			</image>
+			
+			<image>
+				<condition var1="nav_panel_id" op="!=" var2="0"/>
+				<image resource="nav_files_d"/>
 				<placement x="%nav_item_1%" y="%nav_icon_y%" placement="4"/>
 			</image>
 			
@@ -136,67 +155,41 @@
 				<text>{@file_manager_btn}</text>
 			</text>
 			
-			<image>
-				<image resource="nav_files_d"/>
-				<condition var1="nav_panel_id" op="!=" var2="0"/>
-				<condition var1="new_nav_panel_des" var2="0"/>
-				<placement x="%nav_item_1%" y="%nav_icon_y%" placement="4"/>
-			</image>
-
-			<image>
-				<image resource="nav_files_d"/>
-				<condition var1="nav_panel_id" op="!=" var2="0"/>
-				<condition var1="new_nav_panel_des" var2="1"/>
-				<placement x="%nav_item_1%" y="%nav_icon_a_y%" placement="4"/>
-			</image>
-			
 			<text style="nav_panel_d">
 				<condition var1="nav_panel_id" op="!=" var2="0"/>
-				<condition var1="new_nav_panel_des" var2="0"/>
 				<placement x="%nav_item_1%" y="%nav_text_y%" placement="4"/>
 				<text>{@file_manager_btn}</text>
 			</text>
 			
-			<button>
+			<button style="nav_panel_btn">
 				<condition var1="nav_panel_id" var2="0"/>
 				<placement x="%nav_item_1%" y="%nav_item_y%" placement="4"/>
-				<image resource="nav_empty" highlightresource="nav_hl"/>
 				<action function="page">menu</action>
 			</button>
 			
-			<button>
+			<button style="nav_panel_btn">
 				<condition var1="nav_panel_id" op="!=" var2="0"/>
 				<placement x="%nav_item_1%" y="%nav_item_y%" placement="4"/>
-				<image resource="nav_empty" highlightresource="nav_hl"/>
 				<action function="page">filemanagerlist</action>
 			</button>
 			
 			<image>
-				<image resource="nav_backup_d"/>
-				<condition var1="nav_panel_id" op="!=" var2="1"/>
-				<condition var1="new_nav_panel_des" var2="0"/>
+				<condition var1="nav_panel_id" var2="1"/>
+				<image resource="nav_backup"/>
 				<placement x="%nav_item_2%" y="%nav_icon_y%" placement="4"/>
 			</image>
-
+			
 			<image>
-				<image resource="nav_backup_d"/>
 				<condition var1="nav_panel_id" op="!=" var2="1"/>
-				<condition var1="new_nav_panel_des" var2="1"/>
-				<placement x="%nav_item_2%" y="%nav_icon_a_y%" placement="4"/>
+				<image resource="nav_backup_d"/>
+				<placement x="%nav_item_2%" y="%nav_icon_y%" placement="4"/>
 			</image>
 			
 			<text style="nav_panel_d">
 				<condition var1="nav_panel_id" op="!=" var2="1"/>
-				<condition var1="new_nav_panel_des" var2="0"/>
 				<placement x="%nav_item_2%" y="%nav_text_y%" placement="4"/>
 				<text>{@backup_btn}</text>
 			</text>
-			
-			<image>
-				<image resource="nav_backup"/>
-				<condition var1="nav_panel_id" var2="1"/>
-				<placement x="%nav_item_2%" y="%nav_icon_y%" placement="4"/>
-			</image>
 			
 			<text style="nav_panel">
 				<condition var1="nav_panel_id" var2="1"/>
@@ -204,39 +197,29 @@
 				<text>{@backup_btn}</text>
 			</text>
 			
-			<button>
+			<button style="nav_panel_btn">
 				<placement x="%nav_item_2%" y="%nav_item_y%" placement="4"/>
 				<condition var1="nav_panel_id" op="!=" var2="1"/>
-				<image resource="nav_empty" highlightresource="nav_hl"/>
 				<action function="page">restore</action>
 			</button>
 			
 			<image>
-				<image resource="nav_wipe_d"/>
-				<condition var1="nav_panel_id" op="!=" var2="2"/>
-				<condition var1="new_nav_panel_des" var2="0"/>
+				<condition var1="nav_panel_id" var2="2"/>
+				<image resource="nav_wipe"/>
 				<placement x="%nav_item_3%" y="%nav_icon_y%" placement="4"/>
 			</image>
-
+			
 			<image>
-				<image resource="nav_wipe_d"/>
 				<condition var1="nav_panel_id" op="!=" var2="2"/>
-				<condition var1="new_nav_panel_des" var2="1"/>
-				<placement x="%nav_item_3%" y="%nav_icon_a_y%" placement="4"/>
+				<image resource="nav_wipe_d"/>
+				<placement x="%nav_item_3%" y="%nav_icon_y%" placement="4"/>
 			</image>
 			
 			<text style="nav_panel_d">
 				<condition var1="nav_panel_id" op="!=" var2="2"/>
-				<condition var1="new_nav_panel_des" var2="0"/>
 				<placement x="%nav_item_3%" y="%nav_text_y%" placement="4"/>
 				<text>{@wipe_btn}</text>
 			</text>
-			
-			<image>
-				<image resource="nav_wipe"/>
-				<condition var1="nav_panel_id" var2="2"/>
-				<placement x="%nav_item_3%" y="%nav_icon_y%" placement="4"/>
-			</image>
 			
 			<text style="nav_panel">
 				<condition var1="nav_panel_id" var2="2"/>
@@ -244,39 +227,29 @@
 				<text>{@wipe_btn}</text>
 			</text>
 			
-			<button>
+			<button style="nav_panel_btn">
 				<condition var1="nav_panel_id" op="!=" var2="2"/>
 				<placement x="%nav_item_3%" y="%nav_item_y%" placement="4"/>
-				<image resource="nav_empty" highlightresource="nav_hl"/>
 				<action function="page">wipe</action>
 			</button>
 			
 			<image>
-				<image resource="nav_menu_d"/>
-				<condition var1="nav_panel_id" op="!=" var2="3"/>
-				<condition var1="new_nav_panel_des" var2="0"/>
+				<condition var1="nav_panel_id" var2="3"/>
+				<image resource="nav_menu"/>
 				<placement x="%nav_item_4%" y="%nav_icon_y%" placement="4"/>
 			</image>
-
+			
 			<image>
-				<image resource="nav_menu_d"/>
 				<condition var1="nav_panel_id" op="!=" var2="3"/>
-				<condition var1="new_nav_panel_des" var2="1"/>
-				<placement x="%nav_item_4%" y="%nav_icon_a_y%" placement="4"/>
+				<image resource="nav_menu_d"/>
+				<placement x="%nav_item_4%" y="%nav_icon_y%" placement="4"/>
 			</image>
 			
 			<text style="nav_panel_d">
 				<condition var1="nav_panel_id" op="!=" var2="3"/>
-				<condition var1="new_nav_panel_des" var2="0"/>
 				<placement x="%nav_item_4%" y="%nav_text_y%" placement="4"/>
 				<text>{@menu_btn}</text>
 			</text>
-			
-			<image>
-				<image resource="nav_menu"/>
-				<condition var1="nav_panel_id" var2="3"/>
-				<placement x="%nav_item_4%" y="%nav_icon_y%" placement="4"/>
-			</image>
 			
 			<text style="nav_panel">
 				<condition var1="nav_panel_id" var2="3"/>
@@ -284,35 +257,21 @@
 				<text>{@menu_btn}</text>
 			</text>
 			
-			<button>
+			<button style="nav_panel_btn">
 				<condition var1="nav_panel_id" op="!=" var2="3"/>
 				<placement x="%nav_item_4%" y="%nav_item_y%" placement="4"/>
-				<image resource="nav_empty" highlightresource="nav_hl"/>
 				<action function="page">advanced</action>
 			</button>
-			
-			<image>
-				<condition var1="show_shadow" var2="1"/>
-				<placement x="0" y="%nav_panel_y%" placement="2"/>
-				<image resource="nav_shadow"/>
-			</image>
-			
-			<fill color="%linecolor%">
-				<condition var1="show_shadow" var2="2"/>
-				<placement x="0" y="%nav_panel_y%" w="1080" h="2"/>
-			</fill>
 
 			
-			<template name="navbar_bkg_nobg"/>
 			<template name="navbar_home"/>
 			<template name="navbar_console"/>
-			<template name="navbar_back_cls"/>
+			<template name="navbar_back_classic"/>
 		</template>
         
         <!-- Body (navbar+bg) -->
         <template name="body">
 			<background color="%background%"/>
-			<template name="navbar_bkg"/>
 			<template name="keys"/>
 			<template name="navbar"/>
 		</template>
@@ -326,7 +285,6 @@
 			<background color="%background%"/>
 			<template name="keys"/>
 			<template name="keyboardtemplate"/>
-			<!-- <template name="navbar_bkg"/> -->
 			<template name="navbar_home"/>
 			<template name="navbar_console"/>
 			<template name="navbar_key"/>
@@ -336,7 +294,6 @@
 			<background color="%background%"/>
 			<template name="keys"/>
 			<template name="keyboardnum"/>
-			<!-- <template name="navbar_bkg"/> -->
 			<template name="navbar_home"/>
 			<template name="navbar_console"/>
 			<template name="navbar_key"/>
@@ -344,8 +301,7 @@
 		
 		<template name="dialog_body">
 			<background color="%transparent%"/>
-			<template name="navbar_bkg"/>
-			
+
 			<button>
 				<fill color="%darktransparent%"/>
 				<placement x="0" y="0" w="%screen_w%" h="%screen_h%"/>
@@ -375,21 +331,11 @@
 		<template name="body_ct">
 			<background color="%background%"/>
 			<template name="keys"/>
-
-			<fill color="%title_solid_bg%">
-				<placement x="0" y="0" w="%screen_w%" h="%ab_ex_h%"/>
-			</fill>
-
 			<template name="statusbarinfo"/>
 		</template>
         
         <!-- Basic UI elements -->
-        <template name="status_bg">
-			<fill color="%status_solid_bg%">
-				<condition var1="separate_status" var2="1"/>
-				<placement x="0" y="0" w="%screen_w%" h="%status_h%"/>
-			</fill>
-			
+        <template name="status_bg">			
 			<fill color="#000000">
 				<condition var1="hide_notch" var2="1"/>
 				<placement x="0" y="0" w="%screen_w%" h="%status_h%"/>
@@ -406,22 +352,6 @@
         
         <!-- Headers -->
         <template name="ab_main">
-			<image>
-				<condition var1="show_shadow" var2="1"/>
-				<image resource="actionbar_shadow"/>
-				<placement x="0" y="%ab_h%"/>
-			</image>
-			
-			<fill color="%linecolor%">
-				<condition var1="show_shadow" var2="2"/>
-				<placement x="0" y="%ab_h%" w="1080" h="2"/>
-			</fill>
-			
-			<fill color="%title_solid_bg%">
-				<condition var1="darker_ui" var2="1"/>
-				<placement x="0" y="0" w="%screen_w%" h="%ab_h%"/>
-			</fill>
-			
 			<template name="status_bg"/>
 		</template>
 
@@ -431,22 +361,6 @@
 		</template>
 		
 		<template name="ab_ex">
-			<image>
-				<condition var1="show_shadow" var2="1"/>
-				<image resource="actionbar_shadow"/>
-				<placement x="0" y="%ab_ex_h%"/>
-			</image>
-			
-			<fill color="%title_solid_bg%">
-				<condition var1="darker_ui" var2="1"/>
-				<placement x="0" y="0" w="%screen_w%" h="%ab_ex_h%"/>
-			</fill>
-			
-			<fill color="%linecolor%">
-				<condition var1="show_shadow" var2="2"/>
-				<placement x="0" y="%ab_ex_h%" w="1080" h="2"/>
-			</fill>
-			
 			<template name="status_bg"/>
 			<template name="actionbar_back"/>
 		</template>
@@ -480,15 +394,8 @@
 
 		<template name="actionbar_storage">
 			<button style="actionbar">
-				<condition var1="darker_ui" op="!=" var2="1"/>
 				<placement x="%ab_btn2_x%" y="%ab_y%" placement="4"/>
 				<action function="page">select_path</action>
-			</button>
-			
-			<button style="actionbar">
-				<condition var1="darker_ui" var2="1"/>
-				<placement x="%ab_btn2_x%" y="%ab_y%" placement="4"/>
-				<action function="page">select_path_dark</action>
 			</button>
 
 			<image>
@@ -516,19 +423,6 @@
 				<data name="tw_storage_path"/>
 				<listtype name="storage"/>
 			</partitionlist>
-
-			<image>
-				<condition var1="of_show_storage_selection" var2="1"/>
-				<condition var1="show_shadow" var2="1"/>
-				<image resource="actionbar_shadow"/>
-				<placement x="0" y="%modern_storage_shadow_y%"/>
-			</image>
-			
-			<fill color="%linecolor%">
-				<condition var1="of_show_storage_selection" var2="1"/>
-				<condition var1="show_shadow" var2="2"/>
-				<placement x="0" y="%modern_storage_shadow_y%" w="1080" h="2"/>
-			</fill>
 
 			<fill color="%linecolor%">
 				<condition var1="of_show_storage_selection" var2="1"/>

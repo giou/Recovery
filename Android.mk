@@ -50,6 +50,7 @@ LOCAL_SRC_FILES := \
     startupArgs.cpp \
     twrp-functions.cpp \
     orangefox.cpp \
+    gui/nanosvg.cpp \
     twrpDigestDriver.cpp \
     openrecoveryscript.cpp \
     tarWrite.c \
@@ -317,6 +318,7 @@ ifneq ($(TW_NO_NETWORK), true)
         microhttpd \
         index.html \
         microhttpd.rc \
+        fox_icon.png \
         ttyd \
         ttyd.rc \
         wlan_start \

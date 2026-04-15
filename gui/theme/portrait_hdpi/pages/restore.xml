@@ -44,7 +44,6 @@
 			<template name="body_nav"/>
 			<template name="ab_main"/>
 			<template name="base_nav_basic"/>
-			<template name="navbar_bkg_nobg"/>
 
 			<text style="text_ab_subtitle">
 				<placement x="%center_x%" y="%ab_bc_double_d_y%" placement="5"/>
@@ -203,7 +202,7 @@
 
 			<template name="navbar_home"/>
 			<template name="navbar_console"/>
-			<template name="navbar_back_cls"/>
+			<template name="navbar_back_classic"/>
 			<template name="navbar_back_restore"/>
 			<template name="gestures_basic"/>
 
@@ -284,7 +283,7 @@
 			</text>
 
 			<text style="text_ab_subtitle_lim">
-				<placement x="%col1_x_indent%" y="%row1_2_y%"/>
+				<placement x="%col1_x%" y="%row1_2_y%"/>
 				<text>%tw_restore_name%</text>
 			</text>
 
@@ -294,17 +293,17 @@
 			</image>
 
 			<text style="text_body2_hl">
-				<placement x="%col1_x_indent%" y="%row2_1a_y%"/>
+				<placement x="%col1_x%" y="%row2_1a_y%"/>
 				<text>{@sel_encrypt_backup}</text>
 			</text>
 
 			<text style="text_body2">
-				<placement x="%col1_x_indent%" y="%row2_3a_y%"/>
+				<placement x="%col1_x%" y="%row2_3a_y%"/>
 				<text>{@decrypt_data_enter_note1}</text>
 			</text>
 
 			<text style="text_body2">
-				<placement x="%col1_x_indent%" y="%row3_1a_y%"/>
+				<placement x="%col1_x%" y="%row3_1a_y%"/>
 				<text>{@decrypt_data_enter_note2}</text>
 			</text>
 
@@ -360,12 +359,12 @@
 			</text>
 
 			<text style="text_ab_title">
-				<placement x="%col1_x_indent%" y="%row1_2_y%" placement="2"/>
+				<placement x="%col1_x%" y="%row1_2_y%" placement="2"/>
 				<text>{@decrypt_data_trying}</text>
 			</text>
 
 			<text style="text_ab_subtitle_lim">
-				<placement x="%col1_x_indent%" y="%row1_2_y%"/>
+				<placement x="%col1_x%" y="%row1_2_y%"/>
 				<text>%tw_restore_name%</text>
 			</text>
 
@@ -397,12 +396,12 @@
 			</text>
 
 			<text style="text_ab_title">
-				<placement x="%col1_x_indent%" y="%row1_2_y%" placement="2"/>
+				<placement x="%col1_x%" y="%row1_2_y%" placement="2"/>
 				<text>{@restore_backup_hdr}</text>
 			</text>
 
 			<text style="text_ab_subtitle_lim">
-				<placement x="%col1_x_indent%" y="%row1_2_y%"/>
+				<placement x="%col1_x%" y="%row1_2_y%"/>
 				<text>%tw_restore_name%</text>
 			</text>
 
@@ -434,34 +433,34 @@
 			</image>
 
 			<text style="caption">
-				<placement x="%col1_x_caption%" y="%row2_1a_y%"/>
+				<placement x="%gl_text_x%" y="%row2_1a_y%"/>
 				<text>{@restore_backup_date}</text>
 			</text>
 
 			<text style="text_body1">
-				<placement x="%col1_x_caption%" y="%row2_2a_y%"/>
+				<placement x="%gl_text_x%" y="%row2_2a_y%"/>
 				<text>%tw_restore_file_date%</text>
 			</text>
 
 			<text style="caption">
-				<placement x="%col1_x_caption%" y="%row3_1a_y%"/>
+				<placement x="%gl_text_x%" y="%row3_1a_y%"/>
 				<text>{@options_hdr}</text>
 			</text>
 
-			<listbox style="settingslist">
-				<placement x="0" y="%row3_2a_y%" w="%screen_w%" h="%lb_l1%"/>
+			<listbox style="settingslist_group">
+				<placement x="0" y="%row3_2a_y%" w="%screen_w%" h="%lb_group_l1%"/>
 				<listitem name="{@restore_enable_digest_chk}">
 					<data variable="tw_skip_digest_check"/>
 				</listitem>
 			</listbox>
 
 			<text style="caption">
-				<placement x="%col1_x_caption%" y="%row4_2_y%"/>
+				<placement x="%gl_text_x%" y="%row4_3_y%"/>
 				<text>{@partitions}</text>
 			</text>
 
 			<partitionlist>
-				<placement x="0" y="%row4_3_y%" w="%screen_w%" h="%restore_part%"/>
+				<placement x="0" y="%row5_1_y%" w="%screen_w%" h="%restore_part%"/>
 				<data name="tw_restore_list" selectedlist="tw_restore_selected"/>
 				<listtype name="restore"/>
 			</partitionlist>
@@ -498,12 +497,12 @@
 			</text>
 
 			<text style="text_ab_title">
-				<placement x="%col1_x_indent%" y="%row1_2_y%" placement="2"/>
+				<placement x="%col1_x%" y="%row1_2_y%" placement="2"/>
 				<text>{@rename_backup_hdr}</text>
 			</text>
 
 			<text style="text_ab_subtitle_lim">
-				<placement x="%col1_x_indent%" y="%row1_2_y%"/>
+				<placement x="%col1_x%" y="%row1_2_y%"/>
 				<text>%tw_restore_name%</text>
 			</text>
 
@@ -564,12 +563,12 @@
 			</text>
 
 			<text style="text_ab_title">
-				<placement x="%col1_x_indent%" y="%row1_2_y%" placement="2"/>
+				<placement x="%col1_x%" y="%row1_2_y%" placement="2"/>
 				<text>%tw_text1%</text>
 			</text>
 
 			<text style="text_ab_subtitle_lim">
-				<placement x="%col1_x_indent%" y="%row1_2_y%"/>
+				<placement x="%col1_x%" y="%row1_2_y%"/>
 				<text>%tw_text2%</text>
 			</text>
 
@@ -622,25 +621,25 @@
 
 			<text style="text_ab_title">
 				<condition var1="tw_partition"/>
-				<placement x="%col1_x_indent%" y="%row1_2_y%" placement="2"/>
+				<placement x="%col1_x%" y="%row1_2_y%" placement="2"/>
 				<text>%tw_partition%</text>
 			</text>
 
 			<text style="text_ab_title">
 				<condition var1="tw_partition" op="!="/>
-				<placement x="%col1_x_indent%" y="%row1_2_y%" placement="2"/>
+				<placement x="%col1_x%" y="%row1_2_y%" placement="2"/>
 				<text>{@restoring_hdr}</text>
 			</text>
 			
 			<text style="text_ab_subtitle">
 				<condition var1="tw_size_progress"/>
-				<placement x="%col1_x_indent%" y="%row1_2_y%"/>
+				<placement x="%col1_x%" y="%row1_2_y%"/>
 				<text>%tw_size_progress%</text>
 			</text>
 
 			<text style="text_ab_subtitle">
 				<condition var1="tw_size_progress" op="!="/>
-				<placement x="%col1_x_indent%" y="%row1_2_y%"/>
+				<placement x="%col1_x%" y="%row1_2_y%"/>
 				<text>{@lang_wait}</text>
 			</text>
 
@@ -661,12 +660,12 @@
 			</text>
 
 			<text style="text_ab_title">
-				<placement x="%col1_x_indent%" y="%row1_2_y%" placement="2"/>
+				<placement x="%col1_x%" y="%row1_2_y%" placement="2"/>
 				<text>{@rename_backup_confirm}</text>
 			</text>
 
 			<text style="text_ab_subtitle_lim">
-				<placement x="%col1_x_indent%" y="%row1_2_y%"/>
+				<placement x="%col1_x%" y="%row1_2_y%"/>
 				<text>%tw_backup_rename%</text>
 			</text>
 
@@ -707,12 +706,12 @@
 			</text>
 
 			<text style="text_ab_title">
-				<placement x="%col1_x_indent%" y="%row1_2_y%" placement="2"/>
+				<placement x="%col1_x%" y="%row1_2_y%" placement="2"/>
 				<text>%tw_action_text1%</text>
 			</text>
 
 			<text style="text_ab_subtitle">
-				<placement x="%col1_x_indent%" y="%row1_2_y%"/>
+				<placement x="%col1_x%" y="%row1_2_y%"/>
 				<text>{@lang_wait}</text>
 			</text>
 
@@ -731,7 +730,7 @@
 			</text>
 
 			<text style="text_ab_subtitle">
-				<placement x="%col1_x_indent%" y="%row1_2_y%"/>
+				<placement x="%col1_x%" y="%row1_2_y%"/>
 				<text>%tw_complete_text1%</text>
 			</text>
 

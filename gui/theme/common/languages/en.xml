@@ -39,7 +39,7 @@
 		<string name="wipe_btn">Wipe</string>
 		<string name="backup_btn">Backups</string>
 		<string name="restore_btn">Restore</string>
-		<string name="mount_btn">Mount</string>
+		<string name="mount_btn">Mount &amp; MTP</string>
 		<string name="file_manager_btn">Files</string>
 		<string name="advanced_btn">Advanced</string>
 		<string name="reboot_btn">Reboot</string>
@@ -343,7 +343,7 @@
 		<string name="sideload_wipe_cache_chk">Wipe Cache</string>
 		<string name="swipe_to_sideload">Swipe to Start Sideload</string>
 		<string name="sideload_confirm">ADB Sideload</string>
-		<string name="sideload_usage">Usage: ADB SideLoad File.ZIP</string>
+		<string name="sideload_usage">Usage: "adb sideload filename.zip"</string>
 		<string name="sideload_complete">ADB Sideload completed</string>
 		<string name="fix_contexts_hdr">Fix Contexts</string>
 		<string name="fix_contexts_confirm">Fix SELinux contexts</string>
@@ -385,7 +385,7 @@
 		<string name="md5_error"> * MD5 Error!</string>
 		<string name="md5_compute_error"> * Error computing MD5.</string>
 		<string name="current_date">(Current Date)</string>
-		<string name="auto_generate">(Auto Generate)</string>
+		<string name="auto_generate">(Default name – will be auto generated)</string>
 		<string name="unable_to_locate_partition">Unable to locate '{1}' partition for backup calculations.</string>
 		<string name="no_partition_selected">No partitions selected for backup.</string>
 		<string name="total_partitions_backup"> * Total number of partitions to back up: {1}</string>
@@ -552,7 +552,7 @@
 		<string name="zip_wipe_cache">One or more ZIP requested a cache wipe -- Wiping cache now.</string>
 		<string name="and_sec_wipe_err">Unable to wipe android secure</string>
 		<string name="dalvik_wipe_err">Failed to wipe dalvik</string>
-		<string name="auto_gen">(Auto Generate)</string>
+		<string name="auto_gen">(Default name – will be auto generated)</string>
 		<string name="curr_date">(Current Date)</string>
 		<string name="backup_name_len">Backup name is too long.</string>
 		<string name="backup_name_invalid">Backup name '{1}' contains invalid character: '{1}'</string>
@@ -624,9 +624,9 @@
 		<string name="arc_lvl">Compression level:</string>
 		<string name="arc_lvl_title">Compression</string>
 		
-		<string name="bkp_date">Add date</string>
-		<string name="bkp_gen">Generate backup name</string>
-		<string name="bkp_gen_whilebkp">Generate backup name while backing up</string>
+		<string name="bkp_date">Insert current date</string>
+		<string name="bkp_gen">Insert default name</string>
+		<string name="bkp_gen_whilebkp">Clear to default name</string>
 		<string name="bkp_quick">Quick Backup</string>
 		<string name="bkp_clear">Clear</string>
 		
@@ -935,7 +935,7 @@
 		<!-- Utilities -->
 		<string name="more">More...</string>
 		<string name="hide">Hide</string>
-		<string name="part_menu_hdr">Manage Partitions</string>
+		<string name="part_menu_hdr">Partition Editor</string>
 		<string name="run_adb_startup">Run ADB on startup</string>
 
 		<!-- Root modules manager -->
@@ -1120,6 +1120,7 @@
 		<string name="backup_quick_info2">after tapping "Quick Backup" button</string>
 		<string name="mbyte">MB</string>
 		<string name="mbytesec">MB/s</string>
+		<string name="kbyte"> KB</string>
 		<string name="backup_av_files">File</string>
 		<string name="backup_av_img">Image</string>
 		<string name="backup_exp_size">Expected size</string>
@@ -1211,6 +1212,11 @@
 		<string name="custom_settings_title">Custom settings</string>
 		<string name="tap_to_show">Tap to show</string>
 
+		<!-- R12 -->
+		<string name="theme_fox_style">Brand styles</string>
+		<string name="theme_custom_style">Classic themes</string>
+		<string name="brand_theme_no_accents">Brand styles cannot have accents</string>
+
 		<!-- Android Rescue Party trigger -->
 		<string name="rescue_party0">Android Rescue Party trigger! Possible solutions? Either:</string>
 		<string name="rescue_party1"> 1. Wipe caches, and/or</string>
@@ -1255,19 +1261,10 @@
 		<string name="enable_hw_control_3">volume and power buttons.</string>
 		<string name="enable_hw_control_4">Gestures will be disabled. Proceed?</string>
 
-		<!-- WLAN -->
-		<string name="wlan_menu">WLAN</string>
-		<string name="wlan_start">Start WLAN</string>
-		<string name="wlan_starting">WLAN Starting...</string>
-		<string name="wlan_scan">Scan Network</string>
-		<string name="wlan_scanning">Network Scanning...</string>
-		<string name="wlan_connect">Connect Network</string>
-		<string name="wlan_status">Get Network Info</string>
-		<string name="wlan_test">Test Network Connection</string>
-		<string name="wlan_list">WLAN List</string>
-		<string name="wlan_select">Select to connect</string>
-		<string name="wlan_password">Enter password for WLAN</string>
-		<string name="wlan_encryption">WLAN Encryption:</string>
-		<string name="wlan_empty">Scan failed or list empty, rescan please!</string>
+		<string name="listbox_group_main">Main</string>
+		<string name="listbox_group_static_part">Static partitions</string>
+		<string name="listbox_group_dynamic_part">Dynamic partitions</string>
+		<string name="listbox_group_additions">Additions</string>
+		<string name="partitions_management">Partitions Management</string>
 	</resources>
 </language>

@@ -9,7 +9,7 @@
 	</details>
 	
 	<resources>
-		<#LOGO_ON#image name="splash_logo" filename="Splash/logo_#LOGO_TYPE#" retainaspect="1"/#LOGO_ON#>
+		<#LOGO_ON#image name="splash_logo" filename="SVG/Logos/logo_#LOGO_TYPE#.svg" retainaspect="1" scale="2.0"/#LOGO_ON#>
 		<#BG_IMG#image name="splash_bg" filename="Splash/user" retainaspect="1"/#BG_IMG#>
 		<#SHOWOFR#font name="of" filename="EuclidFlex-Medium.ttf" size="64"/>
 		<font name="recovery" filename="EuclidFlex-Regular.ttf" size="52"/#SHOWOFR#>

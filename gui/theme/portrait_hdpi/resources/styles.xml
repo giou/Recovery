@@ -2,15 +2,22 @@
 <recovery>
 	<styles>
 		<style name="nav_panel">
-			<font resource="Secondary" color="%accent%"/>
+			<font resource="Secondary-navbar" color="%accent%"/>
 		</style>
 		<style name="nav_panel_d">
-			<font resource="Secondary" color="%color_disable%"/>
+			<font resource="Secondary-navbar" color="%text_action%"/>
+		</style>
+		<style name="nav_panel_btn">
+			<image resource="nav_empty" highlightresource="nav_hl"/>
+		</style>
+
+		<style name="nb_btn">
+			<image resource="nb_empty" highlightresource="nb_hl"/>
 		</style>
 		
 		<style name="tab_btn">
 			<fill color="%transparent%"/>
-			<font resource="Secondary" color="%color_disable%" highlightcolor="#46494C"/>
+			<font resource="Secondary" color="%text_dark%" highlightcolor="#46494C"/>
 		</style>
 
 		<style name="tab_btn_hl">
@@ -29,8 +36,12 @@
 		<style name="text_ab_title_ota">
 			<font resource="Secondary-title" color="%text%"/>
 		</style>
-		<style name="text_ab_switch">
+
+		<style name="text_ab_switch_on">
 			<font resource="Secondary-title" color="%text_hl_btn%"/>
+		</style>
+		<style name="text_ab_switch_off">
+			<font resource="Secondary-title" color="%disabled_text%"/>
 		</style>
 		
 		<style name="text_ab_subtitle">
@@ -51,11 +62,11 @@
 		</style>
 		
 		<style name="about_name">
-			<font resource="font_l" color="#222222"/>
+			<font resource="font_l" color="%text%"/>
 		</style>
 		
 		<style name="about_info">
-			<font resource="body1" color="%color_disable%"/>
+			<font resource="body1" color="%text_status%"/>
 		</style>
 
 		<style name="text_dlg_title">
@@ -79,7 +90,7 @@
 		</style>
 
 		<style name="text_body1_dark">
-			<font resource="caption" color="%color_disable%"/>
+			<font resource="caption" color="%text%"/>
 		</style>
 
 		<style name="text_body2">
@@ -87,11 +98,11 @@
 		</style>
 
 		<style name="text_body2_dark">
-			<font resource="body2" color="%color_disable%"/>
+			<font resource="body2" color="%text_dark%"/>
 		</style>
 
 		<style name="text_body2_hl">
-			<font resource="body2" color="%accent%"/>
+			<font resource="body2" color="%text%"/>
 		</style>
 
 		<style name="text_body2_fail">
@@ -99,7 +110,7 @@
 		</style>
 
 		<style name="caption">
-			<font resource="caption" color="%accent%"/>
+			<font resource="caption" color="%text%"/>
 		</style>
 
 		<style name="caption_hl">
@@ -127,7 +138,7 @@
 
 		<style name="btn_raised">
 			<highlight color="%highlight_color%"/>
-			<font resource="Secondary" color="%accent%"/>
+			<font resource="Secondary" color="%text%"/>
 			<image resource="btn_raised"/>
 		</style>
 
@@ -176,8 +187,30 @@
 			<font resource="body1" spacing="%fileselector_spacing%" color="%text%" />
 		</style>
 
+		<style name="settingslist_group">
+			<highlight color="%highlight_color_full%"/>
+			<group color="%groupitems_clr%"/>
+			<padding top="40" bottom="40"/>
+			<background color="%background%"/>
+			<fastscroll rectcolor="%accent%" w="%fastscroll_w%" rectw="%fastscroll_rectw%" recth="%fastscroll_recth%" />
+			<icon selected="checkbox_true" unselected="checkbox_false"/>
+			<iconsize w="%col1_x_caption%" h="90" padding="25"/>
+			<font resource="body1" spacing="%fileselector_spacing%" color="%text%" />
+		</style>
+
 		<style name="checkbox">
 			<image checked="checkbox_true" unchecked="checkbox_false"/>
+			<font resource="body1" spacing="%fileselector_spacing%" color="%text%" />
+		</style>
+
+		<style name="radiobox_group">
+			<group color="%groupitems_clr%"/>
+			<padding top="40" bottom="40"/>
+			<background color="%background%"/>
+			<highlight color="%highlight_color_full%"/>
+			<fastscroll rectcolor="%accent%" w="%fastscroll_w%" rectw="%fastscroll_rectw%" recth="%fastscroll_recth%" />
+			<icon selected="radio_true" unselected="radio_false" />
+			<iconsize w="%col1_x_caption%" h="90" padding="25"/>
 			<font resource="body1" spacing="%fileselector_spacing%" color="%text%" />
 		</style>
 		
@@ -203,8 +236,28 @@
 			<font resource="button" spacing="%fileselector_spacing%" color="%text_menu%"/>
 		</style>
 
+		<style name="group_list">
+			<background color="%background%"/>
+			<group arrowresource="arrow_r" color="%groupitems_clr%"/>
+			<highlight color="%highlight_color_full%"/>
+			<fastscroll rectcolor="%accent%" w="%fastscroll_w%" rectw="%fastscroll_rectw%" recth="%fastscroll_recth%" />
+			<iconsize w="216" h="%bl_h1%" padding="24"/>
+			<font resource="button" spacing="%fileselector_spacing%" color="%text_menu%"/>
+		</style>
+
+		<style name="group_list_flat">
+			<background color="%background%"/>
+			<group color="%groupitems_clr%"/>
+			<highlight color="%highlight_color_full%"/>
+			<fastscroll rectcolor="%accent%" w="%fastscroll_w%" rectw="%fastscroll_rectw%" recth="%fastscroll_recth%" />
+			<iconsize w="216" h="%bl_h1%" padding="24"/>
+			<font resource="button" spacing="%fileselector_spacing%" color="%text_menu%"/>
+		</style>
+
 		<style name="partitionlist">
 			<background color="%background%"/>
+			<group color="%groupitems_clr%"/>
+			<padding top="40" bottom="40"/>
 			<highlight color="%highlight_color_full%"/>
 			<fastscroll rectcolor="%accent%" w="%fastscroll_w%" rectw="%fastscroll_rectw%" recth="%fastscroll_recth%" />
 			<icon selected="checkbox_true" unselected="checkbox_false" />
@@ -214,6 +267,8 @@
 
 		<style name="partitionlist_dialog">
 			<background color="%background%"/>
+			<group color="%groupitems_clr%"/>
+			<padding top="40" bottom="40"/>
 			<highlight color="%highlight_color_full%"/>
 			<fastscroll rectcolor="%accent%" w="%fastscroll_w%" rectw="%fastscroll_rectw%" recth="%fastscroll_recth%" />
 			<icon selected="radio_true" unselected="radio_false" />
@@ -223,6 +278,8 @@
 
 		<style name="partitionlist_radio">
 			<background color="%background%"/>
+			<group color="%groupitems_clr%"/>
+			<padding top="40" bottom="40"/>
 			<highlight color="%highlight_color_full%"/>
 			<fastscroll rectcolor="%accent%" w="%fastscroll_w%" rectw="%fastscroll_rectw%" recth="%fastscroll_recth%" />
 			<icon selected="radio_true" unselected="radio_false" />
@@ -235,7 +292,7 @@
 			<fastscroll rectcolor="%accent%" w="%fastscroll_w%" rectw="%fastscroll_rectw%" recth="%fastscroll_recth%" />
 			<background color="%background%" />
 			<exicon up="up_icon" link="link_icon" block="block_icon"  zip="zip_icon" img="img_icon" txt="txt_icon" png="png_icon" />
-			<iconsize w="216" h="168" padding="24" />
+			<iconsize w="216" h="168" padding="0" bg="fs_bg_big" />
 			<font resource="body2" spacing="%fileselector_spacing%" color="%text%" />
 		</style>
 
@@ -273,7 +330,7 @@
 		<style name="slidervalue">
 			<resource background="slider_used" handle="handle" handlehover="handle_h"/>
 			<font resource="caption" color="%text%"/>
-			<colors line="%color_disable%" slider="%accent%"/>
+			<colors line="%text_dark%" slider="%accent%"/>
 			<dimensions lineh="%slidervalue_lineh%" linepadding="%slidervalue_padding%" sliderw="%slidervalue_sliderw%" sliderh="%slidervalue_sliderh%"/>
 		</style>
 
@@ -290,7 +347,7 @@
 			<image resource="switch_off"/>
 		</style>
 		<style name="patternpassword">
-			<dot color="%color_disable%" activecolor="%accent%" radius="%pattern_dot_dia%"/>
+			<dot color="%text_dark%" activecolor="%accent%" radius="%pattern_dot_dia%"/>
 			<line color="%accent%" width="%pattern_line_w%"/>
 			<size name="tw_gui_pattern_grid_size" default="3"/>
 		</style>
@@ -299,13 +356,19 @@
 			<dynamic dx="4" dy="8" dw="18" dh="32"
 					 img="battery_p" imgLow="battery_low_p"/>
 			<font resource="status" color="%text_status%" colorLow="#FFA244" padding="28"/>
-			<charging img="battery_charge" x="28" y="13"/>
+			<charging img="bolt" x="26" y="10"/>
 		</style>
 		<style name="battery_circle">
 			<states 100="battery100" 75="battery75" 50="battery50"
 				    25="battery25" 15="battery15" c15="battery15_good" 5="battery5"/>
-			<charging img="battery_charge" x="17" y="13"/>
+			<charging img="bolt" x="13" y="12"/>
 			<font resource="status" color="%text_status%" colorLow="#FFA244" padding="16"/>
+		</style>
+		<style name="battery_style_2">
+			<states 100="battery_android_full" 90="battery_android_6" 75="battery_android_5" 50="battery_android_4"
+			25="battery_android_3" 15="battery_android_2" c15="battery_android_1" 5="battery_android_alert"/>
+			<font resource="status" color="%text_status%" colorLow="#FFA244" padding="10"/>
+			<charging img="bolt" x="-20" y="5"/>
 		</style>
 	</styles>
 </recovery>

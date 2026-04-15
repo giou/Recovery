@@ -92,22 +92,6 @@
 				<condition var1="use_fixed_font" var2="1"/>
 				<font resource="fixed"/>
 			</console>
-
-			<fill color="%title_solid_bg%">
-				<condition var1="darker_ui" var2="1"/>
-				<placement x="0" y="%nav_panel_y%" w="%screen_w%" h="%nav_panel_h%"/>
-			</fill>
-
-			<image>
-				<condition var1="show_shadow" var2="1"/>
-				<placement x="0" y="%nav_panel_y%" placement="2"/>
-				<image resource="nav_shadow"/>
-			</image>
-
-			<fill color="%linecolor%">
-				<condition var1="show_shadow" var2="2"/>
-				<placement x="0" y="%nav_panel_y%" w="1080" h="2" placement="2"/>
-			</fill>
 			
 			<slidervalue>
 				<condition var1="tw_has_brightnesss_file" var2="1"/>

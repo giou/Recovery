@@ -25,6 +25,7 @@
 		<font name="keylabel-longpress" filename="#PRIMARY_FONT_REG#.ttf" size="38"/>
 		
 		<font name="Secondary" filename="#SECONDARY_FONT_MED#.ttf" size="46"/>
+		<font name="Secondary-navbar" filename="#SECONDARY_FONT_MED#.ttf" size="36"/>
 		<font name="Secondary-title" filename="#SECONDARY_FONT_MED#.ttf" size="67"/>
 		<font name="caption" filename="#SECONDARY_FONT_MED#.ttf" size="36"/>
 		

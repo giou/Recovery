@@ -2,43 +2,55 @@
 <recovery>
 	<pages>
         <page name="fox_ota">
-			<fill color="%unactive_title%">
-				<placement x="0" y="%ab_h%" w="%screen_w%" h="%ab_btn_h%"/>
-			</fill>
 
-			<image style="switch_off">
-				<placement x="%ab_btn1_x%" y="%ab2_y%" placement="4"/>
-			</image>
-
-			<fill color="%accent%">
+			<!-- Enabled -->
+			<image>
 				<condition var1="fox_support_miui_ota" var2="1"/>
-				<condition var1="fox_include_system_survival" var2="1"/>
-				<placement x="0" y="%ab_h%" w="%screen_w%" h="%ab_btn_h%"/>
-			</fill>
+				<placement x="40" y="%ab_h%"/>
+				<image resource="main_switch_card_active" />
+			</image>
 
 			<image style="switch_on">
 				<condition var1="fox_support_miui_ota" var2="1"/>
-				<condition var1="fox_include_system_survival" var2="1"/>
-				<placement x="%ab_btn1_x%" y="%ab2_y%" placement="4"/>
+				<placement x="%main_switch_icon_x%" y="%ab2_y%" placement="4"/>
 			</image>
-			
-			<text style="text_ab_switch">
-				<placement x="%col1_x_indent%" y="%ab_bc2_y%"/>
+
+			<text style="text_ab_switch_on">
+				<condition var1="fox_support_miui_ota" var2="1"/>
+				<placement x="%switch_text_x%" y="%ab_bc2_y%"/>
 				<text>{@fox_miui_ota_on}</text>
 			</text>
 
 			<button style="bs_btn">
-				<placement x="0" y="%ab_h%" w="%screen_w%" h="%ab_btn_h%"/>
-				<action function="set">fox_support_miui_ota=1</action>
-				<action function="set">fox_include_system_survival=1</action>
-			</button>
-
-			<button style="bs_btn">
 				<condition var1="fox_support_miui_ota" var2="1"/>
-				<condition var1="fox_include_system_survival" var2="1"/>
 				<placement x="0" y="%ab_h%" w="%screen_w%" h="%ab_btn_h%"/>
 				<action function="set">fox_support_miui_ota=0</action>
 				<action function="set">fox_include_system_survival=0</action>
+			</button>
+
+			<!-- Disabled -->
+			<image>
+				<condition var1="fox_support_miui_ota" op="!=" var2="1"/>
+				<placement x="40" y="%ab_h%"/>
+				<image resource="main_switch_card_not_active" />
+			</image>
+
+			<image style="switch_off">
+				<condition var1="fox_support_miui_ota" op="!=" var2="1"/>
+				<placement x="%main_switch_icon_x%" y="%ab2_y%" placement="4"/>
+			</image>
+
+			<text style="text_ab_switch_off">
+				<condition var1="fox_support_miui_ota" op="!=" var2="1"/>
+				<placement x="%gl_text_x%" y="%ab_bc2_y%"/>
+				<text>{@fox_miui_ota_on}</text>
+			</text>
+
+			<button style="bs_btn">
+				<condition var1="fox_support_miui_ota" op="!=" var2="1"/>
+				<placement x="0" y="%ab_h%" w="%screen_w%" h="%ab_btn_h%"/>
+				<action function="set">fox_support_miui_ota=1</action>
+				<action function="set">fox_include_system_survival=1</action>
 			</button>
 		
             <template name="base"/>
@@ -110,12 +122,12 @@
 			</text>
 			
 			<text style="caption">
-				<placement x="%col1_x_caption%" y="%row2_2a_y%"/>
+				<placement x="%gl_text_x%" y="%row2_2a_y%"/>
 				<text>{@fox_ota_settings}</text>
 			</text>
 
-            <listbox style="settingslist">
-				<placement x="0" y="%row2_3a_y%" w="%screen_w%" h="%lb_l5%"/>
+            <listbox style="settingslist_group">
+				<placement x="0" y="%row2_3a_y%" w="%screen_w%" h="%lb_group_l5%"/>
 				<listitem name="{@fox_support_miui_ota_chk}">
 					<data variable="fox_support_miui_ota"/>
 				</listitem>	
@@ -134,12 +146,12 @@
 			</listbox>
 
 			<text style="caption">
-				<placement x="%col1_x_caption%" y="%row6_1a_y%"/>
+				<placement x="%gl_text_x%" y="%row6_1a_y%"/>
 				<text>{@fox_patch_rom}</text>
 			</text>
 
-			<listbox style="settingslist">
-				<placement x="0" y="%row6_2a_y%" w="%screen_w%" h="%lb_l3%"/>
+			<listbox style="settingslist_group">
+				<placement x="0" y="%row6_2a_y%" w="%screen_w%" h="%lb_group_l3%"/>
 				<listitem name="{@fox_dmverity_chk}">
 					<data variable="fox_reboot_dm_verity_check"/>
 				</listitem>
@@ -173,24 +185,24 @@
 			</text>
 			
 			<text style="caption">
-				<placement x="%col1_x_caption%" y="%row1_1_y%"/>
+				<placement x="%gl_text_x%" y="%row1_1_y%"/>
 				<text>{@fox_ota_settings}</text>
 			</text>
 
-            <listbox style="settingslist">
-				<placement x="0" y="%row1_2_y%" w="%screen_w%" h="%lb_l1%"/>
+            <listbox style="settingslist_group">
+				<placement x="0" y="%row1_2_y%" w="%screen_w%" h="%lb_group_l1%"/>
 				<listitem name="{@FOX_DISABLE_OTA_AUTO_REBOOT_chk}">
 					<data variable="fox_disable_ota_auto_reboot_check"/>
 				</listitem>
 			</listbox>
 
 			<text style="caption">
-				<placement x="%col1_x_caption%" y="%row2_1a_y%"/>
+				<placement x="%gl_text_x%" y="%row2_2a_y%"/>
 				<text>{@fox_patch_rom}</text>
 			</text>
 
-            <listbox style="settingslist">
-				<placement x="0" y="%row2_2a_y%" w="%screen_w%" h="%lb_l3%"/>
+            <listbox style="settingslist_group">
+				<placement x="0" y="%row2_3a_y%" w="%screen_w%" h="%lb_group_l3%"/>
 				<listitem name="{@fox_dmverity_chk}">
 					<data variable="fox_reboot_dm_verity_check"/>
 				</listitem>
@@ -216,9 +228,9 @@
         </page>
 
 		<page name="fox_lab">
-			<listbox style="btn_list">
+			<listbox style="group_list">
 				<placement x="0" y="%ab_h%" w="%screen_w%" h="%bl_fullscreen_h%"/>
-				<icon selected="bs_adv_se" unselected="bs_adv_se" />
+				<icon selected="build" unselected="build" />
 				<listitem name="Kill recovery">
 					<action function="ftls">pkill recovery</action>
 				</listitem>
@@ -243,25 +255,31 @@
 				<listitem name="Set screen size to 1920">
 					<condition var1="screen_original_h" op="!=" var2="1920"/>
 					<action function="ftls">
-						[ ! -d "%fox_navbar_path%" ] &amp;&amp; mkdir -p "%fox_navbar_path%"
+						if [ ! -d "%fox_navbar_path%" ]; then mkdir -p -m 0755 "%fox_navbar_path%"; chcon -R "%fox_media_rw_data_file%" "%fox_navbar_path%"; chown -R "%fox_media_rw%" "%fox_navbar_path%"; fi;
 						cat "/twres/themes/sed/navbar.xml" | sed -e "s/#NAVBAR_DISABLE#/0/g;
 						s/#SCREEN_H#/1920/g" > %fox_navbar_path%/navbar.xml;
+						chcon -R "%fox_media_rw_data_file%" "%fox_navbar_path%/navbar.xml";
+						chown -R "%fox_media_rw%" "%fox_navbar_path%/navbar.xml";
 					</action>
 					<action function="reload"/>
 				</listitem>
 				<listitem name="Set screen size to %screen_original_h%">
 					<action function="ftls">
-						[ ! -d "%fox_navbar_path%" ] &amp;&amp; mkdir -p "%fox_navbar_path%"
+						if [ ! -d "%fox_navbar_path%" ]; then mkdir -p -m 0755 "%fox_navbar_path%"; chcon -R "%fox_media_rw_data_file%" "%fox_navbar_path%"; chown -R "%fox_media_rw%" "%fox_navbar_path%"; fi;
 						cat "/twres/themes/sed/navbar.xml" | sed -e "s/#NAVBAR_DISABLE#/0/g;
 						s/#SCREEN_H#/%screen_original_h%/g" > %fox_navbar_path%/navbar.xml;
+						chcon -R "%fox_media_rw_data_file%" "%fox_navbar_path%/navbar.xml";
+						chown -R "%fox_media_rw%" "%fox_navbar_path%/navbar.xml";
 					</action>
 					<action function="reload"/>
 				</listitem>
 				<listitem name="Set screen size to %screen_original_h% + 96">
 					<action function="ftls">
-						[ ! -d "%fox_navbar_path%" ] &amp;&amp; mkdir -p "%fox_navbar_path%"
+						if [ ! -d "%fox_navbar_path%" ]; then mkdir -p -m 0755 "%fox_navbar_path%"; chcon -R "%fox_media_rw_data_file%" "%fox_navbar_path%"; chown -R "%fox_media_rw%" "%fox_navbar_path%"; fi;
 						cat "/twres/themes/sed/navbar.xml" | sed -e "s/#NAVBAR_DISABLE#/0/g;
 						s/#SCREEN_H#/$(expr %screen_original_h% + 96)/g" > %fox_navbar_path%/navbar.xml;
+						chcon -R "%fox_media_rw_data_file%" "%fox_navbar_path%/navbar.xml";
+						chown -R "%fox_media_rw%" "%fox_navbar_path%/navbar.xml";
 					</action>
 					<action function="reload"/>
 				</listitem>
@@ -303,7 +321,7 @@
 			</text>
 			
 			<text style="caption">
-				<placement x="%col1_x_caption%" y="%row1_1_y%"/>
+				<placement x="%gl_text_x%" y="%row1_1_y%"/>
 				<text>Pages</text>
 			</text>
 
@@ -376,7 +394,7 @@
 			</text>
 
 			<text style="caption">
-				<placement x="%col1_x_caption%" y="%row2_1_y%"/>
+				<placement x="%gl_text_x%" y="%row2_1_y%"/>
 				<text>{@dbg_func}</text>
 			</text>
 
@@ -389,7 +407,7 @@
 			</listbox>
 			
 			<text style="caption">
-				<placement x="%col1_x_caption%" y="%row4_1a_y%"/>
+				<placement x="%gl_text_x%" y="%row4_1a_y%"/>
 				<text>{@cust_oth}</text>
 			</text>
 

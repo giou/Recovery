@@ -10,10 +10,9 @@
 			<template name="body_nav"/>
 			<template name="base_nav_basic"/>
 			
-			<template name="navbar_bkg_nobg"/>
 			<template name="navbar_home"/>
 			<template name="navbar_console"/>
-			<template name="navbar_back_cls"/>
+			<template name="navbar_back_classic"/>
 			<template name="tabs"/>
 			
 			<button style="tab_btn_hl">
@@ -37,7 +36,7 @@
 			</text>
 
 			<text style="caption">
-				<placement x="%col1_x_caption%" y="%row1_3_y%"/>
+				<placement x="%gl_text_x%" y="%row1_3_y%"/>
 				<text>{@partitions}</text>
 			</text>
 
@@ -151,17 +150,17 @@
 			</text>
 
 			<text style="text_body2">
-				<placement x="%col1_x_indent%" y="%row3_1_y%"/>
+				<placement x="%col1_x%" y="%row3_1_y%"/>
 				<text>{@yes_continue}</text>
 			</text>
 
 			<text style="caption_hl">
-				<placement x="%col1_x_caption%" y="%row3_3a_y%"/>
+				<placement x="%col1_x%" y="%row3_3a_y%"/>
 				<text>{@confirm_wipe_cptn}</text>
 			</text>
 
 			<input>
-				<placement x="%col1_x_caption%" y="%row4_1a_y%" w="%input_w%" h="%input_height%"/>
+				<placement x="%col1_x%" y="%row4_1a_y%" w="%input_w%" h="%input_height%"/>
 				<text>%tw_confirm_formatdata%</text>
 				<data name="tw_confirm_formatdata"/>
 				<restrict minlen="3" maxlen="3" allow="yes"/>
@@ -169,7 +168,7 @@
 			</input>
 
 			<fill color="%accent%">
-				<placement x="%col1_x_caption%" y="%row4_2a_y%" w="%input_w%" h="%input_line_height%" placement="1"/>
+				<placement x="%col1_x%" y="%row4_2a_y%" w="%input_w%" h="%input_line_height%" placement="1"/>
 			</fill>
 
 			<template name="gestures_key"/>
@@ -212,12 +211,12 @@
 			</text>
 
 			<text style="text_ab_title">
-				<placement x="%col1_x_indent%" y="%row1_2_y%" placement="2"/>
+				<placement x="%col1_x%" y="%row1_2_y%" placement="2"/>
 				<text>%tw_text1%</text>
 			</text>
 
 			<text style="text_ab_subtitle">
-				<placement x="%col1_x_indent%" y="%row1_2_y%"/>
+				<placement x="%col1_x%" y="%row1_2_y%"/>
 				<text>%tw_text2%</text>
 			</text>
 
@@ -254,12 +253,12 @@
 			</text>
 
 			<text style="text_ab_title">
-				<placement x="%col1_x_indent%" y="%row1_2_y%" placement="2"/>
+				<placement x="%col1_x%" y="%row1_2_y%" placement="2"/>
 				<text>%tw_action_text1%</text>
 			</text>
 
 			<text style="text_ab_subtitle">
-				<placement x="%col1_x_indent%" y="%row1_2_y%"/>
+				<placement x="%col1_x%" y="%row1_2_y%"/>
 				<text>%tw_action_text2%</text>
 			</text>
 
@@ -294,7 +293,7 @@
 			</text>
 
 			<text style="text_ab_subtitle">
-				<placement x="%col1_x_indent%" y="%row1_2_y%"/>
+				<placement x="%col1_x%" y="%row1_2_y%"/>
 				<text>%tw_complete_text1%</text>
 			</text>
 
@@ -336,12 +335,12 @@
 				</text>
 
 				<text style="text_ab_title">
-					<placement x="%col1_x_indent%" y="%row1_2_y%" placement="2"/>
+					<placement x="%col1_x%" y="%row1_2_y%" placement="2"/>
 					<text>{@part_opt_hdr}</text>
 				</text>
 
 				<text style="text_ab_subtitle">
-					<placement x="%col1_x_indent%" y="%row1_2_y%"/>
+					<placement x="%col1_x%" y="%row1_2_y%"/>
 					<text>%tw_partition_name%</text>
 				</text>
 
@@ -538,12 +537,12 @@
 				</text>
 
 				<text style="text_ab_title">
-					<placement x="%col1_x_indent%" y="%row1_2_y%" placement="2"/>
+					<placement x="%col1_x%" y="%row1_2_y%" placement="2"/>
 					<text>{@change_fs_hdr}</text>
 				</text>
 
 				<text style="text_ab_subtitle">
-					<placement x="%col1_x_indent%" y="%row1_2_y%"/>
+					<placement x="%col1_x%" y="%row1_2_y%"/>
 					<text>%tw_partition_name%</text>
 				</text>
 
@@ -625,12 +624,12 @@
 				</text>
 
 				<text style="caption">
-					<placement x="%col1_x_caption%" y="%row1_1_y%"/>
+					<placement x="%col1_x_caption%" y="%row0_y%"/>
 					<text>{@partitions}</text>
 				</text>
 
 				<partitionlist style="partitionlist_radio">
-					<placement x="0" y="%row1_2_y%" w="%screen_w%" h="%fullscreen_list_h%"/>
+					<placement x="0" y="%row1_1_y%" w="%screen_w%" h="%fullscreen_list_h%"/>
 					<data name="part_option"/>
 					<listtype name="part_option"/>
 				</partitionlist>
@@ -664,7 +663,7 @@
 
 				<action>
 					<touch key="back"/>
-					<action function="page">advanced</action>
+					<action function="page">part_manage</action>
 				</action>
 			</page>
 	</pages>

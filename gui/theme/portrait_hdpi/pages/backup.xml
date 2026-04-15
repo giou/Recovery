@@ -44,12 +44,12 @@
 			</text>
 
 			<text style="text_ab_title">
-				<placement x="%col1_x_indent%" y="%row1_2_y%" placement="2"/>
+				<placement x="%col1_x%" y="%row1_2_y%" placement="2"/>
 				<text>%tw_storage_display_name%</text>
 			</text>
 
 			<text style="text_ab_subtitle">
-				<placement x="%col1_x_indent%" y="%row1_2_y%"/>
+				<placement x="%col1_x%" y="%row1_2_y%"/>
 				<text>{@part_free}: %tw_storage_free_size%{@mbyte}</text>
 			</text>
 
@@ -117,12 +117,12 @@
 			</image>
 
 			<text style="caption">
-				<placement x="%col1_x_caption%" y="%row2_1a_y%"/>
+				<placement x="%gl_text_x%" y="%row2_1a_y%"/>
 				<text>{@name}</text>
 			</text>
 
 			<input>
-				<placement x="%col1_x_caption%" y="%row2_2a_y%" w="%input_w%" h="%input_height%"/>
+				<placement x="%col1_x%" y="%row2_2a_y%" w="%input_w%" h="%input_height%"/>
 				<cursor color="%transparent%" hasfocus="0" width="0"/>
 				<data name="tw_backup_name"/>
 				<restrict disable="1"/>
@@ -132,41 +132,41 @@
 			<fill color="%linecolor%">
 				<condition var1="tw_fileexists" var2="0"/>
 				<condition var1="tw_backup_name" op="!=" var2="{@auto_gen}"/>
-				<placement x="%col1_x_caption%" y="%row2_3a_y%" w="%input_w%" h="%input_line_height%" placement="1"/>
+				<placement x="%col1_x%" y="%row2_3a_y%" w="%input_w%" h="%input_line_height%" placement="1"/>
 			</fill>
 
 			<fill color="%linecolor%">
 				<condition var1="tw_backup_name" var2="{@auto_gen}"/>
-				<placement x="%col1_x_caption%" y="%row2_3a_y%" w="%input_w%" h="%input_line_height%" placement="1"/>
+				<placement x="%col1_x%" y="%row2_3a_y%" w="%input_w%" h="%input_line_height%" placement="1"/>
 			</fill>
 
 			<fill color="%text_fail%">
 				<condition var1="tw_fileexists" var2="1"/>
 				<condition var1="tw_backup_name" op="!=" var2="{@auto_gen}"/>
-				<placement x="%col1_x_caption%" y="%row2_3a_y%" w="%input_w%" h="%input_line_height%" placement="1"/>
+				<placement x="%col1_x%" y="%row2_3a_y%" w="%input_w%" h="%input_line_height%" placement="1"/>
 			</fill>
 
 			<text style="text_input_fail">
 				<condition var1="tw_fileexists" var2="1"/>
 				<condition var1="tw_backup_name" op="!=" var2="{@auto_gen}"/>
-				<placement x="%col1_x_caption%" y="%row2_3a_y%"/>
+				<placement x="%col1_x%" y="%row2_3a_y%"/>
 				<text>{@backup_name_exists}</text>
 			</text>
 
 			<button style="menu_btn">
 				<condition var1="tw_backup_name" op="!=" var2="{@auto_gen}"/>
-				<placement x="%col1_x_caption%" y="%row2_1a_y%" w="%input_w%" h="%mb_h_hide%"/>
+				<placement x="%col1_x%" y="%row2_1a_y%" w="%input_w%" h="%mb_h_hide%"/>
 				<action function="page">backupname</action>
 			</button>
 
 			<button style="menu_btn">
 				<condition var1="tw_backup_name" var2="{@auto_gen}"/>
-				<placement x="%col1_x_caption%" y="%row2_1a_y%" w="%input_w%" h="%mb_h_hide%"/>
+				<placement x="%col1_x" y="%row2_1a_y%" w="%input_w%" h="%mb_h_hide%"/>
 				<action function="page">backupname_auto</action>
 			</button>
 
 			<text style="caption">
-				<placement x="%col1_x_caption%" y="%row3_1a_y%"/>
+				<placement x="%gl_text_x%" y="%row3_1a_y%"/>
 				<text>{@partitions}</text>
 			</text>
 
@@ -175,16 +175,6 @@
 				<data name="tw_backup_list"/>
 				<listtype name="backup_total"/>
 			</partitionlist>
-
-			<fill color="%linecolor%">
-				<condition var1="tw_fileexists" var2="0"/>
-				<condition var1="tw_backup_name" op="!=" var2="{@auto_gen}"/>
-				<placement x="%col1_x_caption%" y="%row2_3a_y%" w="%input_w%" h="%input_line_height%" placement="1"/>
-			</fill>
-
-			<fill color="%linecolor%">
-				<placement x="%col1_x%" y="%part_backup_line_y%" w="%content_w%" h="%input_line_height%" placement="1"/>
-			</fill>
 
 			<text style="text_body1_dark">
 				<placement x="%col1_x%" y="%part_backup_info_y%" />
@@ -234,7 +224,6 @@
 				<action function="page">backup_run</action>
 			</slider>
 
-			<template name="navbar_bkg"/>
 			<button>
 				<condition var1="of_show_storage_selection" var2="1"/>
 				<fill color="%darktransparent%"/>
@@ -288,22 +277,22 @@
 			</text>
 
 			<text style="text_ab_title">
-				<placement x="%col1_x_indent%" y="%row1_2_y%" placement="2"/>
+				<placement x="%col1_x%" y="%row1_2_y%" placement="2"/>
 				<text>{@bkp_nametitle}</text>
 			</text>
 
 			<text style="text_ab_subtitle">
-				<placement x="%col1_x_indent%" y="%row1_2_y%"/>
+				<placement x="%col1_x%" y="%row1_2_y%"/>
 				<text>{@bkp_namesub}</text>
 			</text>
 
 			<text style="caption_hl">
-				<placement x="%col1_x_caption%" y="%row2_1a_y%"/>
+				<placement x="%col1_x%" y="%row2_1a_y%"/>
 				<text>{@name}</text>
 			</text>
 
 			<input>
-				<placement x="%col1_x_caption%" y="%row2_2a_y%"  w="%input_backup_w%" h="%input_height%"/>
+				<placement x="%col1_x%" y="%row2_2a_y%"  w="%input_backup_w%" h="%input_height%"/>
 				<text>%tw_backup_name%</text>
 				<data name="tw_backup_name"/>
 				<restrict minlen="0" maxlen="64" allow="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890-_.{}[]"/>
@@ -322,32 +311,36 @@
 
 			<fill color="%accent%">
 				<condition var1="tw_fileexists" var2="0"/>
-				<placement x="%col1_x_caption%" y="%row2_3a_y%" w="%input_backup_w%" h="%input_line_height%" placement="1"/>
+				<placement x="%col1_x%" y="%row2_3a_y%" w="%input_backup_w%" h="%input_line_height%" placement="1"/>
 			</fill>
 
 			<fill color="%text_fail%">
 				<condition var1="tw_fileexists" var2="1"/>
-				<placement x="%col1_x_caption%" y="%row2_3a_y%" w="%input_backup_w%" h="%input_line_height%" placement="1"/>
+				<placement x="%col1_x%" y="%row2_3a_y%" w="%input_backup_w%" h="%input_line_height%" placement="1"/>
 			</fill>
 
 			<text style="text_input_fail">
 				<condition var1="tw_fileexists" var2="1"/>
-				<placement x="%col1_x_caption%" y="%row2_3a_y%"/>
+				<placement x="%col1_x%" y="%row2_3a_y%"/>
 				<text>{@backup_name_exists}</text>
 			</text>
 
-			<listbox style="btn_list">
-				<placement x="0" y="%input_btn_list_y%" w="%screen_w%" h="%bl_h3%"/>
+			<listbox style="group_list">
+				<placement x="0" y="%input_btn_list_y%" w="%screen_w%" h="%bl_h2%"/>
 				<listitem name="{@bkp_date}">
-					<icon res="bs_btn_time"/>
+					<icon res="calendar_add_on"/>
 					<action function="appenddatetobackupname"/>
 				</listitem>
 				<listitem name="{@bkp_gen}">
-					<icon res="bs_btn_new"/>
+					<icon res="chat_add_on"/>
 					<action function="generatebackupname"/>
 				</listitem>
+			</listbox>
+
+			<listbox style="group_list">
+				<placement x="0" y="%row5_1_y%" w="%screen_w%" h="%bl_h1%"/>
 				<listitem name="{@bkp_gen_whilebkp}">
-					<icon res="bs_btn_wut"/>
+					<icon res="reset_wrench"/>
 					<action function="set">tw_backup_name={@auto_gen}</action>
 					<action function="page">backupname_auto</action>
 				</listitem>
@@ -375,22 +368,22 @@
 			</text>
 
 			<text style="text_ab_title">
-				<placement x="%col1_x_indent%" y="%row1_2_y%" placement="2"/>
+				<placement x="%col1_x%" y="%row1_2_y%" placement="2"/>
 				<text>{@bkp_nametitle}</text>
 			</text>
 
 			<text style="text_ab_subtitle">
-				<placement x="%col1_x_indent%" y="%row1_2_y%"/>
+				<placement x="%col1_x%" y="%row1_2_y%"/>
 				<text>{@bkp_namesub}</text>
 			</text>
 
 			<text style="caption">
-				<placement x="%col1_x_caption%" y="%row2_1a_y%"/>
+				<placement x="%gl_text_x%" y="%row2_1a_y%"/>
 				<text>{@name}</text>
 			</text>
 
 			<input>
-				<placement x="%col1_x_caption%" y="%row2_2a_y%" w="%input_w%" h="%input_height%"/>
+				<placement x="%col1_x%" y="%row2_2a_y%" w="%input_w%" h="%input_height%"/>
 				<cursor color="%transparent%" hasfocus="0" width="0"/>
 				<data name="tw_backup_name"/>
 				<restrict minlen="0" maxlen="64" disable="1"/>
@@ -398,25 +391,25 @@
 			</input>
 
 			<fill color="%linecolor%">
-				<placement x="%col1_x_caption%" y="%row2_3a_y%" w="%input_w%" h="%input_line_height%" placement="1"/>
+				<placement x="%col1_x%" y="%row2_3a_y%" w="%input_w%" h="%input_line_height%" placement="1"/>
 			</fill>
 			
 			<button style="menu_btn">
-				<placement x="%col1_x_caption%" y="%row2_1a_y%" w="%input_w%" h="%mb_h_hide%"/>
+				<placement x="%gl_text_x%" y="%row2_1a_y%" w="%input_w%" h="%mb_h_hide%"/>
 				<action function="generatebackupname"/>
 				<action function="page">backupname</action>
 			</button>
 
-			<listbox style="btn_list">
+			<listbox style="group_list">
 				<placement x="0" y="%input_btn_list_y%" w="%screen_w%" h="%bl_h2%"/>
 				<listitem name="{@bkp_date}">
-					<icon res="bs_btn_time"/>
+					<icon res="calendar_add_on"/>
 					<action function="set">tw_backup_name=</action>
 					<action function="page">backupname</action>
 					<action function="appenddatetobackupname"/>
 				</listitem>
 				<listitem name="{@bkp_gen}">
-					<icon res="bs_btn_new"/>
+					<icon res="chat_add_on"/>
 					<action function="generatebackupname"/>
 					<action function="page">backupname</action>
 				</listitem>
@@ -444,22 +437,22 @@
 			</text>
 
 			<text style="text_ab_title">
-				<placement x="%col1_x_indent%" y="%row1_2_y%" placement="2"/>
+				<placement x="%col1_x%" y="%row1_2_y%" placement="2"/>
 				<text>{@encryption_hdr}</text>
 			</text>
 
 			<text style="text_ab_subtitle">
-				<placement x="%col1_x_indent%" y="%row1_2_y%"/>
+				<placement x="%col1_x%" y="%row1_2_y%"/>
 				<text>{@backup_encrypt_data_info}</text>
 			</text>
 
 			<text style="caption_hl">
-				<placement x="%col1_x_caption%" y="%row2_1a_y%"/>
+				<placement x="%col1_x%" y="%row2_1a_y%"/>
 				<text>{@set_password}</text>
 			</text>
 
 			<input>
-				<placement x="%col1_x_caption%" y="%row2_2a_y%" w="%input_w%" h="%input_height%"/>
+				<placement x="%col1_x%" y="%row2_2a_y%" w="%input_w%" h="%input_height%"/>
 				<text>%tw_backup_encrypt_display%</text>
 				<data name="tw_backup_password" mask="*" maskvariable="tw_backup_encrypt_display"/>
 				<restrict minlen="1" maxlen="32" allow="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890_"/>
@@ -468,7 +461,7 @@
 
 			<fill color="%accent%">
 				<condition var1="tw_password_not_match" op="!=" var2="1"/>
-				<placement x="%col1_x_caption%" y="%row2_3a_y%" w="%input_w%" h="%input_line_height%" placement="1"/>
+				<placement x="%col1_x%" y="%row2_3a_y%" w="%input_w%" h="%input_line_height%" placement="1"/>
 			</fill>
 
 			<fill color="%text_fail%">
@@ -510,12 +503,12 @@
 			</text>
 
 			<text style="text_ab_title">
-				<placement x="%col1_x_indent%" y="%row1_2_y%" placement="2"/>
+				<placement x="%col1_x%" y="%row1_2_y%" placement="2"/>
 				<text>{@encryption_hdr}</text>
 			</text>
 
 			<text style="text_ab_subtitle">
-				<placement x="%col1_x_indent%" y="%row1_2_y%"/>
+				<placement x="%col1_x%" y="%row1_2_y%"/>
 				<text>{@backup_encrypt_data_info}</text>
 			</text>
 
@@ -589,33 +582,33 @@
 
 			<text style="text_ab_title">
 				<condition var1="tw_partition"/>
-				<placement x="%col1_x_indent%" y="%row1_2_y%" placement="2"/>
+				<placement x="%col1_x%" y="%row1_2_y%" placement="2"/>
 				<text>%tw_partition%</text>
 			</text>
 
 			<text style="text_ab_title">
 				<condition var1="tw_partition" op="!="/>
-				<placement x="%col1_x_indent%" y="%row1_2_y%" placement="2"/>
+				<placement x="%col1_x%" y="%row1_2_y%" placement="2"/>
 				<text>{@backing}</text>
 			</text>
 			
 			<text style="text_ab_subtitle">
 				<condition var1="tw_size_progress"/>
 				<condition var1="tw_file_progress" op="!="/>
-				<placement x="%col1_x_indent%" y="%row1_2_y%"/>
+				<placement x="%col1_x%" y="%row1_2_y%"/>
 				<text>%tw_size_progress%</text>
 			</text>
 
 			<text style="text_ab_subtitle">
 				<condition var1="tw_size_progress"/>
 				<condition var1="tw_file_progress"/>
-				<placement x="%col1_x_indent%" y="%row1_2_y%"/>
+				<placement x="%col1_x%" y="%row1_2_y%"/>
 				<text>%tw_file_progress% %tw_size_progress%</text>
 			</text>
 
 			<text style="text_ab_subtitle">
 				<condition var1="tw_size_progress" op="!="/>
-				<placement x="%col1_x_indent%" y="%row1_2_y%"/>
+				<placement x="%col1_x%" y="%row1_2_y%"/>
 				<text>{@lang_wait}</text>
 			</text>
 			
@@ -650,12 +643,12 @@
 			</text>
 
 			<text style="text_ab_title">
-				<placement x="%col1_x_indent%" y="%row1_2_y%" placement="2"/>
+				<placement x="%col1_x%" y="%row1_2_y%" placement="2"/>
 				<text>{@backing}</text>
 			</text>
 
 			<text style="text_ab_subtitle">
-				<placement x="%col1_x_indent%" y="%row1_2_y%"/>
+				<placement x="%col1_x%" y="%row1_2_y%"/>
 				<text>{@digest_creating}</text>
 			</text>
 
@@ -679,13 +672,13 @@
 
 			<text style="text_ab_subtitle">
 				<condition var1="tw_cancel_backup" op="!=" var2="1"/>
-				<placement x="%col1_x_indent%" y="%row1_2_y%"/>
+				<placement x="%col1_x%" y="%row1_2_y%"/>
 				<text>{@backup_complete}</text>
 			</text>
 
 			<text style="text_ab_subtitle">
 				<condition var1="tw_cancel_backup" var2="1"/>
-				<placement x="%col1_x_indent%" y="%row1_2_y%"/>
+				<placement x="%col1_x%" y="%row1_2_y%"/>
 				<text>{@backup_cancel}</text>
 			</text>
 

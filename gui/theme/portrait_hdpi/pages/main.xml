@@ -8,6 +8,14 @@
 				<action function="need_reboot">%tw_reboot_param%</action>
 			</action>
 
+			<!-- DEBUG -->
+			<action>
+<!--				<condition var1="fox_lab" var2="1"/>-->
+				<action function="overlay"/>
+				<action function="set">tw_clear_destination=ext_custom_status</action>
+				<action function="page">clear_vars</action>
+			</action>
+
 			<!-- Show welcome page after installing OF -->
 			<action>
 				<condition var1="first_start" var2="1"/>

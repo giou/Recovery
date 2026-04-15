@@ -26,7 +26,6 @@
 				<action function="set">theme_accent_dark_tmp=%theme_accent_dark%</action>
 				<action function="set">theme_style_tmp=%theme_style%</action>
 				<action function="set">theme_style_act_tmp=%theme_style_act%</action>
-				<action function="set">theme_pie_tmp=%theme_pie%</action>
 				
 				<action function="page">ext_custom</action>
 			</action>
@@ -37,29 +36,52 @@
 				<action function="set">of_reload_back=ext_custom_gest</action>
 			</action>
 
-			<!-- Switch -->
-			<fill color="%accent%">
+			<!-- Enabled -->
+			<image>
 				<condition var1="real_gestures_enable_tmp" var2="1"/>
-				<placement x="0" y="%ab_h%" w="%screen_w%" h="%ab_btn_h%"/>
-			</fill>
-
-			<fill color="%unactive_title%">
-				<condition var1="real_gestures_enable_tmp" op="!=" var2="1"/>
-				<placement x="0" y="%ab_h%" w="%screen_w%" h="%ab_btn_h%"/>
-			</fill>
+				<placement x="40" y="%ab_h%"/>
+				<image resource="main_switch_card_active" />
+			</image>
 
 			<image style="switch_on">
 				<condition var1="real_gestures_enable_tmp" var2="1"/>
-				<placement x="%ab_btn1_x%" y="%ab2_y%" placement="4"/>
-			</image>
-			
-			<image style="switch_off">
-				<condition var1="real_gestures_enable_tmp" op="!=" var2="1"/>
-				<placement x="%ab_btn1_x%" y="%ab2_y%" placement="4"/>
+				<placement x="%main_switch_icon_x%" y="%ab2_y%" placement="4"/>
 			</image>
 
-			<text style="text_ab_switch">
-				<placement x="%col1_x_indent%" y="%ab_bc2_y%"/>
+			<text style="text_ab_switch_on">
+				<condition var1="real_gestures_enable_tmp" var2="1"/>
+				<placement x="%switch_text_x%" y="%ab_bc2_y%"/>
+				<text>{@gst_enable_all}</text>
+			</text>
+
+			<button style="bs_btn">
+				<condition var1="real_gestures_enable_tmp" var2="1"/>
+				<placement x="0" y="%ab_h%" w="%screen_w%" h="%ab_btn_h%"/>
+				<action function="set">real_gestures_enable_tmp=0</action>
+				<action function="set">needs_repack=1</action>
+				<action function="set">update_navbar=1</action>
+				<action function="set">gst_back_left=0</action>
+				<action function="set">gst_back_right=0</action>
+				<action function="set">gst_console=0</action>
+				<action function="set">navbar_disable_tmp=0</action>
+				<action function="set">navbar_disable_add_tmp=0</action>
+			</button>
+
+			<!-- Disabled -->
+			<image>
+				<condition var1="real_gestures_enable_tmp" op="!=" var2="1"/>
+				<placement x="40" y="%ab_h%"/>
+				<image resource="main_switch_card_not_active" />
+			</image>
+
+			<image style="switch_off">
+				<condition var1="real_gestures_enable_tmp" op="!=" var2="1"/>
+				<placement x="%main_switch_icon_x%" y="%ab2_y%" placement="4"/>
+			</image>
+
+			<text style="text_ab_switch_off">
+				<condition var1="real_gestures_enable_tmp" op="!=" var2="1"/>
+				<placement x="%gl_text_x%" y="%ab_bc2_y%"/>
 				<text>{@gst_enable_all}</text>
 			</text>
 
@@ -76,19 +98,6 @@
 				<action function="set">navbar_disable_add_tmp=96</action>
 			</button>
 
-			<button style="bs_btn">
-				<condition var1="real_gestures_enable_tmp" var2="1"/>
-				<placement x="0" y="%ab_h%" w="%screen_w%" h="%ab_btn_h%"/>
-				<action function="set">real_gestures_enable_tmp=0</action>
-				<action function="set">needs_repack=1</action>
-				<action function="set">update_navbar=1</action>
-				<action function="set">gst_back_left=0</action>
-				<action function="set">gst_back_right=0</action>
-				<action function="set">gst_console=0</action>
-				<action function="set">navbar_disable_tmp=0</action>
-				<action function="set">navbar_disable_add_tmp=0</action>
-			</button>
-
 			<template name="base"/>
 
 			<text style="text_ab_title">
@@ -97,12 +106,12 @@
 			</text>
 
 			<text style="caption">
-				<placement x="%col1_x_caption%" y="%row1_3a_y%"/>
+				<placement x="%gl_text_x%" y="%row1_3a_y%"/>
 				<text>{@gst_back}</text>
 			</text>
 
-			<listbox style="settingslist">
-				<placement x="0" y="%row2_1a_y%" w="%screen_w%" h="%lb_l2%"/>
+			<listbox style="settingslist_group">
+				<placement x="0" y="%row2_1a_y%" w="%screen_w%" h="%options_list_num_group%"/>
 				<listitem name="{@gst_back_left}">
 					<data variable="gst_back_left"/>
 				</listitem>
@@ -112,12 +121,12 @@
 			</listbox>
 
 			<text style="caption">
-				<placement x="%col1_x_caption%" y="%row3_2a_y%"/>
+				<placement x="%gl_text_x%" y="%row3_3a_y%"/>
 				<text>{@cust_oth}</text>
 			</text>
 
-			<listbox style="settingslist">
-				<placement x="0" y="%row3_3a_y%" w="%screen_w%" h="%lb_l2%"/>
+			<listbox style="settingslist_group">
+				<placement x="0" y="%row4_1a_y%" w="%screen_w%" h="%options_list_num_group%"/>
 				<listitem name="{@gst_console_enable}">
 					<data variable="gst_console"/>
 				</listitem>
@@ -143,31 +152,31 @@
 				<action function="set">of_reload_back=ext_custom</action>
 			</action>
 
-			<listbox style="btn_list">
+			<listbox style="group_list">
 				<placement x="0" y="%ab_h%" w="%screen_w%" h="%bl_fullscreen_h%"/>
 				<listitem name="{@theme_hdr}">
-					<icon res="invert"/>
+					<icon res="style"/>
 					<action function="page">ext_custom_theme</action>
 				</listitem>
 				<listitem name="{@gst_title}">
-					<icon res="gestures"/>
+					<icon res="gesture"/>
 					<action function="page">ext_custom_gest</action>
 				</listitem>
 				<listitem name="{@navbar_title}">
 					<condition var1="allow_disable_nav" var2="1"/>
 					<condition var1="real_gestures_enable" op="!=" var2="1"/>
-					<icon res="nav"/>
+					<icon res="category"/>
 					<action function="page">ext_custom_nav</action>
 				</listitem>
 				<listitem name="{@navbar_title}">
 					<condition var1="real_gestures_enable" op="!=" var2="1"/>
 					<condition var1="allow_disable_nav" op="!=" var2="1"/>
-					<icon res="nav"/>
+					<icon res="category"/>
 					<action function="page">ext_custom_nav_no_switch</action>
 				</listitem>
 				<listitem name="{@navbar_title}">
 					<condition var1="real_gestures_enable" var2="1"/>
-					<icon res="nav"/>
+					<icon res="category"/>
 					<action function="page">ext_custom_nav_error</action>
 				</listitem>
 				<listitem name="{@settings_ui_status}">
@@ -188,12 +197,12 @@
 					<action function="page">ext_custom_key</action>
 				</listitem>
 				<listitem name="{@theme_fonts}">
-					<icon res="ws_font"/>
+					<icon res="brand_family"/>
 					<action function="set">font_block=0</action>
 					<action function="page">ext_custom_fonts_check</action>
 				</listitem>
 				<listitem name="{@cust_oth}">
-					<icon res="plus"/>
+					<icon res="other"/>
 					<action function="page">ext_custom_other</action>
 				</listitem>
 			</listbox>
@@ -272,12 +281,12 @@
 			</text>
 
 			<text style="caption">
-				<placement x="%col1_x_caption%" y="%row1_1_y%"/>
+				<placement x="%gl_text_x%" y="%row1_1_y%"/>
 				<text>{@status_clock_pos}</text>
 			</text>
 
-			<listbox>
-				<placement x="0" y="%row1_2_y%" w="%screen_w%" h="%lb_l3%"/>
+			<listbox style="radiobox_group">
+				<placement x="0" y="%row1_2_y%" w="%screen_w%" h="%lb_group_l3%"/>
 				<data name="center_clock"/>
 				<listitem name="{@status_clock_left}">2</listitem>
 				<listitem name="{@status_clock_center}">1<condition var1="cutout_clock" var2="0"/></listitem>
@@ -285,21 +294,28 @@
 			</listbox>
 
 			<text style="caption">
-				<placement x="%col1_x_caption%" y="%row7_1_y%"/>
+				<placement x="%gl_text_x%" y="%row3_2a_y%"/>
+				<text>{@status_battery_style}</text>
+			</text>
+
+			<listbox style="radiobox_group">
+				<placement x="0" y="%row3_3a_y%" w="%screen_w%" h="%lb_group_l3%"/>
+				<data name="style_battery"/>
+				<listitem name="Pie">0</listitem>
+				<listitem name="{@status_battery_circle}">1</listitem>
+				<listitem name="Material You">2</listitem>
+			</listbox>
+
+			<text style="caption">
+				<placement x="%gl_text_x%" y="%row6_1a_y%"/>
 				<text>{@settings_ui_status}</text>
 			</text>
 
-			<listbox style="settingslist">
-				<placement x="0" y="%row7_2_y%" w="%screen_w%" h="%lb_l3_dynamic%"/>
+			<listbox style="settingslist_group">
+				<placement x="0" y="%row6_2a_y%" w="%screen_w%" h="%options_list_num_group%"/>
 				<listitem name="{@hide_notch}">
 					<data variable="hide_notch"/>
 					<condition var1="allow_hide_notch" var2="1"/>
-				</listitem>
-				<listitem name="{@separate_status}">
-					<data variable="separate_status"/>
-				</listitem>
-				<listitem name="{@dark_title}">
-					<data variable="darker_ui"/>
 				</listitem>
 				<listitem name="{@show_cpu_temp_bar}">
 					<data variable="show_cpu_temp"/>
@@ -308,31 +324,6 @@
 				<listitem name="{@settings_ui_battery}">
 					<data variable="enable_battery"/>
 				</listitem>
-			</listbox>
-
-			<text style="caption">
-				<placement x="%col1_x_caption%" y="%row3_1a_y%"/>
-				<text>{@status_battery_style}</text>
-			</text>
-
-			<listbox>
-				<placement x="0" y="%row3_2a_y%" w="%screen_w%" h="%lb_l2%"/>
-				<data name="style_battery"/>
-				<listitem name="Pie">0</listitem>
-				<listitem name="{@status_battery_circle}">1</listitem>
-			</listbox>
-
-			<text style="caption">
-				<placement x="%col1_x_caption%" y="%row4_3a_y%"/>
-				<text>{@status_delimeter}</text>
-			</text>
-
-			<listbox>
-				<placement x="0" y="%row5_1a_y%" w="%screen_w%" h="%lb_l3%"/>
-				<data name="show_shadow"/>
-				<listitem name="{@fm_none}">0</listitem>
-				<listitem name="{@status_delimeter_shadow}">1</listitem>
-				<listitem name="{@navbar_style_line}">2</listitem>
 			</listbox>
 
 			<template name="gestures"/>
@@ -350,28 +341,45 @@
 
 		<!-- Keyboard -->
 		<page name="ext_custom_key">
-			<fill color="%accent%">
+			<!-- Enabled -->
+			<image>
 				<condition var1="key_buttons" var2="1"/>
-				<placement x="0" y="%ab_h%" w="%screen_w%" h="%ab_btn_h%"/>
-			</fill>
-			
-			<fill color="%unactive_title%">
-				<condition var1="key_buttons" op="!=" var2="1"/>
-				<placement x="0" y="%ab_h%" w="%screen_w%" h="%ab_btn_h%"/>
-			</fill>
+				<placement x="40" y="%ab_h%"/>
+				<image resource="main_switch_card_active" />
+			</image>
 
 			<image style="switch_on">
 				<condition var1="key_buttons" var2="1"/>
-				<placement x="%ab_btn1_x%" y="%ab2_y%" placement="4"/>
+				<placement x="%main_switch_icon_x%" y="%ab2_y%" placement="4"/>
+			</image>
+
+			<text style="text_ab_switch_on">
+				<condition var1="key_buttons" var2="1"/>
+				<placement x="%switch_text_x%" y="%ab_bc2_y%"/>
+				<text>{@keyboard_newstyle}</text>
+			</text>
+
+			<button style="bs_btn">
+				<condition var1="key_buttons" var2="1"/>
+				<placement x="0" y="%ab_h%" w="%screen_w%" h="%ab_btn_h%"/>
+				<action function="set">key_buttons=0</action>
+			</button>
+
+			<!-- Disabled -->
+			<image>
+				<condition var1="key_buttons" op="!=" var2="1"/>
+				<placement x="40" y="%ab_h%"/>
+				<image resource="main_switch_card_not_active" />
 			</image>
 
 			<image style="switch_off">
 				<condition var1="key_buttons" op="!=" var2="1"/>
-				<placement x="%ab_btn1_x%" y="%ab2_y%" placement="4"/>
+				<placement x="%main_switch_icon_x%" y="%ab2_y%" placement="4"/>
 			</image>
 
-			<text style="text_ab_switch">
-				<placement x="%col1_x_indent%" y="%ab_bc2_y%"/>
+			<text style="text_ab_switch_off">
+				<condition var1="key_buttons" op="!=" var2="1"/>
+				<placement x="%gl_text_x%" y="%ab_bc2_y%"/>
 				<text>{@keyboard_newstyle}</text>
 			</text>
 
@@ -379,12 +387,6 @@
 				<condition var1="key_buttons" op="!=" var2="1"/>
 				<placement x="0" y="%ab_h%" w="%screen_w%" h="%ab_btn_h%"/>
 				<action function="set">key_buttons=1</action>
-			</button>
-			
-			<button style="bs_btn">
-				<condition var1="key_buttons" var2="1"/>
-				<placement x="0" y="%ab_h%" w="%screen_w%" h="%ab_btn_h%"/>
-				<action function="set">key_buttons=0</action>
 			</button>
 
 			<template name="base_key"/>
@@ -394,8 +396,8 @@
 				<text>{@keyboard_title}</text>
 			</text>
 
-			<listbox style="settingslist">
-				<placement x="0" y="%row1_3a_y%" w="%screen_w%" h="%lb_l2%"/>
+			<listbox style="settingslist_group">
+				<placement x="0" y="%row1_3a_y%" w="%screen_w%" h="%lb_group_l2%"/>
 				<listitem name="{@keyboard_nums}">
 					<data variable="key_numbar"/>
 				</listitem>
@@ -420,11 +422,6 @@
 		<!-- Lockscreen -->
 		<page name="ext_custom_lock">
 			<template name="body"/>
-			
-			<fill color="%title_solid_bg%">
-				<condition var1="darker_ui" var2="1"/>
-				<placement x="0" y="0" w="%screen_w%" h="%row4_1_y%"/>
-			</fill>
 
 			<template name="status_bg"/>
 			
@@ -460,36 +457,25 @@
 			</text>
 			<!-- -->
 
-			<image>
-				<image resource="actionbar_shadow"/>
-				<condition var1="show_shadow" var2="1"/>
-				<placement x="0" y="%row4_1_y%"/>
-			</image>
-
-			<fill color="%linecolor%">
-				<condition var1="show_shadow" var2="2"/>
-				<placement x="0" y="%row4_1_y%" w="1080" h="2"/>
-			</fill>
-
 			<text style="caption">
-				<placement x="%col1_x_caption%" y="%row4_2_y%"/>
+				<placement x="%gl_text_x%" y="%row4_2_y%"/>
 				<text>{@lockscreen_style}</text>
 			</text>
 
-			<listbox>
-				<placement x="0" y="%row4_3_y%" w="%screen_w%" h="%lb_l2%"/>
+			<listbox style="radiobox_group">
+				<placement x="0" y="%row4_3_y%" w="%screen_w%" h="%lb_group_l2%"/>
 				<data name="clock_style"/>
 				<listitem name="{@lockscreen_icon}">0</listitem>
 				<listitem name="{@lockscreen_clock}">1</listitem>
 			</listbox>
 
 			<text style="caption">
-				<placement x="%col1_x_caption%" y="%row6_1_y%"/>
+				<placement x="%gl_text_x%" y="%row6_2_y%"/>
 				<text>{@cust_oth}</text>
 			</text>
 
-			<listbox style="settingslist">
-				<placement x="0" y="%row6_2_y%" w="%screen_w%" h="%lb_l3%"/>
+			<listbox style="settingslist_group">
+				<placement x="0" y="%row6_3_y%" w="%screen_w%" h="%lb_group_l3%"/>
 				<listitem name="{@lockscreen_info}">
 					<condition var1="clock_style" var2="1"/>
 					<data variable="lock_info"/>
@@ -521,28 +507,21 @@
 				<action function="set">of_reload_back=ext_custom_nav</action>
 			</action>
 
-			<fill color="%accent%">
-				<condition var1="navbar_disable_tmp" var2="0"/>
-				<placement x="0" y="%ab_h%" w="%screen_w%" h="%ab_btn_h%"/>
-			</fill>
-
-			<fill color="%unactive_title%">
-				<condition var1="navbar_disable_tmp" var2="1"/>
-				<placement x="0" y="%ab_h%" w="%screen_w%" h="%ab_btn_h%"/>
-			</fill>
-
-			<image style="switch_off">
-				<condition var1="navbar_disable_tmp" var2="1"/>
-				<placement x="%ab_btn1_x%" y="%ab2_y%" placement="4"/>
+			<!-- Enabled -->
+			<image>
+				<condition var1="navbar_disable_tmp" op="!=" var2="1"/>
+				<placement x="40" y="%ab_h%"/>
+				<image resource="main_switch_card_active" />
 			</image>
-			
+
 			<image style="switch_on">
 				<condition var1="navbar_disable_tmp" op="!=" var2="1"/>
-				<placement x="%ab_btn1_x%" y="%ab2_y%" placement="4"/>
+				<placement x="%main_switch_icon_x%" y="%ab2_y%" placement="4"/>
 			</image>
 
-			<text style="text_ab_switch">
-				<placement x="%col1_x_indent%" y="%ab_bc2_y%"/>
+			<text style="text_ab_switch_on">
+				<condition var1="navbar_disable_tmp" op="!=" var2="1"/>
+				<placement x="%switch_text_x%" y="%ab_bc2_y%"/>
 				<text>{@navbar_onscreen}</text>
 			</text>
 
@@ -554,6 +533,24 @@
 				<action function="set">needs_repack=1</action>
 				<action function="set">update_navbar=1</action>
 			</button>
+
+			<!-- Disabled -->
+			<image>
+				<condition var1="navbar_disable_tmp" var2="1"/>
+				<placement x="40" y="%ab_h%"/>
+				<image resource="main_switch_card_not_active" />
+			</image>
+
+			<image style="switch_off">
+				<condition var1="navbar_disable_tmp" var2="1"/>
+				<placement x="%main_switch_icon_x%" y="%ab2_y%" placement="4"/>
+			</image>
+
+			<text style="text_ab_switch_off">
+				<condition var1="navbar_disable_tmp" var2="1"/>
+				<placement x="%gl_text_x%" y="%ab_bc2_y%"/>
+				<text>{@navbar_onscreen}</text>
+			</text>
 
 			<button style="bs_btn">
 				<condition var1="navbar_disable_tmp" var2="1"/>
@@ -572,76 +569,40 @@
 			</text>
 
 			<text style="caption">
-				<placement x="%col1_x_caption%" y="%row1_3a_y%"/>
+				<placement x="%gl_text_x%" y="%row1_3a_y%"/>
 				<condition var1="navbar_disable_tmp" op="!=" var2="1"/>
 				<text>{@settings_ui_style}</text>
 			</text>
 
-			<listbox>
-				<placement x="0" y="%row2_1a_y%" w="%screen_w%" h="%lb_l3%"/>
+			<listbox style="radiobox_group">
+				<placement x="0" y="%row2_1a_y%" w="%screen_w%" h="%lb_group_l3%"/>
 				<condition var1="navbar_disable_tmp" op="!=" var2="1"/>
-				<data name="nougat"/>
-				<listitem name="{@cust_navbar_cls}">0</listitem>
-				<listitem name="{@cust_navbar_noug}">1</listitem>
-				<listitem name="Pie">3</listitem>
+				<data name="navbar_style"/>
+				<listitem name="{@cust_navbar_noug}">0</listitem>
+				<listitem name="Pie">1</listitem>
 			</listbox>
 
 			<text style="caption">
-				<placement x="%col1_x_caption%" y="%row4_1_y%"/>
-				<condition var1="navbar_disable_tmp" op="!=" var2="1"/>
-				<text>{@settings_ui_color}</text>
-			</text>
-
-			<listbox>
-				<placement x="0" y="%row4_2_y%" w="%screen_w%" h="%lb_l5%"/>
-				<condition var1="navbar_disable_tmp" op="!=" var2="1"/>
-				<data name="navbar_bkg"/>
-				<listitem name="{@fm_none}">0</listitem>
-				<listitem name="{@dark_nav}">1</listitem>
-				<listitem name="{@navbar_style_line}">2</listitem>
-				<listitem name="{@cust_navbar_accent}">3</listitem>
-				<listitem name="{@cust_navbar_black}">4<condition var1="theme_style_tmp" op="!=" var2="Black"/>
-				</listitem>
-			</listbox>
-
-			<text style="caption">
-				<placement x="%col1_x_caption%" y="%row7_1a_y%"/>
+				<placement x="%gl_text_x%" y="%row3_3a_y%"/>
 				<condition var1="navbar_disable_tmp" op="!=" var2="1"/>
 				<text>{@cust_oth}</text>
 			</text>
 
-			<listbox style="settingslist">
-				<placement x="0" y="%row7_2a_y%" w="%screen_w%" h="%lb_l3%"/>
-				<listitem name="{@cust_navbar_white}">
-					<condition var1="navbar_bkg" op="!=" var2="3"/>
-					<condition var1="theme_style" op="!=" var2="Light"/>
-					<condition var1="navbar_disable_tmp" op="!=" var2="1"/>
-					<data variable="navbar_accent"/>
-				</listitem>
-				<listitem name="{@cust_navbar_gray}">
-					<condition var1="navbar_bkg" op="!=" var2="3"/>
-					<condition var1="theme_style" var2="Light"/>
-					<condition var1="navbar_disable_tmp" op="!=" var2="1"/>
-					<data variable="navbar_accent"/>
-				</listitem>
+			<listbox style="settingslist_group">
+				<placement x="0" y="%row4_1a_y%" w="%screen_w%" h="%lb_group_l3%"/>
 				<listitem name="{@rev_navbar_chk}">
 					<data variable="navbar_sams"/>
 					<condition var1="navbar_disable_tmp" op="!=" var2="1"/>
 				</listitem>
 				<listitem name="{@show_slideout}">
-					<condition var1="nougat" var2="3"/>
+					<condition var1="navbar_style" var2="1"/>
 					<condition var1="navbar_disable_tmp" op="!=" var2="1"/>
 					<data variable="show_slideout"/>
 				</listitem>
 			</listbox>
 
 			<action>
-				<condition var1="navbar_bkg" var2="3"/>
-				<condition var1="navbar_accent" var2="0"/>
-				<action function="set">navbar_accent=1</action>
-			</action>
-			<action>
-				<condition var1="nougat" op="!=" var2="3"/>
+				<condition var1="navbar_style" op="!=" var2="1"/>
 				<condition var1="show_slideout" var2="0"/>
 				<action function="set">show_slideout=1</action>
 			</action>
@@ -670,12 +631,12 @@
 			</text>
 
 			<text style="caption">
-				<placement x="%col1_x_caption%" y="%row1_1_y%"/>
+				<placement x="%gl_text_x%" y="%row1_1_y%"/>
 				<text>{@options_hdr}</text>
 			</text>
 
-			<listbox style="settingslist">
-				<placement x="0" y="%row1_2_y%" w="%screen_w%" h="%lb_l6%"/>
+			<listbox style="settingslist_group">
+				<placement x="0" y="%row1_2_y%" w="%screen_w%" h="%lb_group_l5%"/>
 				<listitem name="{@use_fixed_font}"> <!-- also in ext_context -->
 					<data variable="use_fixed_font"/>
 				</listitem>
@@ -685,11 +646,11 @@
 				<listitem name="{@cust_expand_list}">
 					<data variable="auto_show_btns"/>
 				</listitem>
-				<listitem name="{@cust_autoapply}">
-					<data variable="instant_apply"/>
-				</listitem>
+<!--				<listitem name="{@cust_autoapply}">-->
+<!--					<data variable="instant_apply"/>-->
+<!--				</listitem>-->
 				<listitem name="{@navpan_new_design}">
-					<data variable="new_nav_panel_des"/>
+					<data variable="floating_panel"/>
 				</listitem>
 			</listbox>
 
@@ -729,48 +690,6 @@
 				<text>{@gst_navbar_error_2}</text>
 			</text>
 
-			<text style="caption">
-				<placement x="%col1_x_caption%" y="%row2_1_y%"/>
-				<text>{@settings_ui_color}</text>
-			</text>
-
-			<listbox>
-				<placement x="0" y="%row2_2_y%" w="%screen_w%" h="%lb_l5%"/>
-				<data name="navbar_bkg"/>
-				<listitem name="{@fm_none}">0</listitem>
-				<listitem name="{@dark_nav}">1</listitem>
-				<listitem name="{@navbar_style_line}">2</listitem>
-				<listitem name="{@cust_navbar_accent}">3</listitem>
-				<listitem name="{@cust_navbar_black}">4<condition var1="theme_style_tmp" op="!=" var2="Black"/>
-				</listitem>
-			</listbox>
-
-			<text style="caption">
-				<condition var1="navbar_bkg" op="!=" var2="3"/>
-				<placement x="%col1_x_caption%" y="%row5_1a_y%"/>
-				<text>{@cust_oth}</text>
-			</text>
-
-			<listbox style="settingslist">
-				<placement x="0" y="%row5_2a_y%" w="%screen_w%" h="%lb_l1%"/>
-				<listitem name="{@cust_line_white}">
-					<condition var1="theme_style" op="!=" var2="Light"/>
-					<data variable="navbar_accent"/>
-					<condition var1="navbar_bkg" op="!=" var2="3"/>
-				</listitem>
-				<listitem name="{@cust_line_gray}">
-					<condition var1="theme_style" var2="Light"/>
-					<data variable="navbar_accent"/>
-					<condition var1="navbar_bkg" op="!=" var2="3"/>
-				</listitem>
-			</listbox>
-
-			<action>
-				<condition var1="navbar_bkg" var2="3"/>
-				<condition var1="navbar_accent" var2="0"/>
-				<action function="set">navbar_accent=1</action>
-			</action>
-
 			<template name="gestures"/>
 
 			<action>
@@ -793,68 +712,35 @@
 			</text>
 
 			<text style="caption">
-				<placement x="%col1_x_caption%" y="%row1_1_y%"/>
+				<placement x="%gl_text_x%" y="%row1_1_y%"/>
 				<text>{@settings_ui_style}</text>
 			</text>
 
-			<listbox>
-				<placement x="0" y="%row1_2_y%" w="%screen_w%" h="%lb_l3%"/>
-				<data name="nougat"/>
-				<listitem name="{@cust_navbar_cls}">0</listitem>
-				<listitem name="{@cust_navbar_noug}">1</listitem>
-				<listitem name="Pie">3</listitem>
+			<listbox style="radiobox_group">
+				<placement x="0" y="%row1_2_y%" w="%screen_w%" h="%lb_group_l3%"/>
+				<data name="navbar_style"/>
+				<listitem name="{@cust_navbar_noug}">0</listitem>
+				<listitem name="Pie">1</listitem>
 			</listbox>
 
 			<text style="caption">
-				<placement x="%col1_x_caption%" y="%row3_1a_y%"/>
-				<text>{@settings_ui_color}</text>
-			</text>
-
-			<listbox>
-				<placement x="0" y="%row3_2a_y%" w="%screen_w%" h="%lb_l5%"/>
-				<data name="navbar_bkg"/>
-				<listitem name="{@fm_none}">0</listitem>
-				<listitem name="{@dark_nav}">1</listitem>
-				<listitem name="{@navbar_style_line}">2</listitem>
-				<listitem name="{@cust_navbar_accent}">3</listitem>
-				<listitem name="{@cust_navbar_black}">4<condition var1="theme_style_tmp" op="!=" var2="Black"/>
-				</listitem>
-			</listbox>
-
-			<text style="caption">
-				<placement x="%col1_x_caption%" y="%row6_2_y%"/>
+				<placement x="%gl_text_x%" y="%row3_1_y%"/>
 				<text>{@cust_oth}</text>
 			</text>
 
-			<listbox style="settingslist">
-				<placement x="0" y="%row6_3_y%" w="%screen_w%" h="%lb_l3%"/>
-				<listitem name="{@cust_navbar_white}">
-					<condition var1="navbar_bkg" op="!=" var2="3"/>
-					<condition var1="theme_style" op="!=" var2="Light"/>
-					<data variable="navbar_accent"/>
-				</listitem>
-				<listitem name="{@cust_navbar_gray}">
-					<condition var1="navbar_bkg" op="!=" var2="3"/>
-					<condition var1="theme_style" var2="Light"/>
-					<data variable="navbar_accent"/>
-				</listitem>
+			<listbox style="settingslist_group">
+				<placement x="0" y="%row3_2_y%" w="%screen_w%" h="%lb_group_l3%"/>
 				<listitem name="{@rev_navbar_chk}">
 					<data variable="navbar_sams"/>
 				</listitem>
 				<listitem name="{@show_slideout}">
-					<condition var1="nougat" var2="3"/>
+					<condition var1="navbar_style" var2="1"/>
 					<data variable="show_slideout"/>
 				</listitem>
 			</listbox>
 
 			<action>
-				<condition var1="navbar_bkg" var2="3"/>
-				<condition var1="navbar_accent" var2="0"/>
-				<action function="set">navbar_accent=1</action>
-			</action>
-
-			<action>
-				<condition var1="nougat" op="!=" var2="3"/>
+				<condition var1="navbar_style" op="!=" var2="1"/>
 				<condition var1="show_slideout" var2="0"/>
 				<action function="set">show_slideout=1</action>
 			</action>
@@ -926,7 +812,7 @@
 			</image>
 			
 			<text style="caption">
-				<placement x="%col1_x_caption%" y="%row1_3_y%" />
+				<placement x="%gl_text_x%" y="%row1_3_y%" />
 				<text>{@theme_font_select}</text>
 			</text>
 			
@@ -962,35 +848,21 @@
 				<placement x="0" y="%row4_1_y%" w="%screen_w%" h="%lb_l1%"/>
 				<font resource="font5" spacing="%fileselector_spacing%" color="%text%" />
 				<data name="theme_font_tmp"/>
-				<listitem name="Choco Cooky">Chococooky</listitem>
+				<listitem name="Fira Code">FiraCode</listitem>
 			</listbox>
 			
 			<listbox>
 				<placement x="0" y="%row4_2a_y%" w="%screen_w%" h="%lb_l1%"/>
 				<font resource="font6" spacing="%fileselector_spacing%" color="%text%" />
 				<data name="theme_font_tmp"/>
-				<listitem name="Fira Code">FiraCode</listitem>
+				<listitem name="Exo 2">Exo2</listitem>
 			</listbox>
 			
 			<listbox>
 				<placement x="0" y="%row5_1_y%" w="%screen_w%" h="%lb_l1%"/>
 				<font resource="font7" spacing="%fileselector_spacing%" color="%text%" />
 				<data name="theme_font_tmp"/>
-				<listitem name="Exo 2">Exo2</listitem>
-			</listbox>
-			
-			<listbox>
-				<placement x="0" y="%row5_2a_y%" w="%screen_w%" h="%lb_l1%"/>
-				<font resource="font8" spacing="%fileselector_spacing%" color="%text%" />
-				<data name="theme_font_tmp"/>
-				<listitem name="MiLan Pro">MILanPro</listitem>
-			</listbox>
-			
-			<listbox>
-				<placement x="0" y="%row6_1_y%" w="%screen_w%" h="%lb_l1%"/>
-				<font resource="font9" spacing="%fileselector_spacing%" color="%text%" />
-				<data name="theme_font_tmp"/>
-				<listitem name="Amatic">Amatic</listitem>
+				<listitem name="Inter Display">InterDisplay</listitem>
 			</listbox>
 			
 			<action>
@@ -1050,7 +922,7 @@
 			</image>
 			
 			<text style="caption">
-				<placement x="%col1_x_caption%" y="%row1_3_y%" />
+				<placement x="%gl_text_x%" y="%row1_3_y%" />
 				<text>{@theme_font_select}</text>
 			</text>
 			
@@ -1086,35 +958,21 @@
 				<placement x="0" y="%row4_1_y%" w="%screen_w%" h="%lb_l1%"/>
 				<font resource="font5" spacing="%fileselector_spacing%" color="%text%" />
 				<data name="theme_sec_font_tmp"/>
-				<listitem name="Choco Cooky">Chococooky</listitem>
+				<listitem name="Fira Code">FiraCode</listitem>
 			</listbox>
 			
 			<listbox>
 				<placement x="0" y="%row4_2a_y%" w="%screen_w%" h="%lb_l1%"/>
 				<font resource="font6" spacing="%fileselector_spacing%" color="%text%" />
 				<data name="theme_sec_font_tmp"/>
-				<listitem name="Fira Code">FiraCode</listitem>
+				<listitem name="Exo 2">Exo2</listitem>
 			</listbox>
 			
 			<listbox>
 				<placement x="0" y="%row5_1_y%" w="%screen_w%" h="%lb_l1%"/>
 				<font resource="font7" spacing="%fileselector_spacing%" color="%text%" />
 				<data name="theme_sec_font_tmp"/>
-				<listitem name="Exo 2">Exo2</listitem>
-			</listbox>
-			
-			<listbox>
-				<placement x="0" y="%row5_2a_y%" w="%screen_w%" h="%lb_l1%"/>
-				<font resource="font8" spacing="%fileselector_spacing%" color="%text%" />
-				<data name="theme_sec_font_tmp"/>
-				<listitem name="MiLan Pro">MILanPro</listitem>
-			</listbox>
-			
-			<listbox>
-				<placement x="0" y="%row6_1_y%" w="%screen_w%" h="%lb_l1%"/>
-				<font resource="font9" spacing="%fileselector_spacing%" color="%text%" />
-				<data name="theme_sec_font_tmp"/>
-				<listitem name="Amatic">Amatic</listitem>
+				<listitem name="Inter Display">InterDisplay</listitem>
 			</listbox>
 			
 			<action>
@@ -1174,12 +1032,12 @@
 			</image>
 			
             <text style="caption">
-				<placement x="%col1_x_caption%" y="%row1_3_y%" />
+				<placement x="%gl_text_x%" y="%row1_3_y%" />
 				<text>{@font_size}</text>
 			</text>
 
-			<listbox>
-				<placement x="0" y="%row2_1_y%" w="%screen_w%" h="%lb_l3%"/>
+			<listbox style="radiobox_group">
+				<placement x="0" y="%row2_1_y%" w="%screen_w%" h="%lb_group_l3%"/>
 				<data name="theme_font_size_tmp"/>
 				<listitem name="{@font_small}">s</listitem>
 				<listitem name="{@font_norm}">n</listitem>
@@ -1193,12 +1051,12 @@
 			</action>
 
             <text style="caption">
-				<placement x="%col1_x_caption%" y="%row3_3a_y%" />
+				<placement x="%gl_text_x%" y="%row4_1a_y%" />
 				<text>{@theme_fweight}</text>
 			</text>
 
-			<listbox>
-				<placement x="0" y="%row4_1a_y%" w="%screen_w%" h="%lb_l3%"/>
+			<listbox style="radiobox_group">
+				<placement x="0" y="%row4_2a_y%" w="%screen_w%" h="%lb_group_l3%"/>
 				<data name="theme_font_weight_tmp"/>
 				<listitem name="{@theme_fweight_norm}">0</listitem>
 				<listitem name="{@theme_fweight_reg}">1</listitem>
@@ -1240,7 +1098,7 @@
 
 			<!-- Font Size -->
 			<text style="caption">
-				<placement x="%col1_x_caption%" y="%row1_1_y%" />
+				<placement x="%gl_text_x%" y="%row1_1_y%" />
 				<text>{@font_size}</text>
 			</text>
 
@@ -1284,107 +1142,156 @@
 				<placement x="%col1_x_indent%" y="%ab_bc_y%"/>
 				<text>{@theme_hdr}</text>
 			</text>
-			
+
+			<!-- Fox brand themes -->
 			<text style="caption">
 				<placement x="%col1_x%" y="%row1_1_y%" />
-				<text>{@theme_style}</text>
+				<text>{@theme_fox_style}</text>
 			</text>
 
-			<!-- Themes -->
-			<!-- Night -->
+			<!-- Brand Cream -->
 			<image>
 				<placement x="%ws_cards_x1%" y="%ws_cards_y1%" placement="4"/>
 				<image resource="style_shadow"/>
 			</image>
-			
+
 			<button>
 				<placement x="%ws_cards_x1%" y="%ws_cards_y1%" placement="4"/>
-				<image resource="style_night"/>
-				<action function="set">theme_style_tmp=Night</action>
-				<action function="set">theme_style_act_tmp=Default</action>
+				<image resource="style_cream"/>
+				<action function="set">theme_style_tmp=Cream</action>
+				<action function="set">theme_style_act_tmp=Black</action>
+				<action function="set">theme_accent_tmp=Fox</action>
+				<action function="set">theme_accent_light_tmp=#D86100</action>
+				<action function="set">theme_accent_dark_tmp=#ED6F02</action>
 			</button>
 
 			<image>
 				<placement x="%ws_cards_x1%" y="%ws_cards_y1%" placement="4"/>
-				<condition var1="theme_style_tmp" var2="Night"/>
-				<image resource="style_apply"/>
+				<condition var1="theme_style_tmp" var2="Cream"/>
+				<image resource="style_apply_black"/>
 			</image>
 			<!-- -->
 
-			<!-- Gray -->
+			<!-- Brand Dark -->
 			<image>
 				<placement x="%ws_cards_x2%" y="%ws_cards_y1%" placement="4"/>
 				<image resource="style_shadow"/>
 			</image>
-			
+
 			<button>
 				<placement x="%ws_cards_x2%" y="%ws_cards_y1%" placement="4"/>
+				<image resource="style_dark"/>
+				<action function="set">theme_style_tmp=Dark</action>
+				<action function="set">theme_style_act_tmp=Gray</action>
+				<action function="set">theme_accent_tmp=Black</action>
+				<action function="set">theme_accent_light_tmp=#D86100</action>
+				<action function="set">theme_accent_dark_tmp=#ED6F02</action>
+			</button>
+
+			<image>
+				<placement x="%ws_cards_x2%" y="%ws_cards_y1%" placement="4"/>
+				<condition var1="theme_style_tmp" var2="Dark"/>
+				<image resource="style_apply_black"/>
+			</image>
+
+			<!-- Custom Themes -->
+			<text style="caption">
+				<placement x="%col1_x%" y="%row3_1_y%" />
+				<text>{@theme_custom_style}</text>
+			</text>
+
+			<!-- Black -->
+			<image>
+				<placement x="%ws_cards_x1%" y="%ws_cards_y2%" placement="4"/>
+				<image resource="style_shadow"/>
+			</image>
+			
+			<button>
+				<placement x="%ws_cards_x1%" y="%ws_cards_y2%" placement="4"/>
 				<image resource="style_black"/>
 				<action function="set">theme_style_tmp=Black</action>
 				<action function="set">theme_style_act_tmp=Default</action>
 			</button>
 
 			<image>
-				<placement x="%ws_cards_x2%" y="%ws_cards_y1%" placement="4"/>
+				<placement x="%ws_cards_x1%" y="%ws_cards_y2%" placement="4"/>
 				<condition var1="theme_style_tmp" var2="Black"/>
 				<image resource="style_apply"/>
 			</image>
 			<!-- -->
-			
-			<!-- Black -->
+
+			<!-- Gray brand -->
 			<image>
-				<placement x="%ws_cards_x3%" y="%ws_cards_y1%" placement="4"/>
+				<placement x="%ws_cards_x2%" y="%ws_cards_y2%" placement="4"/>
 				<image resource="style_shadow"/>
 			</image>
-
+			
 			<button>
-				<placement x="%ws_cards_x3%" y="%ws_cards_y1%" placement="4"/>
+				<placement x="%ws_cards_x2%" y="%ws_cards_y2%" placement="4"/>
 				<image resource="style_gray"/>
 				<action function="set">theme_style_tmp=Gray</action>
 				<action function="set">theme_style_act_tmp=Default</action>
 			</button>
 
 			<image>
-				<placement x="%ws_cards_x3%" y="%ws_cards_y1%" placement="4"/>
+				<placement x="%ws_cards_x2%" y="%ws_cards_y2%" placement="4"/>
 				<condition var1="theme_style_tmp" var2="Gray"/>
 				<image resource="style_apply"/>
 			</image>
 			<!-- -->
-
+			
 			<!-- Light -->
 			<image>
-				<placement x="%ws_cards_x4%" y="%ws_cards_y1%" placement="4"/>
+				<placement x="%ws_cards_x3%" y="%ws_cards_y2%" placement="4"/>
 				<image resource="style_shadow"/>
 			</image>
 
 			<button>
-				<placement x="%ws_cards_x4%" y="%ws_cards_y1%" placement="4"/>
+				<placement x="%ws_cards_x3%" y="%ws_cards_y2%" placement="4"/>
 				<image resource="style_light"/>
 				<action function="set">theme_style_tmp=Light</action>
 				<action function="set">theme_style_act_tmp=Black</action>
 			</button>
-			
+
 			<image>
-				<placement x="%ws_cards_x4%" y="%ws_cards_y1%" placement="4"/>
+				<placement x="%ws_cards_x3%" y="%ws_cards_y2%" placement="4"/>
 				<condition var1="theme_style_tmp" var2="Light"/>
 				<image resource="style_apply_black"/>
 			</image>
-			<!-- -->
+			 
 
 			<!-- Accent colors -->
 			<text style="caption">
-				<placement x="%col1_x%" y="%row3_1_y%" />
+				<condition var1="theme_style" op="!=" var2="Dark"/>
+				<condition var1="theme_style" op="!=" var2="Cream"/>
+				<placement x="%col1_x%" y="%row5_1_y%" />
 				<text>{@theme_accent}</text>
+			</text>
+
+			<text style="text_body2">
+				<condition var1="theme_style" var2="Dark"/>
+				<placement x="%col1_x_indent%" y="%row6_1_y%"/>
+				<text>{@brand_theme_no_accents}</text>
+			</text>
+
+			<text style="text_body2">
+				<condition var1="theme_style" var2="Cream"/>
+				<placement x="%col1_x_indent%" y="%row6_1_y%"/>
+				<text>{@brand_theme_no_accents}</text>
 			</text>
 
 			<!-- Fox -->
 			<image>
-				<placement x="%ws_cards_x1%" y="%ws_cards_y2%" placement="4"/>
+				<condition var1="theme_style" op="!=" var2="Dark"/>
+				<condition var1="theme_style" op="!=" var2="Cream"/>
+				<placement x="%ws_cards_x1%" y="%ws_cards_y3%" placement="4"/>
 				<image resource="style_shadow"/>
 			</image>
 
 			<button>
-				<placement x="%ws_cards_x1%" y="%ws_cards_y2%" placement="4"/>
+				<condition var1="theme_style" op="!=" var2="Dark"/>
+				<condition var1="theme_style" op="!=" var2="Cream"/>
+				<placement x="%ws_cards_x1%" y="%ws_cards_y3%" placement="4"/>
 				<image resource="accent_fox"/>
 				<action function="set">theme_accent_tmp=Fox</action>
 				<action function="set">theme_accent_light_tmp=#D86100</action>
@@ -1392,7 +1299,9 @@
 			</button>
 			
 			<image>
-				<placement x="%ws_cards_x1%" y="%ws_cards_y2%" placement="4"/>
+				<condition var1="theme_style" op="!=" var2="Dark"/>
+				<condition var1="theme_style" op="!=" var2="Cream"/>
+				<placement x="%ws_cards_x1%" y="%ws_cards_y3%" placement="4"/>
 				<condition var1="theme_accent_tmp" var2="Fox"/>
 				<image resource="accent_apply"/>
 			</image>
@@ -1400,12 +1309,16 @@
 
 			<!-- Google -->
 			<image>
-				<placement x="%ws_cards_x2%" y="%ws_cards_y2%" placement="4"/>
+				<condition var1="theme_style" op="!=" var2="Dark"/>
+				<condition var1="theme_style" op="!=" var2="Cream"/>
+				<placement x="%ws_cards_x2%" y="%ws_cards_y3%" placement="4"/>
 				<image resource="style_shadow"/>
 			</image>
 
 			<button>
-				<placement x="%ws_cards_x2%" y="%ws_cards_y2%" placement="4"/>
+				<condition var1="theme_style" op="!=" var2="Dark"/>
+				<condition var1="theme_style" op="!=" var2="Cream"/>
+				<placement x="%ws_cards_x2%" y="%ws_cards_y3%" placement="4"/>
 				<image resource="accent_google"/>
 				<action function="set">theme_accent_tmp=Google</action>
 				<action function="set">theme_accent_light_tmp=#1A73E8</action>
@@ -1413,7 +1326,9 @@
 			</button>
 			
 			<image>
-				<placement x="%ws_cards_x2%" y="%ws_cards_y2%" placement="4"/>
+				<condition var1="theme_style" op="!=" var2="Dark"/>
+				<condition var1="theme_style" op="!=" var2="Cream"/>
+				<placement x="%ws_cards_x2%" y="%ws_cards_y3%" placement="4"/>
 				<condition var1="theme_accent_tmp" var2="Google"/>
 				<image resource="accent_apply"/>
 			</image>
@@ -1421,12 +1336,16 @@
 
 			<!-- Lollipop -->
 			<image>
-				<placement x="%ws_cards_x3%" y="%ws_cards_y2%" placement="4"/>
+				<condition var1="theme_style" op="!=" var2="Dark"/>
+				<condition var1="theme_style" op="!=" var2="Cream"/>
+				<placement x="%ws_cards_x3%" y="%ws_cards_y3%" placement="4"/>
 				<image resource="style_shadow"/>
 			</image>
 
 			<button>
-				<placement x="%ws_cards_x3%" y="%ws_cards_y2%" placement="4"/>
+				<condition var1="theme_style" op="!=" var2="Dark"/>
+				<condition var1="theme_style" op="!=" var2="Cream"/>
+				<placement x="%ws_cards_x3%" y="%ws_cards_y3%" placement="4"/>
 				<image resource="accent_lollipop"/>
 				<action function="set">theme_accent_tmp=Lollipop</action>
 				<action function="set">theme_accent_light_tmp=#009788</action>
@@ -1434,7 +1353,9 @@
 			</button>
 			
 			<image>
-				<placement x="%ws_cards_x3%" y="%ws_cards_y2%" placement="4"/>
+				<condition var1="theme_style" op="!=" var2="Dark"/>
+				<condition var1="theme_style" op="!=" var2="Cream"/>
+				<placement x="%ws_cards_x3%" y="%ws_cards_y3%" placement="4"/>
 				<condition var1="theme_accent_tmp" var2="Lollipop"/>
 				<image resource="accent_apply"/>
 			</image>
@@ -1442,12 +1363,16 @@
 
 			<!-- Black -->
 			<image>
-				<placement x="%ws_cards_x4%" y="%ws_cards_y2%" placement="4"/>
+				<condition var1="theme_style" op="!=" var2="Dark"/>
+				<condition var1="theme_style" op="!=" var2="Cream"/>
+				<placement x="%ws_cards_x4%" y="%ws_cards_y3%" placement="4"/>
 				<image resource="style_shadow"/>
 			</image>
 
 			<button>
-				<placement x="%ws_cards_x4%" y="%ws_cards_y2%" placement="4"/>
+				<condition var1="theme_style" op="!=" var2="Dark"/>
+				<condition var1="theme_style" op="!=" var2="Cream"/>
+				<placement x="%ws_cards_x4%" y="%ws_cards_y3%" placement="4"/>
 				<image resource="accent_black"/>
 				<action function="set">theme_accent_tmp=Black</action>
 				<action function="set">theme_accent_light_tmp=#202124</action>
@@ -1455,7 +1380,9 @@
 			</button>
 			
 			<image>
-				<placement x="%ws_cards_x4%" y="%ws_cards_y2%" placement="4"/>
+				<condition var1="theme_style" op="!=" var2="Dark"/>
+				<condition var1="theme_style" op="!=" var2="Cream"/>
+				<placement x="%ws_cards_x4%" y="%ws_cards_y3%" placement="4"/>
 				<condition var1="theme_accent_tmp" var2="Black"/>
 				<image resource="accent_apply"/>
 			</image>
@@ -1463,12 +1390,16 @@
 
 			<!-- Red -->
 			<image>
-				<placement x="%ws_cards_x1%" y="%ws_cards_y3%" placement="4"/>
+				<condition var1="theme_style" op="!=" var2="Dark"/>
+				<condition var1="theme_style" op="!=" var2="Cream"/>
+				<placement x="%ws_cards_x1%" y="%ws_cards_y4%" placement="4"/>
 				<image resource="style_shadow"/>
 			</image>
 
 			<button>
-				<placement x="%ws_cards_x1%" y="%ws_cards_y3%" placement="4"/>
+				<condition var1="theme_style" op="!=" var2="Dark"/>
+				<condition var1="theme_style" op="!=" var2="Cream"/>
+				<placement x="%ws_cards_x1%" y="%ws_cards_y4%" placement="4"/>
 				<image resource="accent_red"/>
 				<action function="set">theme_accent_tmp=Red</action>
 				<action function="set">theme_accent_light_tmp=#E53935</action>
@@ -1476,7 +1407,9 @@
 			</button>
 			
 			<image>
-				<placement x="%ws_cards_x1%" y="%ws_cards_y3%" placement="4"/>
+				<condition var1="theme_style" op="!=" var2="Dark"/>
+				<condition var1="theme_style" op="!=" var2="Cream"/>
+				<placement x="%ws_cards_x1%" y="%ws_cards_y4%" placement="4"/>
 				<condition var1="theme_accent_tmp" var2="Red"/>
 				<image resource="accent_apply"/>
 			</image>
@@ -1484,12 +1417,16 @@
 
 			<!-- Orchid -->
 			<image>
-				<placement x="%ws_cards_x2%" y="%ws_cards_y3%" placement="4"/>
+				<condition var1="theme_style" op="!=" var2="Dark"/>
+				<condition var1="theme_style" op="!=" var2="Cream"/>
+				<placement x="%ws_cards_x2%" y="%ws_cards_y4%" placement="4"/>
 				<image resource="style_shadow"/>
 			</image>
 
 			<button>
-				<placement x="%ws_cards_x2%" y="%ws_cards_y3%" placement="4"/>
+				<condition var1="theme_style" op="!=" var2="Dark"/>
+				<condition var1="theme_style" op="!=" var2="Cream"/>
+				<placement x="%ws_cards_x2%" y="%ws_cards_y4%" placement="4"/>
 				<image resource="accent_orchid"/>
 				<action function="set">theme_accent_tmp=Orchid</action>
 				<action function="set">theme_accent_light_tmp=#C42CC9</action>
@@ -1497,7 +1434,9 @@
 			</button>
 			
 			<image>
-				<placement x="%ws_cards_x2%" y="%ws_cards_y3%" placement="4"/>
+				<condition var1="theme_style" op="!=" var2="Dark"/>
+				<condition var1="theme_style" op="!=" var2="Cream"/>
+				<placement x="%ws_cards_x2%" y="%ws_cards_y4%" placement="4"/>
 				<condition var1="theme_accent_tmp" var2="Orchid"/>
 				<image resource="accent_apply"/>
 			</image>
@@ -1505,12 +1444,16 @@
 
 			<!-- Green -->
 			<image>
-				<placement x="%ws_cards_x3%" y="%ws_cards_y3%" placement="4"/>
+				<condition var1="theme_style" op="!=" var2="Dark"/>
+				<condition var1="theme_style" op="!=" var2="Cream"/>
+				<placement x="%ws_cards_x3%" y="%ws_cards_y4%" placement="4"/>
 				<image resource="style_shadow"/>
 			</image>
 
 			<button>
-				<placement x="%ws_cards_x3%" y="%ws_cards_y3%" placement="4"/>
+				<condition var1="theme_style" op="!=" var2="Dark"/>
+				<condition var1="theme_style" op="!=" var2="Cream"/>
+				<placement x="%ws_cards_x3%" y="%ws_cards_y4%" placement="4"/>
 				<image resource="accent_green"/>
 				<action function="set">theme_accent_tmp=Green</action>
 				<action function="set">theme_accent_light_tmp=#1B873B</action>
@@ -1518,7 +1461,9 @@
 			</button>
 			
 			<image>
-				<placement x="%ws_cards_x3%" y="%ws_cards_y3%" placement="4"/>
+				<condition var1="theme_style" op="!=" var2="Dark"/>
+				<condition var1="theme_style" op="!=" var2="Cream"/>
+				<placement x="%ws_cards_x3%" y="%ws_cards_y4%" placement="4"/>
 				<condition var1="theme_accent_tmp" var2="Green"/>
 				<image resource="accent_apply"/>
 			</image>
@@ -1526,12 +1471,16 @@
 
 			<!-- Space -->
 			<image>
-				<placement x="%ws_cards_x4%" y="%ws_cards_y3%" placement="4"/>
+				<condition var1="theme_style" op="!=" var2="Dark"/>
+				<condition var1="theme_style" op="!=" var2="Cream"/>
+				<placement x="%ws_cards_x4%" y="%ws_cards_y4%" placement="4"/>
 				<image resource="style_shadow"/>
 			</image>
 
 			<button>
-				<placement x="%ws_cards_x4%" y="%ws_cards_y3%" placement="4"/>
+				<condition var1="theme_style" op="!=" var2="Dark"/>
+				<condition var1="theme_style" op="!=" var2="Cream"/>
+				<placement x="%ws_cards_x4%" y="%ws_cards_y4%" placement="4"/>
 				<image resource="accent_space"/>
 				<action function="set">theme_accent_tmp=Space</action>
 				<action function="set">theme_accent_light_tmp=#47618A</action>
@@ -1539,7 +1488,9 @@
 			</button>
 			
 			<image>
-				<placement x="%ws_cards_x4%" y="%ws_cards_y3%" placement="4"/>
+				<condition var1="theme_style" op="!=" var2="Dark"/>
+				<condition var1="theme_style" op="!=" var2="Cream"/>
+				<placement x="%ws_cards_x4%" y="%ws_cards_y4%" placement="4"/>
 				<condition var1="theme_accent_tmp" var2="Space"/>
 				<image resource="accent_apply"/>
 			</image>
@@ -1547,12 +1498,16 @@
 
 			<!-- Ocean -->
 			<image>
-				<placement x="%ws_cards_x1%" y="%ws_cards_y4%" placement="4"/>
+				<condition var1="theme_style" op="!=" var2="Dark"/>
+				<condition var1="theme_style" op="!=" var2="Cream"/>
+				<placement x="%ws_cards_x1%" y="%ws_cards_y5%" placement="4"/>
 				<image resource="style_shadow"/>
 			</image>
 
 			<button>
-				<placement x="%ws_cards_x1%" y="%ws_cards_y4%" placement="4"/>
+				<condition var1="theme_style" op="!=" var2="Dark"/>
+				<condition var1="theme_style" op="!=" var2="Cream"/>
+				<placement x="%ws_cards_x1%" y="%ws_cards_y5%" placement="4"/>
 				<image resource="accent_ocean"/>
 				<action function="set">theme_accent_tmp=Ocean</action>
 				<action function="set">theme_accent_light_tmp=#0C80A7</action>
@@ -1560,7 +1515,9 @@
 			</button>
 			
 			<image>
-				<placement x="%ws_cards_x1%" y="%ws_cards_y4%" placement="4"/>
+				<condition var1="theme_style" op="!=" var2="Dark"/>
+				<condition var1="theme_style" op="!=" var2="Cream"/>
+				<placement x="%ws_cards_x1%" y="%ws_cards_y5%" placement="4"/>
 				<condition var1="theme_accent_tmp" var2="Ocean"/>
 				<image resource="accent_apply"/>
 			</image>
@@ -1568,12 +1525,16 @@
 
 			<!-- Purple -->
 			<image>
-				<placement x="%ws_cards_x2%" y="%ws_cards_y4%" placement="4"/>
+				<condition var1="theme_style" op="!=" var2="Dark"/>
+				<condition var1="theme_style" op="!=" var2="Cream"/>
+				<placement x="%ws_cards_x2%" y="%ws_cards_y5%" placement="4"/>
 				<image resource="style_shadow"/>
 			</image>
 
 			<button>
-				<placement x="%ws_cards_x2%" y="%ws_cards_y4%" placement="4"/>
+				<condition var1="theme_style" op="!=" var2="Dark"/>
+				<condition var1="theme_style" op="!=" var2="Cream"/>
+				<placement x="%ws_cards_x2%" y="%ws_cards_y5%" placement="4"/>
 				<image resource="accent_purple"/>
 				<action function="set">theme_accent_tmp=Purple</action>
 				<action function="set">theme_accent_light_tmp=#725AFF</action>
@@ -1581,7 +1542,9 @@
 			</button>
 			
 			<image>
-				<placement x="%ws_cards_x2%" y="%ws_cards_y4%" placement="4"/>
+				<condition var1="theme_style" op="!=" var2="Dark"/>
+				<condition var1="theme_style" op="!=" var2="Cream"/>
+				<placement x="%ws_cards_x2%" y="%ws_cards_y5%" placement="4"/>
 				<condition var1="theme_accent_tmp" var2="Purple"/>
 				<image resource="accent_apply"/>
 			</image>
@@ -1589,12 +1552,16 @@
 
 			<!-- Yellow -->
 			<image>
-				<placement x="%ws_cards_x3%" y="%ws_cards_y4%" placement="4"/>
+				<condition var1="theme_style" op="!=" var2="Dark"/>
+				<condition var1="theme_style" op="!=" var2="Cream"/>
+				<placement x="%ws_cards_x3%" y="%ws_cards_y5%" placement="4"/>
 				<image resource="style_shadow"/>
 			</image>
 
 			<button>
-				<placement x="%ws_cards_x3%" y="%ws_cards_y4%" placement="4"/>
+				<condition var1="theme_style" op="!=" var2="Dark"/>
+				<condition var1="theme_style" op="!=" var2="Cream"/>
+				<placement x="%ws_cards_x3%" y="%ws_cards_y5%" placement="4"/>
 				<image resource="accent_yellow"/>
 				<action function="set">theme_accent_tmp=Yellow</action>
 				<action function="set">theme_accent_light_tmp=#E6AF05</action>
@@ -1602,7 +1569,9 @@
 			</button>
 			
 			<image>
-				<placement x="%ws_cards_x3%" y="%ws_cards_y4%" placement="4"/>
+				<condition var1="theme_style" op="!=" var2="Dark"/>
+				<condition var1="theme_style" op="!=" var2="Cream"/>
+				<placement x="%ws_cards_x3%" y="%ws_cards_y5%" placement="4"/>
 				<condition var1="theme_accent_tmp" var2="Yellow"/>
 				<image resource="accent_apply"/>
 			</image>
@@ -1610,12 +1579,16 @@
 
 			<!-- Cinnamon -->
 			<image>
-				<placement x="%ws_cards_x4%" y="%ws_cards_y4%" placement="4"/>
+				<condition var1="theme_style" op="!=" var2="Dark"/>
+				<condition var1="theme_style" op="!=" var2="Cream"/>
+				<placement x="%ws_cards_x4%" y="%ws_cards_y5%" placement="4"/>
 				<image resource="style_shadow"/>
 			</image>
 
 			<button>
-				<placement x="%ws_cards_x4%" y="%ws_cards_y4%" placement="4"/>
+				<condition var1="theme_style" op="!=" var2="Dark"/>
+				<condition var1="theme_style" op="!=" var2="Cream"/>
+				<placement x="%ws_cards_x4%" y="%ws_cards_y5%" placement="4"/>
 				<image resource="accent_cinnamon"/>
 				<action function="set">theme_accent_tmp=Cinnamon</action>
 				<action function="set">theme_accent_light_tmp=#AF6050</action>
@@ -1623,7 +1596,9 @@
 			</button>
 			
 			<image>
-				<placement x="%ws_cards_x4%" y="%ws_cards_y4%" placement="4"/>
+				<condition var1="theme_style" op="!=" var2="Dark"/>
+				<condition var1="theme_style" op="!=" var2="Cream"/>
+				<placement x="%ws_cards_x4%" y="%ws_cards_y5%" placement="4"/>
 				<condition var1="theme_accent_tmp" var2="Cinnamon"/>
 				<image resource="accent_apply"/>
 			</image>
@@ -1640,19 +1615,6 @@
 				<condition var1="theme_accent_tmp" op="modified"/>
 				<action function="set">needs_repack=1</action>
 				<action function="set">update_accent=1</action>
-			</action>
-
-			<listbox style="settingslist">
-				<placement x="0" y="%ws_cards_y5%" w="%screen_w%" h="%lb_l1%"/>
-				<listitem name="{@accent_in_titles}">
-					<data variable="theme_pie_tmp"/>
-				</listitem>
-			</listbox>
-
-			<action>
-				<condition var1="theme_pie_tmp" op="modified"/>
-				<action function="set">needs_repack=1</action>
-				<action function="set">update_action=1</action>
 			</action>
 
 			<template name="snackbar_update"/>
@@ -1685,9 +1647,9 @@
 				<placement x="%ab_btn1_x%" y="%ab_y%" placement="4"/>
 				<action function="set">spl_bg_user=0</action>
 				<action function="set">spl_bg_on=0</action>
-				<action function="set">spl_logo_type=w</action>
+				<action function="set">spl_logo_type=o</action>
 				<action function="set">spl_ofr=1</action>
-				<action function="set">spl_bg_color=#1E1F22</action>
+				<action function="set">spl_bg_color=#000000</action>
 				<action function="page">ext_custom_splash</action>
 			</button>
 
@@ -1697,11 +1659,11 @@
 				<image resource="actionbar_reset"/>
 			</image>
 
-			<listbox style="btn_list">
-				<placement x="0" y="%row4_3_y%" w="%screen_w%" h="%spl_list_h%"/>
+			<listbox style="group_list">
+				<placement x="0" y="%row5_1_y%" w="%screen_w%" h="%spl_list_h%"/>
 				<listitem name="{@spl_image}">
 					<condition var1="spl_bg_on" var2="0"/>
-					<icon res="add_image"/>
+					<icon res="image"/>
 					<action function="set">tw_zip_location_tmp=%tw_file_location1%</action>
 					<action function="set">location_input_tmp=%tw_file_location1%</action>
 					<action function="set">sp_back=ext_custom_splash_select</action>
@@ -1709,16 +1671,16 @@
 				</listitem>
 				<listitem name="{@spl_del_img}">
 					<condition var1="spl_bg_on" var2="1"/>
-					<icon res="image_off"/>
+					<icon res="hide_image"/>
 					<action function="set">spl_bg_on=0</action>
 				</listitem>
 				<listitem name="{@spl_background}">
-					<icon res="subs"/>
+					<icon res="format_color"/>
 					<action function="set">spl_bg_user=1</action>
 					<action function="page">ext_custom_splash_color</action>
 				</listitem>
 				<listitem name="{@spl_logo}">
-					<icon res="logo_icon"/>
+					<icon res="fox"/>
 					<action function="set">spl_bg_user=1</action>
 					<action function="page">ext_custom_splash_logo</action>
 				</listitem>
@@ -1767,12 +1729,11 @@
 				<placement x="%col1_x_indent%" y="%ab_bc_y%"/>
 				<text>{@spl_background}</text>
 			</text>
-		
-			<listbox>
-				<placement x="0" y="%row4_3_y%" w="%screen_w%" h="%spl_list_h%"/>
+
+			<listbox style="radiobox_group">
+				<placement x="0" y="%row5_1_y%" w="%screen_w%" h="%spl_list_h%"/>
 				<data name="spl_bg_color"/>
-				<iconsize w="%col1_x_caption%" h="%bl_h1%" padding="25"/>
-				<listitem name="{@spl_image}">#1E1F22</listitem>
+				<listitem name="{@spl_image}">#00000000</listitem>
 				<listitem name="{@spl_accent}"><condition var1="accent" op="!=" var2="#d86100"/><condition var1="accent" op="!=" var2="#ed6f02"/>%accent%</listitem>
 				<listitem name="{@spl_orange}">#ED6F02</listitem>
 				<listitem name="{@spl_white}">#FFFFFF</listitem>
@@ -1816,9 +1777,8 @@
 				<text>{@spl_logo}</text>
 			</text>
 		
-			<listbox style="settingslist">
-				<placement x="0" y="%row4_3_y%" w="%screen_w%" h="%bl_h1%"/>
-				<iconsize w="%col1_x_caption%" h="%bl_h1%" padding="25"/>
+			<listbox style="settingslist_group">
+				<placement x="0" y="%row5_1_y%" w="%screen_w%" h="%lb_group_l1%"/>
 				<listitem name="{@spl_ofr}">
 					<condition var1="spl_logo_type" var2="0"/>
 					<icon res="checkbox_false"/>
@@ -1831,9 +1791,8 @@
 				</listitem>
 			</listbox>
 
-			<listbox>
-				<placement x="0" y="%row5_2a_y%" w="%screen_w%" h="%bl_h4%"/>
-				<iconsize w="%col1_x_caption%" h="%bl_h1%" padding="25"/>
+			<listbox style="radiobox_group">
+				<placement x="0" y="%row6_1a_y%" w="%screen_w%" h="%lb_group_l4%"/>
 				<data name="spl_logo_type"/>
 				<listitem name="{@hidden}"><condition var1="spl_bg_on" var2="1"/>0</listitem>
 				<listitem name="{@spl_white}">w</listitem>
@@ -1888,12 +1847,12 @@
 			</text>
 
 			<text style="text_ab_title">
-				<placement x="%col1_x_indent%" y="%row1_2_y%" placement="2"/>
+				<placement x="%col1_x%" y="%row1_2_y%" placement="2"/>
 				<text>{@sel_splash_png}</text>
 			</text>
 
 			<text style="text_ab_subtitle_lim">
-				<placement x="%col1_x_indent%" y="%row1_2_y%"/>
+				<placement x="%col1_x%" y="%row1_2_y%"/>
 				<text>%tw_zip_location_tmp%</text>
 			</text>
 				
@@ -1902,7 +1861,7 @@
 				<action function="set">tw_splash_png_path=%tw_zip_location_tmp%</action>
 				<action function="set">spl_bg_user=1</action>
 				<action function="set">spl_bg_on=1</action>
-				<action function="set">spl_bg_color=#1E1F22</action>
+				<action function="set">spl_bg_color=#00000000</action>
 				<action function="cmd">
 						cp "%tw_splash_png_path%/%tw_splash_png_name%" "/twres/images/Splash/user.png";
 				</action>
@@ -1929,11 +1888,11 @@
 			<action>
 				<action function="ftls">
 					#Remove theme
-					if [[ '%remove_theme%' = '1' ]] || [[ '%theme_pie_tmp%' = '1' &amp;&amp; '%theme_style_tmp%' = 'Night' &amp;&amp; '%theme_accent_tmp%' = 'Orange' &amp;&amp; '%theme_font_tmp%' = 'Roboto' &amp;&amp; '%theme_sec_font_tmp%' = 'GoogleSans' &amp;&amp; '%theme_font_size_tmp%' = 'n' ]]; then
+					if [[ '%remove_theme%' = '1' ]] || [[ '%theme_style_tmp%' = 'Cream' &amp;&amp; '%theme_accent_tmp%' = 'Orange' &amp;&amp; '%theme_font_tmp%' = 'Roboto' &amp;&amp; '%theme_sec_font_tmp%' = 'GoogleSans' &amp;&amp; '%theme_font_size_tmp%' = 'n' ]]; then
 						[ -d "%fox_theme_path%" ] &amp;&amp; rm -rf %fox_theme_path%;
 						[[ '%update_navbar%' = '1' ]] || exit;
 					else
-						if [ ! -d "%fox_theme_path%" ]; then mkdir -p "%fox_theme_path%"; fi;
+						if [ ! -d "%fox_theme_path%" ]; then mkdir -p -m 0755 "%fox_theme_path%"; chcon -R "%fox_media_rw_data_file%" "%fox_theme_path%"; chown -R "%fox_media_rw%" "%fox_theme_path%"; fi;
 					fi;
 
 					#Fonts
@@ -1969,63 +1928,58 @@
 				
 					#Navbar
 					if [[ '%update_navbar%' = '1' ]]; then
-						if [ ! -d "%fox_navbar_path%" ]; then mkdir -p "%fox_navbar_path%"; fi;
+						if [ ! -d "%fox_navbar_path%" ]; then mkdir -p -m 0755 "%fox_navbar_path%"; chcon -R "%fox_media_rw_data_file%" "%fox_navbar_path%"; chown -R "%fox_media_rw%" "%fox_navbar_path%"; fi;
+						navbar_disable_add='%navbar_disable_add_tmp%';
+						if [ -z "${navbar_disable_add}" ]; then
+							echo "E: navbar_disable_add_tmp is empty; aborting navbar regeneration." >> /tmp/recovery.log;
+							exit 1;
+						fi;
+						if ! screen_h=$(expr %screen_original_h% + "${navbar_disable_add}"); then
+							echo "E: Failed to compute navbar screen_h; aborting navbar regeneration." >> /tmp/recovery.log;
+							exit 1;
+						fi;
+						if [ -z "${screen_h}" ]; then
+							echo "E: Computed navbar screen_h is empty; aborting navbar regeneration." >> /tmp/recovery.log;
+							exit 1;
+						fi;
 						cat "/twres/themes/sed/navbar.xml" | sed -e "
 						s/#NAVBAR_DISABLE#/%navbar_disable_tmp%/g;
+						s/#NAVBAR_DISABLE_ADD#/${navbar_disable_add}/g;
 						s/#RGE#/%real_gestures_enable_tmp%/g;
-						s/#SCREEN_H#/$(expr %screen_original_h% + %navbar_disable_add_tmp%)/g
+						s/#SCREEN_H#/${screen_h}/g
 						" > %fox_navbar_path%/navbar.xml;
+						chcon -R "%fox_media_rw_data_file%" "%fox_navbar_path%/navbar.xml";
+						chown -R "%fox_media_rw%" "%fox_navbar_path%/navbar.xml";
 					fi;
 				
 					#Style
 					if [[ '%update_style%' = '1' ]]; then
 						cat "/twres/themes/styles/%theme_style_tmp%.xml" > %fox_theme_path%/style.xml;
+						chcon -R "%fox_media_rw_data_file%" "%fox_theme_path%/style.xml";
+						chown -R "%fox_media_rw%" "%fox_theme_path%/style.xml";
 					fi;
 				
 					#Accent
 					if [[ '%update_accent%' = '1' ]] || [[ '%update_style%' = '1' ]]; then
 						if [[ '%theme_style_act_tmp%' = 'Default' ]]; then
 							cat "/twres/themes/sed/accent.xml" | sed -e "
-							s/#ACCENT#/D%theme_accent_tmp%/g;
 							s/#ACCENT_NAME#/%theme_accent_tmp%/g;
 							s/#COLOR#/%theme_accent_dark_tmp%/g;
 							s/#COLOR_LIGHT#/%theme_accent_light_tmp%/g;
 							s/#COLOR_DARK#/%theme_accent_dark_tmp%/g
 							" > %fox_theme_path%/accent.xml;
+							chcon -R "%fox_media_rw_data_file%" "%fox_theme_path%/accent.xml";
+							chown -R "%fox_media_rw%" "%fox_theme_path%/accent.xml";
 						else
 							cat "/twres/themes/sed/accent.xml" | sed -e "
-							s/#ACCENT#/%theme_accent_tmp%/g;
 							s/#ACCENT_NAME#/%theme_accent_tmp%/g;
 							s/#COLOR#/%theme_accent_light_tmp%/g;
 							s/#COLOR_LIGHT#/%theme_accent_light_tmp%/g;
 							s/#COLOR_DARK#/%theme_accent_dark_tmp%/g
 							" > %fox_theme_path%/accent.xml;
+							chcon -R "%fox_media_rw_data_file%" "%fox_theme_path%/accent.xml";
+							chown -R "%fox_media_rw%" "%fox_theme_path%/accent.xml";
 						fi;
-					fi;
-
-					#ActBar
-					if [[ '%update_action%' = '1' ]] || [[ '%update_style%' = '1' ]] || [[ '%update_accent%' = '1' ]]; then
-						if [[ '%theme_pie_tmp%' = '1' ]]; then
-							if [[ '%theme_style_act_tmp%' = 'Default' ]]; then
-								cat "/twres/themes/sed/action.xml" | sed -e "
-								s/#ACCENT#/D%theme_accent_tmp%/g;
-								s/#A_COLOR#/accent/g;
-								s/#ENABLE#/1/g
-								" > %fox_theme_path%/action.xml;
-							else
-								cat "/twres/themes/sed/action.xml" | sed -e "
-								s/#ACCENT#/%theme_accent_tmp%/g;
-								s/#A_COLOR#/accent/g;
-								s/#ENABLE#/1/g
-								" > %fox_theme_path%/action.xml;
-							fi;
-						else
-							cat "/twres/themes/sed/action.xml" | sed -e "
-							s/#ACCENT#/%theme_style_act_tmp%/g;
-							s/#A_COLOR#/text_action/g;
-							s/#ENABLE#/0/g
-							" > %fox_theme_path%/action.xml;
-						fi
 					fi;
 				</action>
 				<action function="reload"/>
@@ -2076,8 +2030,8 @@
 
 							if [[ '%spl_bg_on%' = '1' ]] &amp;&amp; [[ "$(du -s "%tw_splash_png_path%/%tw_splash_png_name%" | cut -f1)" -lt "%of_splash_max_size%" ]];
 									then bg_on=;
-										 cp "%tw_splash_png_path%/%tw_splash_png_name%" "/tmp/orangefox/ramdisk/twres/images/Splash/user.png";
-										 cp "%tw_splash_png_path%/%tw_splash_png_name%" "/twres/images/Splash/user.png";
+										cp "%tw_splash_png_path%/%tw_splash_png_name%" "/tmp/orangefox/ramdisk/twres/images/Splash/user.png";
+										cp "%tw_splash_png_path%/%tw_splash_png_name%" "/twres/images/Splash/user.png";
 									else bg_on=!--;
 										cp "/twres/images/Splash/empty.png" "/tmp/orangefox/ramdisk/twres/images/Splash/user.png";
 										cp "/twres/images/Splash/empty.png" "/twres/images/Splash/user.png";
@@ -2093,9 +2047,11 @@
 							s/#LOGO_ON#/${logo_on}/g;
 							s/#BG_IMG#/${bg_on}/g
 							" > /tmp/orangefox/ramdisk/twres/splash.xml;
-							else cat "/twres/themes/sed/splash_orig.xml" > /tmp/orangefox/ramdisk/twres/splash.xml;
+						else
+							cat "/twres/themes/sed/splash_orig.xml" > /tmp/orangefox/ramdisk/twres/splash.xml;
 						fi;
 						cat "/tmp/orangefox/ramdisk/twres/splash.xml" > /twres/splash.xml;
+						twrp xset spl_parsed=0;
 				</action>
 				<action function="wlfx"/>
 				<action function="overlay"/>
@@ -2117,26 +2073,22 @@
 			</text>
 
 			<action>
-				<action function="set">spl_logo_type=w</action>
-				<action function="set">spl_bg_color=#1E1F22</action>
+				<condition var1="spl_parsed" op="!=" var2="1"/>
+				<action function="set">spl_logo_type=o</action>
+				<action function="set">spl_bg_color=#00000000</action>
 				<action function="set">spl_bg_user=0</action>
 				<action function="set">spl_bg_on=0</action>
-				<action function="set">spl_ofr=1</action>
+				<action function="set">spl_ofr=0</action>
 				<action function="ftls">
-					splash=/twres/splash.xml
-
-					cat $splash | grep "SED Splash"
-					if [ $? -ne 0 ]; then
-						exit 0;
-					fi;
-
+					splash=/twres/splash.xml;
 					spl_logo_string=`cat $splash | grep 'image name="splash_logo"'`;
 					spl_bg_user_string=`cat $splash | grep 'image name="splash_bg"'`;
 					spl_bg_color_string=`cat $splash | grep 'background color='`;
+					spl_text_string=`cat $splash | grep 'text style='`;
 
 					echo ${spl_logo_string} | grep '!--' > /dev/null;
 					if [ $? -ne 0 ]; then
-						spl_logo_type=`echo ${spl_logo_string} | sed 's/.*Splash\/logo_\(.\).*/\1/'`;
+						spl_logo_type=`echo ${spl_logo_string} | sed 's/.*\/logo_\(.\).*/\1/'`;
 					fi;
 
 					echo ${spl_bg_user_string} | grep '!--' > /dev/null;
@@ -2149,9 +2101,13 @@
 						spl_bg_color=`echo ${spl_bg_color_string} | sed 's/.*color="\([^"]*\)".*/\1/'`;
 					fi;
 
+					echo ${spl_text_string} | grep '!--' > /dev/null;
+					if [ $? -ne 0 ]; then
+						twrp xset spl_ofr=1;
+					fi;
+
 					if [[ ! -z ${spl_logo_type} ]]; then
 						twrp xset spl_logo_type=${spl_logo_type};
-						twrp xset spl_ofr=0;
 						twrp xset spl_bg_user=1;
 					fi;
 
@@ -2160,8 +2116,22 @@
 						twrp xset spl_bg_user=1;
 					fi;
 
+					cat $splash | grep "SED Splash";
+					if [ $? -ne 0 ]; then
+						twrp xset spl_bg_user=0;
+						twrp xset spl_bg_on=0;
+					fi;
+
+					twrp xset spl_parsed=1;
+
 					exit 0;
 				</action>
+				<action function="overlay"/>
+				<action function="page">ext_custom_splash</action>
+			</action>
+
+			<action>
+				<condition var1="spl_parsed" var2="1"/>
 				<action function="overlay"/>
 				<action function="page">ext_custom_splash</action>
 			</action>

@@ -10,10 +10,10 @@
 	</details>
 	
 	<resources>
-		<image name="splash_logo_w" filename="Splash/logo_w" retainaspect="1"/>
-		<image name="splash_bg" filename="Splash/original" retainaspect="1"/>
-		<font name="of" filename="EuclidFlex-Medium.ttf" size="64"/>
-		<font name="recovery" filename="EuclidFlex-Regular.ttf" size="52"/>
+		<image name="splash_logo" filename="SVG/Logos/logo_o.svg" retainaspect="1" scale="2.0"/>
+		<image name="splash_bg" filename="Splash/user" retainaspect="1"/>
+		<font name="of" filename="InterDisplay-Medium.ttf" size="64"/>
+		<font name="recovery" filename="InterDisplay-Regular.ttf" size="52"/>
 	</resources>
 
 	<variables>
@@ -21,8 +21,8 @@
 		<variable name="rec" value="%screen_h%-320"/>
 		<variable name="screen_width" value="1080"/>
 		<variable name="screen_height" value="1920"/>
-		<variable name="header_color" value="#FF8038"/>
-		<variable name="background_color" value="#D34E38"/>
+		<variable name="header_color" value="#000000"/>
+		<variable name="background_color" value="#000000"/>
 	</variables>
 
 	<pages>
@@ -39,7 +39,7 @@
 			</image>
 
 			<image>
-				<image resource="splash_logo_w"/>
+				<image resource="splash_logo"/>
 				<placement x="540" y="%center_y%" placement="4"/>
 			</image>
 
