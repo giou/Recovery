@@ -50,6 +50,7 @@ LOCAL_SRC_FILES := \
     startupArgs.cpp \
     twrp-functions.cpp \
     orangefox.cpp \
+    wlan.cpp \
     gui/nanosvg.cpp \
     twrpDigestDriver.cpp \
     openrecoveryscript.cpp \
@@ -318,21 +319,20 @@ ifneq ($(TW_NO_NETWORK), true)
         microhttpd \
         index.html \
         microhttpd.rc \
-        fox_icon.png \
         ttyd \
         ttyd.rc \
-        wlan_start \
-        wlan_connect \
-        wlan_scan \
-        wlan_info
 endif
 ifneq ($(TW_ADDITIONAL_APEX_FILES),)
     LOCAL_CFLAGS += -DTW_ADDITIONAL_APEX_FILES=$(TW_ADDITIONAL_APEX_FILES)
 endif
-ifneq ($(TW_LOAD_VENDOR_MODULES),)
+
+ifneq ($(strip $(TW_LOAD_VENDOR_MODULES) $(TW_POST_DECRYPT_MODULES)),)
     LOCAL_SRC_FILES += kernel_module_loader.cpp
     LOCAL_C_INCLUDES += system/core/libmodprobe/include
     LOCAL_STATIC_LIBRARIES += libmodprobe
+endif
+
+ifneq ($(TW_LOAD_VENDOR_MODULES),)
     LOCAL_CFLAGS += -DTW_LOAD_VENDOR_MODULES=$(TW_LOAD_VENDOR_MODULES)
     ifeq ($(TW_LOAD_VENDOR_MODULES_EXCLUDE_GKI),true)
         LOCAL_CFLAGS += -DTW_LOAD_VENDOR_MODULES_EXCLUDE_GKI
@@ -344,6 +344,11 @@ ifneq ($(TW_LOAD_VENDOR_MODULES),)
         LOCAL_CFLAGS += -DTW_LOAD_PREBUILT_MODULES_AT_FIRST
     endif
 endif
+
+ifneq ($(TW_POST_DECRYPT_MODULES),)
+    LOCAL_CFLAGS += -DTW_POST_DECRYPT_MODULES=$(TW_POST_DECRYPT_MODULES)
+endif
+
 ifeq ($(TW_INCLUDE_CRYPTO), true)
     LOCAL_CFLAGS += -DTW_INCLUDE_CRYPTO -DUSE_FSCRYPT -Wno-macro-redefined
     LOCAL_SHARED_LIBRARIES += libgpt_twrp

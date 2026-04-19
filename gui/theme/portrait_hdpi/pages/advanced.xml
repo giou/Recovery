@@ -28,6 +28,11 @@
 					<action function="ftls">ps -eo 'comm' | grep adbd &amp;&amp; twrp xset fox_adb=1</action>
 					<action function="page">sideload</action>
 				</listitem>
+				<listitem name="{@wlan_menu}">
+					<condition var1="tw_no_network" op="!=" var2="1"/>
+					<icon res="wlan"/>
+					<action function="page">wlan</action>
+				</listitem>
 				<listitem name="{@reboot_btn}">
 					<icon res="restart"/>
 					<action function="set">tw_back=advanced</action>
@@ -36,12 +41,12 @@
 			</listbox>
 
 			<text style="caption">
-				<placement x="%gl_text_x%" y="%row4_3_y%"/>
+				<placement x="%gl_text_x%" y="%row5_3_y%"/>
 				<text>{@listbox_group_additions}</text>
 			</text>
 
 			<listbox style="group_list">
-				<placement x="0" y="%row5_1_y%" w="%screen_w%" h="%adv_additions_h%"/>
+				<placement x="0" y="%row6_1_y%" w="%screen_w%" h="%adv_additions_h%"/>
 				<listitem name="{@reflash_twrp}">
 					<icon res="wrench"/>
 					<condition var1="fox_branch" op="&gt;=" var2="11"/>

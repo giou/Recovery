@@ -1,0 +1,319 @@
+<?xml version="1.0"?>
+<recovery>
+	<pages>
+
+		<!-- Main WLAN page -->
+		<page name="wlan">
+			<action>
+				<action function="set">tw_back=advanced</action>
+				<action function="set">wlanlistdisplay=0</action>
+			</action>
+
+			<!-- If scan results exist, show them on this page -->
+			<action>
+				<condition var1="fileexists" var2="/tmp/wlan/list.txt"/>
+				<action function="set">wlanlistdisplay=1</action>
+				<action function="set">of_file_to_read=/tmp/wlan/list.txt</action>
+			</action>
+
+			<action>
+				<condition var1="fileexists" op="!=" var2="/tmp/wlan/list.txt"/>
+				<action function="set">of_file_to_read=</action>
+			</action>
+
+			<!-- WLAN enabled card -->
+			<image>
+				<condition var1="tw_wlan_enabled" var2="1"/>
+				<placement x="40" y="%ab_h%"/>
+				<image resource="main_switch_card_active"/>
+			</image>
+
+			<image style="switch_on">
+				<condition var1="tw_wlan_enabled" var2="1"/>
+				<placement x="%main_switch_icon_x%" y="%ab2_y%" placement="4"/>
+			</image>
+
+			<text style="text_ab_switch_on">
+				<condition var1="tw_wlan_enabled" var2="1"/>
+				<placement x="%switch_text_x%" y="%ab_bc2_y%"/>
+				<text>WLAN</text>
+			</text>
+
+			<button style="bs_btn">
+				<condition var1="tw_wlan_enabled" var2="1"/>
+				<placement x="0" y="%ab_h%" w="%screen_w%" h="%ab_btn_h%"/>
+				<action function="wlan_disable"/>
+				<action function="set">of_file_to_read=</action>
+				<action function="set">wlanlistdisplay=0</action>
+				<action function="set">wlanselectedid=</action>
+				<action function="set">wlanempty=</action>
+				<action function="set">wlan_connected_name=</action>
+				<action function="page">wlan</action>
+			</button>
+
+			<!-- WLAN disabled card -->
+			<image>
+				<condition var1="tw_wlan_enabled" op="!=" var2="1"/>
+				<placement x="40" y="%ab_h%"/>
+				<image resource="main_switch_card_not_active"/>
+			</image>
+
+			<image style="switch_off">
+				<condition var1="tw_wlan_enabled" op="!=" var2="1"/>
+				<placement x="%main_switch_icon_x%" y="%ab2_y%" placement="4"/>
+			</image>
+
+			<text style="text_ab_switch_off">
+				<condition var1="tw_wlan_enabled" op="!=" var2="1"/>
+				<placement x="%gl_text_x%" y="%ab_bc2_y%"/>
+				<text>WLAN</text>
+			</text>
+
+			<button style="bs_btn">
+				<condition var1="tw_wlan_enabled" op="!=" var2="1"/>
+				<placement x="0" y="%ab_h%" w="%screen_w%" h="%ab_btn_h%"/>
+				<action function="wlan_enable"/>
+				<action function="page">wlan</action>
+			</button>
+
+			<template name="base"/>
+
+			<text style="text_ab_title">
+				<placement x="%col1_x_indent%" y="%ab_bc_y%"/>
+				<text>{@wlan_menu}</text>
+			</text>
+
+			<button style="actionbar">
+				<placement x="%ab_btn1_x%" y="%ab_y%" placement="4"/>
+				<action function="set">general_back=wlan</action>
+				<action function="page">wlan_settings</action>
+			</button>
+
+			<image>
+				<placement x="%ab_btn1_x%" y="%ab_y%" placement="4"/>
+				<image resource="actionbar_settings"/>
+			</image>
+
+			<!-- Available networks -->
+			<text style="caption">
+				<condition var1="tw_wlan_enabled" var2="1"/>
+				<placement x="%gl_text_x%" y="%row2_1a_y%"/>
+				<text>{@wlan_list}</text>
+			</text>
+
+			<button style="actionbar">
+				<condition var1="tw_wlan_enabled" var2="1"/>
+				<placement x="%ab_btn1_x%" y="%row2_1a_y%" placement="1"/>
+				<action function="set">of_file_to_read=</action>
+				<action function="set">wlanlistdisplay=0</action>
+				<action function="wlan_scan"/>
+				<action function="page">wlan</action>
+			</button>
+
+			<image>
+				<condition var1="tw_wlan_enabled" var2="1"/>
+				<placement x="%ab_btn1_x%" y="%row2_1a_y%" placement="1"/>
+				<image resource="actionbar_reset"/>
+			</image>
+
+			<text style="text_body2_hl">
+				<condition var1="tw_wlan_enabled" var2="1"/>
+				<condition var1="fileexists" op="!=" var2="/tmp/wlan/list.txt"/>
+				<placement x="%gl_text_x%" y="%row2_2a_y%"/>
+				<text>{@wlan_empty}</text>
+			</text>
+
+			<listbox style="group_list">
+				<condition var1="tw_wlan_enabled" var2="1"/>
+				<condition var1="fileexists" var2="/tmp/wlan/list.txt"/>
+				<placement x="0" y="%row2_2a_y%" w="%screen_w%" h="%bl_h4%"/>
+				<icon selected="wlan" unselected="wlan"/>
+				<data name="of_file_to_read"/>
+			</listbox>
+
+			<template name="gestures"/>
+
+			<action>
+				<touch key="home"/>
+				<action function="set">wlanlistdisplay=</action>
+				<action function="set">of_file_to_read=</action>
+				<action function="page">main</action>
+			</action>
+
+			<action>
+				<touch key="back"/>
+				<action function="set">wlanlistdisplay=</action>
+				<action function="set">of_file_to_read=</action>
+				<action function="page">advanced</action>
+			</action>
+		</page>
+
+		<!-- WLAN settings page -->
+		<page name="wlan_settings">
+			<template name="base"/>
+
+			<text style="text_ab_title">
+				<placement x="%col1_x_indent%" y="%ab_bc_y%"/>
+				<text>WLAN Settings</text>
+			</text>
+
+			<text style="caption">
+				<placement x="%gl_text_x%" y="%row2_1a_y%"/>
+				<text>Options</text>
+			</text>
+
+			<listbox style="group_list">
+				<placement x="0" y="%row2_2a_y%" w="%screen_w%" h="%bl_h2%"/>
+				<listitem name="Saved networks">
+					<icon res="wlan"/>
+					<action function="page">wlan_saved</action>
+				</listitem>
+				<listitem name="Test Network Connection">
+					<icon res="wlan"/>
+					<action function="page">wlan_settings</action>
+					<action function="overlay">console</action>
+					<action function="terminalcommand">
+echo "Trying test net connection with ping bing.com ..."
+echo "=============Ping bing.com==========="
+echo " "
+busybox ping -w 4 bing.com
+echo " "
+echo "====================================="
+echo " "
+echo " "
+echo " "
+					</action>
+				</listitem>
+			</listbox>
+
+			<template name="gestures"/>
+
+			<action>
+				<touch key="home"/>
+				<action function="page">main</action>
+			</action>
+
+			<action>
+				<touch key="back"/>
+				<action function="page">wlan</action>
+			</action>
+		</page>
+
+		<!-- Selected network connect flow -->
+		<page name="wlan_connect">
+			<action>
+				<action function="set">wlan_password=</action>
+				<action function="setvaluebyfile">wlanencryption,/tmp/wlan/list/%wlanselectedid%</action>
+			</action>
+
+			<action>
+				<condition var1="wlanencryption" op="!=" var2="OPEN"/>
+				<action function="page">wlan_password</action>
+			</action>
+
+			<action function="page">wlan</action>
+			<action function="overlay">console</action>
+			<action function="wlan_connect"/>
+		</page>
+
+		<!-- Password entry page -->
+		<page name="wlan_password">
+			<action function="page">wlan_password_pattern</action>
+
+			<template name="body_ct"/>
+			<template name="keyboardtemplate"/>
+			<action function="set">of_show_pass=1</action>
+			<template name="wlan_password_page"/>
+		</page>
+
+		<!-- Pattern/keyboard entry -->
+		<page name="wlan_password_pattern">
+			<template name="body_ct"/>
+			<template name="navbar"/>
+
+			<image>
+				<image resource="actionbar_encr_ena"/>
+				<placement x="%center_x%" y="%centered_title_1%" placement="4"/>
+			</image>
+
+			<text style="text_ab_subtitle">
+				<placement x="%center_x%" y="%centered_title_2%" placement="4"/>
+				<text>{@decrypt}</text>
+			</text>
+
+			<patternpassword>
+				<placement x="%pattern_x%" y="%row4_1a_y%" w="%pattern_size%" h="%pattern_size%"/>
+				<data name="wlan_password"/>
+				<action function="page">wlan_password</action>
+			</patternpassword>
+
+			<template name="gestures"/>
+
+			<action>
+				<touch key="home"/>
+				<action function="page">wlan_password</action>
+			</action>
+
+			<action>
+				<touch key="back"/>
+				<action function="page">wlan_password</action>
+			</action>
+		</page>
+
+		<!-- Saved networks page -->
+		<page name="wlan_saved">
+			<template name="base"/>
+
+			<text style="text_ab_title">
+				<placement x="%col1_x_indent%" y="%ab_bc_y%"/>
+				<text>Saved networks</text>
+			</text>
+
+			<action function="set">wlansaveddisplay=0</action>
+			<action function="wlan_saved_refresh"/>
+
+			<action>
+				<condition var1="fileexists" var2="/tmp/wlan/saved.txt"/>
+				<action function="set">wlansaveddisplay=1</action>
+				<action function="set">of_saved_file_to_read=/tmp/wlan/saved.txt</action>
+			</action>
+
+			<text style="caption">
+				<placement x="%gl_text_x%" y="%row2_1a_y%"/>
+				<text>Saved Wi-Fi networks</text>
+			</text>
+
+			<text style="text_body2_hl">
+				<condition var1="fileexists" op="!=" var2="/tmp/wlan/saved.txt"/>
+				<placement x="%gl_text_x%" y="%row2_2a_y%"/>
+				<text>No saved networks found</text>
+			</text>
+
+			<listbox style="group_list">
+				<condition var1="fileexists" var2="/tmp/wlan/saved.txt"/>
+				<placement x="0" y="%row2_2a_y%" w="%screen_w%" h="%bl_h4%"/>
+				<icon selected="wlan" unselected="wlan"/>
+				<data name="of_saved_file_to_read"/>
+			</listbox>
+
+			<button style="btn_flat_qw">
+				<placement x="%btn_raised_left_x%" y="%row7_1a_y%"/>
+				<text>Refresh</text>
+				<action function="page">wlan_saved</action>
+			</button>
+
+			<template name="gestures"/>
+
+			<action>
+				<touch key="home"/>
+				<action function="page">main</action>
+			</action>
+
+			<action>
+				<touch key="back"/>
+				<action function="page">wlan_settings</action>
+			</action>
+		</page>
+
+	</pages>
+</recovery>

@@ -94,6 +94,7 @@
 		<image name="bs_btn_set_ota" filename="Default/Icons/bs_btn_set_ota" retainaspect="1"/>
 		<image name="bs_btn_set_secure" filename="Default/Icons/bs_btn_set_secure" retainaspect="1"/>
 		<image name="bs_btn_restore" filename="Default/Icons/bs_btn_restore" retainaspect="1"/>
+		<image name="bs_adv_wlan" filename="Default/Icons/wlan" retainaspect="1"/>
 
 		<!-- Info -->
 		<image name="icon_warning" filename="Default/Info/icon_warning" retainaspect="1"/>
