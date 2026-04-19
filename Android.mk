@@ -318,6 +318,7 @@ ifneq ($(TW_NO_NETWORK), true)
     TWRP_REQUIRED_MODULES += \
         microhttpd \
         index.html \
+        fox_icon.png \
         microhttpd.rc \
         ttyd \
         ttyd.rc
