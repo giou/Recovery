@@ -320,7 +320,7 @@ ifneq ($(TW_NO_NETWORK), true)
         index.html \
         microhttpd.rc \
         ttyd \
-        ttyd.rc \
+        ttyd.rc
 endif
 ifneq ($(TW_ADDITIONAL_APEX_FILES),)
     LOCAL_CFLAGS += -DTW_ADDITIONAL_APEX_FILES=$(TW_ADDITIONAL_APEX_FILES)
