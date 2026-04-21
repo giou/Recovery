@@ -82,7 +82,8 @@ cc_library_static {
         "twmsg.cpp",
         // OrangeFox
         "gesture.cpp",
-        "battery.cpp"
+        "battery.cpp",
+        "wlan.cpp"
     ],
     shared_libs: [
         "libminuitwrp",

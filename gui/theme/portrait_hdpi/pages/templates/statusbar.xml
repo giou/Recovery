@@ -38,6 +38,33 @@
 				<text>%tw_time%</text>
 			</text>
 
+			<!-- WIFI icon -->
+			<!-- Center clock -->
+			<wlan style="wlan_status">
+				<placement x="%wlan_x%" y="%wlan_y%" w="46" h="46"/>
+				<condition var1="center_clock" var2="1"/>
+			</wlan>
+
+			<!-- Right clock -->
+			<wlan style="wlan_status">
+				<placement x="%wlan_x%" y="%wlan_y%" w="46" h="46"/>
+				<condition var1="center_clock" var2="2"/>
+			</wlan>
+
+			<!-- Left clock, 12-hour -->
+			<wlan style="wlan_status">
+				<placement x="%wlan_x%" y="%wlan_y%" w="46" h="46"/>
+				<condition var1="center_clock" var2="0"/>
+				<condition var1="tw_military_time" op="!=" var2="1"/>
+			</wlan>
+
+			<!-- Left clock, 24-hour -->
+			<wlan style="wlan_status">
+				<placement x="%wlan_x%" y="%wlan_y%" w="46" h="46"/>
+				<condition var1="center_clock" var2="0"/>
+				<condition var1="tw_military_time" var2="1"/>
+			</wlan>
+
 			<!-- Battery -->
 			<!-- Center clock battery styles -->
 			<battery>
@@ -118,8 +145,6 @@
 				<condition var1="tw_military_time" var2="1"/>
 				<condition var1="style_battery" var2="2"/>
 			</battery>
-
-
 		</template>
 	</templates>
 </recovery>

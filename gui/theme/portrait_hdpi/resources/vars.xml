@@ -152,8 +152,8 @@
 		<variable name="np_pill_w" value="192"/>
 		<variable name="np_pill_h" value="96"/>
 		<variable name="np_pill_y" value="%screen_h%-330"/>
-		<variable name="np_pill_x1" value="75"/> <!-- 48 + 27 -->
-		<variable name="np_pill_x2" value="321"/> <!-- 48 + 27 + np_pill_w + 27 + 27 -->
+		<variable name="np_pill_x1" value="75"/>
+		<variable name="np_pill_x2" value="321"/>
 		<variable name="np_pill_x3" value="567"/>
 		<variable name="np_pill_x4" value="813"/>
 		
@@ -173,13 +173,12 @@
 		<variable name="magisk_list_h" value="%screen_min_cut%-882"/>
 		<variable name="fullscreen_list_h" value="%screen_min_cut%-504"/>
 		<variable name="fullscreen_list_info_h" value="%screen_min_cut%-732"/>
-		<variable name="part_list_btns_h" value="%screen_min_cut%-1446"/> <!-- Backup parts -->
+		<variable name="part_list_btns_h" value="%screen_min_cut%-1446"/>
 		<variable name="part_backup_info_y" value="%screen_h%-678"/>
 		<variable name="part_backup_line_y" value="%screen_h%-696"/>
-		<variable name="part_list_btns_9_h" value="%screen_min_cut%-1188"/> <!-- Wipe parts -->
-		<variable name="part_list_mount_h" value="%screen_min_cut%-654"/> <!-- Mount parts -->
+		<variable name="part_list_btns_9_h" value="%screen_min_cut%-1188"/>
+		<variable name="part_list_mount_h" value="%screen_min_cut%-654"/>
 		
-		<!--variable name="flash_img_part_expanded" value="%screen_min_cut%-1122"/-->
 		<variable name="flash_img_part" value="%screen_min_cut%-1396"/>
 		<variable name="restore_part" value="%screen_min_cut%-1506"/>
 
@@ -286,7 +285,6 @@
 		<variable name="chtxt_x_x" value="738"/>
 		<variable name="chtxt_y" value="%cutout_w%+697"/>
 		<variable name="chtxt_sph_y" value="%cutout_w%+1135"/>
-		<!-- row6_1_y -->
 
 		<!-- About -->
 		<variable name="about_title_h" value="576+%cutout_w%"/>
@@ -347,6 +345,8 @@
 		
 		<!-- Status Bar -->
 		<variable name="status_right_x" value="1060-%status_indent_right%"/>
+		<variable name="wlan_x" value="830-%status_indent_right%"/>
+		<variable name="wlan_y" value="%status_info_y%"/>
 		
 		<!-- Big invisible button -->
 		<variable name="mb_h_hide" value="120"/>
