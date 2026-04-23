@@ -163,11 +163,13 @@
 			</text>
 
 			<listbox style="group_list">
-				<placement x="0" y="%row2_2a_y%" w="%screen_w%" h="%bl_h2%"/>
+				<placement x="0" y="%row2_2a_y%" w="%screen_w%" h="%bl_h3%"/>
+
 				<listitem name="Saved networks">
 					<icon res="wlan"/>
 					<action function="page">wlan_saved</action>
 				</listitem>
+
 				<listitem name="Test Network Connection">
 					<icon res="wlan"/>
 					<action function="page">wlan_settings</action>
@@ -184,6 +186,11 @@ echo " "
 echo " "
 					</action>
 				</listitem>
+
+				<listitem name="Remote Web Access">
+					<icon res="rwa"/>
+					<action function="page">remote_web_access_settings</action>
+				</listitem>
 			</listbox>
 
 			<template name="gestures"/>
@@ -196,6 +203,90 @@ echo " "
 			<action>
 				<touch key="back"/>
 				<action function="page">wlan</action>
+			</action>
+		</page>
+
+		<!-- Remote Web Access settings page -->
+		<page name="remote_web_access_settings">
+			<template name="base"/>
+
+			<text style="text_ab_title">
+				<placement x="%col1_x_indent%" y="%ab_bc_y%"/>
+				<text>Remote Web Access</text>
+			</text>
+
+			<!-- Remote Web Access enabled card -->
+			<image>
+				<condition var1="of_remote_web_access_enabled" var2="1"/>
+				<placement x="40" y="%ab_h%"/>
+				<image resource="main_switch_card_active"/>
+			</image>
+
+			<image style="switch_on">
+				<condition var1="of_remote_web_access_enabled" var2="1"/>
+				<placement x="%main_switch_icon_x%" y="%ab2_y%" placement="4"/>
+			</image>
+
+			<text style="text_ab_switch_on">
+				<condition var1="of_remote_web_access_enabled" var2="1"/>
+				<placement x="%switch_text_x%" y="%ab_bc2_y%"/>
+				<text>Enable Remote Web Access</text>
+			</text>
+
+			<button style="bs_btn">
+				<condition var1="of_remote_web_access_enabled" var2="1"/>
+				<placement x="0" y="%ab_h%" w="%screen_w%" h="%ab_btn_h%"/>
+				<action function="set">of_remote_web_access_enabled=0</action>
+				<action function="terminalcommand">stop microhttpd</action>
+				<action function="page">remote_web_access_settings</action>
+			</button>
+
+			<!-- Remote Web Access disabled card -->
+			<image>
+				<condition var1="of_remote_web_access_enabled" op="!=" var2="1"/>
+				<placement x="40" y="%ab_h%"/>
+				<image resource="main_switch_card_not_active"/>
+			</image>
+
+			<image style="switch_off">
+				<condition var1="of_remote_web_access_enabled" op="!=" var2="1"/>
+				<placement x="%main_switch_icon_x%" y="%ab2_y%" placement="4"/>
+			</image>
+
+			<text style="text_ab_switch_off">
+				<condition var1="of_remote_web_access_enabled" op="!=" var2="1"/>
+				<placement x="%gl_text_x%" y="%ab_bc2_y%"/>
+				<text>Enable Remote Web Access</text>
+			</text>
+
+			<button style="bs_btn">
+				<condition var1="of_remote_web_access_enabled" op="!=" var2="1"/>
+				<placement x="0" y="%ab_h%" w="%screen_w%" h="%ab_btn_h%"/>
+				<action function="set">of_remote_web_access_enabled=1</action>
+				<action function="terminalcommand">start microhttpd</action>
+				<action function="page">remote_web_access_settings</action>
+			</button>
+
+			<text style="caption">
+				<placement x="%gl_text_x%" y="%row2_1a_y%"/>
+				<text>Options</text>
+			</text>
+
+			<text style="text_body2_hl">
+				<placement x="%gl_text_x%" y="%row2_2a_y%"/>
+				<text>Empty for now</text>
+			</text>
+
+			<template name="gestures"/>
+
+			<action>
+				<touch key="home"/>
+				<action function="page">main</action>
+			</action>
+
+			<action>
+				<touch key="back"/>
+				<action function="page">wlan_settings</action>
 			</action>
 		</page>
 
