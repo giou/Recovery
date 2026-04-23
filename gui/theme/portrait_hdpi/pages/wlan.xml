@@ -203,60 +203,89 @@ echo " "
 		<page name="wlan_connect">
 			<action>
 				<action function="set">wlan_password=</action>
+				<action function="set">of_show_pass=1</action>
 				<action function="setvaluebyfile">wlanencryption,/tmp/wlan/list/%wlanselectedid%</action>
+				<action function="page">wlan_connect_decide</action>
 			</action>
+		</page>
 
+		<!-- Decide whether to connect directly or show overlay -->
+		<page name="wlan_connect_decide">
 			<action>
 				<condition var1="wlanencryption" op="!=" var2="OPEN"/>
-				<action function="page">wlan_password</action>
+				<action function="overlay">wlan_password</action>
+				<action function="page">wlan</action>
 			</action>
-
-			<action function="page">wlan</action>
-			<action function="overlay">console</action>
-			<action function="wlan_connect"/>
-		</page>
-
-		<!-- Password entry page -->
-		<page name="wlan_password">
-			<action function="page">wlan_password_pattern</action>
-
-			<template name="body_ct"/>
-			<template name="keyboardtemplate"/>
-			<action function="set">of_show_pass=1</action>
-			<template name="wlan_password_page"/>
-		</page>
-
-		<!-- Pattern/keyboard entry -->
-		<page name="wlan_password_pattern">
-			<template name="body_ct"/>
-			<template name="navbar"/>
-
-			<image>
-				<image resource="actionbar_encr_ena"/>
-				<placement x="%center_x%" y="%centered_title_1%" placement="4"/>
-			</image>
-
-			<text style="text_ab_subtitle">
-				<placement x="%center_x%" y="%centered_title_2%" placement="4"/>
-				<text>{@decrypt}</text>
-			</text>
-
-			<patternpassword>
-				<placement x="%pattern_x%" y="%row4_1a_y%" w="%pattern_size%" h="%pattern_size%"/>
-				<data name="wlan_password"/>
-				<action function="page">wlan_password</action>
-			</patternpassword>
-
-			<template name="gestures"/>
 
 			<action>
-				<touch key="home"/>
-				<action function="page">wlan_password</action>
+				<condition var1="wlanencryption" var2="OPEN"/>
+				<action function="page">wlan</action>
+				<action function="overlay">console</action>
+				<action function="wlan_connect"/>
 			</action>
+		</page>
+
+		<!-- Password popup overlay -->
+		<page name="wlan_password">
+			<action function="set">of_show_pass=1</action>
+
+			<template name="dialog_body"/>
+			<template name="keyboardtemplate"/>
+
+			<button>
+				<placement x="%bg_storage_x%" y="%bg_storage_y%"/>
+				<image resource="dialog_bg"/>
+			</button>
+
+			<text style="text_dlg_title">
+				<placement x="%bg_storage_hdr_x%" y="%bg_storage_hdr_y%"/>
+				<text>%wlanselectedid%</text>
+			</text>
+
+			<text style="text_body1">
+				<placement x="%bg_storage_hdr_x%" y="%db_text1_y%"/>
+				<text>{@wlan_encryption} %wlanencryption%</text>
+			</text>
+
+			<text style="text_body1">
+				<placement x="%bg_storage_hdr_x%" y="%db_text2_y%"/>
+				<text>{@decrypt_data_enter_pass}</text>
+			</text>
+
+			<input>
+				<placement x="%bg_storage_hdr_x%" y="%db_text3_y%" w="700" h="%input_height%"/>
+				<data name="wlan_password" mask="*" maskvariable="pass_enter_mask"/>
+				<restrict minlen="8" maxlen="254"/>
+				<action function="overlay"/>
+				<action function="page">wlan</action>
+				<action function="overlay">console</action>
+				<action function="wlan_connect"/>
+			</input>
+
+			<button style="btn_dlg">
+				<placement x="%db_left_x%" y="%db_y%"/>
+				<text>{@cancel_btn}</text>
+				<actions>
+					<action function="set">wlan_password=</action>
+					<action function="overlay"/>
+				</actions>
+			</button>
+
+			<button style="btn_dlg_hl">
+				<placement x="%db_right_x%" y="%db_y%"/>
+				<text>{@ok_btn}</text>
+				<actions>
+					<action function="overlay"/>
+					<action function="page">wlan</action>
+					<action function="overlay">console</action>
+					<action function="wlan_connect"/>
+				</actions>
+			</button>
 
 			<action>
 				<touch key="back"/>
-				<action function="page">wlan_password</action>
+				<action function="set">wlan_password=</action>
+				<action function="overlay"/>
 			</action>
 		</page>
 
