@@ -107,6 +107,7 @@
 				<action function="set">of_file_to_read=</action>
 				<action function="set">wlanlistdisplay=0</action>
 				<action function="wlan_scan"/>
+				<action function="wlan_saved_refresh"/>
 				<action function="page">wlan</action>
 			</button>
 
@@ -123,11 +124,14 @@
 				<text>{@wlan_empty}</text>
 			</text>
 
+			<!-- Full WLAN scan list.
+			     Per-row icon is handled in gui/listbox.cpp:
+			     selected=wlan_saved for saved SSIDs, unselected=wlan for normal SSIDs. -->
 			<listbox style="group_list">
 				<condition var1="tw_wlan_enabled" var2="1"/>
 				<condition var1="fileexists" var2="/tmp/wlan/list.txt"/>
 				<placement x="0" y="%row2_2a_y%" w="%screen_w%" h="%bl_h4%"/>
-				<icon selected="wlan" unselected="wlan"/>
+				<icon selected="wlan_saved" unselected="wlan" locked="wlan_locked"/>
 				<data name="of_file_to_read"/>
 			</listbox>
 
@@ -166,7 +170,7 @@
 				<placement x="0" y="%row2_2a_y%" w="%screen_w%" h="%bl_h3%"/>
 
 				<listitem name="Saved networks">
-					<icon res="wlan"/>
+					<icon res="wlan_saved"/>
 					<action function="page">wlan_saved</action>
 				</listitem>
 
@@ -215,7 +219,6 @@ echo " "
 				<text>Remote Web Access</text>
 			</text>
 
-			<!-- Remote Web Access enabled card -->
 			<image>
 				<condition var1="of_remote_web_access_enabled" var2="1"/>
 				<placement x="40" y="%ab_h%"/>
@@ -241,7 +244,6 @@ echo " "
 				<action function="page">remote_web_access_settings</action>
 			</button>
 
-			<!-- Remote Web Access disabled card -->
 			<image>
 				<condition var1="of_remote_web_access_enabled" op="!=" var2="1"/>
 				<placement x="40" y="%ab_h%"/>
@@ -313,7 +315,18 @@ echo " "
 				<action function="page">wlan</action>
 				<action function="overlay">console</action>
 				<action function="wlan_connect"/>
+				<action function="wlan_saved_refresh"/>
 			</action>
+		</page>
+
+		<!-- Saved network auto-connect flow -->
+		<page name="wlan_connect_saved">
+		    <action>
+		        <action function="page">wlan</action>
+		        <action function="overlay">console</action>
+		        <action function="wlan_connect_saved"/>
+		        <action function="wlan_saved_refresh"/>
+		    </action>
 		</page>
 
 		<!-- Password popup overlay -->
@@ -351,6 +364,7 @@ echo " "
 				<action function="page">wlan</action>
 				<action function="overlay">console</action>
 				<action function="wlan_connect"/>
+				<action function="wlan_saved_refresh"/>
 			</input>
 
 			<button style="btn_dlg">
@@ -370,6 +384,7 @@ echo " "
 					<action function="page">wlan</action>
 					<action function="overlay">console</action>
 					<action function="wlan_connect"/>
+					<action function="wlan_saved_refresh"/>
 				</actions>
 			</button>
 
@@ -389,13 +404,19 @@ echo " "
 				<text>Saved networks</text>
 			</text>
 
+			<action function="set">wlanlistdisplay=0</action>
 			<action function="set">wlansaveddisplay=0</action>
 			<action function="wlan_saved_refresh"/>
 
 			<action>
 				<condition var1="fileexists" var2="/tmp/wlan/saved.txt"/>
 				<action function="set">wlansaveddisplay=1</action>
-				<action function="set">of_saved_file_to_read=/tmp/wlan/saved.txt</action>
+				<action function="set">of_file_to_read=/tmp/wlan/saved.txt</action>
+			</action>
+
+			<action>
+				<condition var1="fileexists" op="!=" var2="/tmp/wlan/saved.txt"/>
+				<action function="set">of_file_to_read=</action>
 			</action>
 
 			<text style="caption">
@@ -412,8 +433,8 @@ echo " "
 			<listbox style="group_list">
 				<condition var1="fileexists" var2="/tmp/wlan/saved.txt"/>
 				<placement x="0" y="%row2_2a_y%" w="%screen_w%" h="%bl_h4%"/>
-				<icon selected="wlan" unselected="wlan"/>
-				<data name="of_saved_file_to_read"/>
+				<icon selected="wlan_saved" unselected="wlan_saved"/>
+				<data name="of_file_to_read"/>
 			</listbox>
 
 			<button style="btn_flat_qw">
@@ -426,11 +447,13 @@ echo " "
 
 			<action>
 				<touch key="home"/>
+				<action function="set">of_file_to_read=</action>
 				<action function="page">main</action>
 			</action>
 
 			<action>
 				<touch key="back"/>
+				<action function="set">of_file_to_read=</action>
 				<action function="page">wlan_settings</action>
 			</action>
 		</page>
