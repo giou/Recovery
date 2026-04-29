@@ -48,6 +48,7 @@
 				<action function="set">wlanselectedid=</action>
 				<action function="set">wlanempty=</action>
 				<action function="set">wlan_connected_name=</action>
+				<action function="set">wlan_connect_text=</action>
 				<action function="page">wlan</action>
 			</button>
 
@@ -97,13 +98,16 @@
 			<!-- Available networks -->
 			<text style="caption">
 				<condition var1="tw_wlan_enabled" var2="1"/>
-				<placement x="%gl_text_x%" y="%row2_1a_y%"/>
+				<placement x="%gl_text_x%" y="552+%cutout_w%"/>
 				<text>{@wlan_list}</text>
 			</text>
 
+			<!-- WLAN scan/refresh button.
+			     Visible icon is anchored like the settings icon.
+			     Touch target is explicit and slightly taller/lower for better alignment. -->
 			<button style="actionbar">
 				<condition var1="tw_wlan_enabled" var2="1"/>
-				<placement x="%ab_btn1_x%" y="%row2_1a_y%" placement="1"/>
+				<placement x="%ab_btn1_x%" y="%row2_1a_y%" w="96" h="112" placement="4"/>
 				<action function="set">of_file_to_read=</action>
 				<action function="set">wlanlistdisplay=0</action>
 				<action function="wlan_scan"/>
@@ -113,7 +117,7 @@
 
 			<image>
 				<condition var1="tw_wlan_enabled" var2="1"/>
-				<placement x="%ab_btn1_x%" y="%row2_1a_y%" placement="1"/>
+				<placement x="%ab_btn1_x%" y="%row2_1a_y%" placement="4"/>
 				<image resource="actionbar_reset"/>
 			</image>
 
@@ -302,7 +306,7 @@ echo " "
 			</action>
 		</page>
 
-		<!-- Decide whether to connect directly or show overlay -->
+		<!-- Decide whether to connect directly or show password popup -->
 		<page name="wlan_connect_decide">
 			<action>
 				<condition var1="wlanencryption" op="!=" var2="OPEN"/>
@@ -313,20 +317,26 @@ echo " "
 			<action>
 				<condition var1="wlanencryption" var2="OPEN"/>
 				<action function="page">wlan</action>
-				<action function="overlay">console</action>
+				<action function="set">wlan_connect_text=Connecting</action>
+				<action function="overlay">wlan_connecting</action>
 				<action function="wlan_connect"/>
 				<action function="wlan_saved_refresh"/>
+				<action function="overlay"/>
+				<action function="page">wlan</action>
 			</action>
 		</page>
 
 		<!-- Saved network auto-connect flow -->
 		<page name="wlan_connect_saved">
-		    <action>
-		        <action function="page">wlan</action>
-		        <action function="overlay">console</action>
-		        <action function="wlan_connect_saved"/>
-		        <action function="wlan_saved_refresh"/>
-		    </action>
+			<action>
+				<action function="page">wlan</action>
+				<action function="set">wlan_connect_text=Connecting</action>
+				<action function="overlay">wlan_connecting</action>
+				<action function="wlan_connect_saved"/>
+				<action function="wlan_saved_refresh"/>
+				<action function="overlay"/>
+				<action function="page">wlan</action>
+			</action>
 		</page>
 
 		<!-- Password popup overlay -->
@@ -362,9 +372,12 @@ echo " "
 				<restrict minlen="8" maxlen="254"/>
 				<action function="overlay"/>
 				<action function="page">wlan</action>
-				<action function="overlay">console</action>
+				<action function="set">wlan_connect_text=Connecting</action>
+				<action function="overlay">wlan_connecting</action>
 				<action function="wlan_connect"/>
 				<action function="wlan_saved_refresh"/>
+				<action function="overlay"/>
+				<action function="page">wlan</action>
 			</input>
 
 			<button style="btn_dlg">
@@ -382,9 +395,12 @@ echo " "
 				<actions>
 					<action function="overlay"/>
 					<action function="page">wlan</action>
-					<action function="overlay">console</action>
+					<action function="set">wlan_connect_text=Connecting</action>
+					<action function="overlay">wlan_connecting</action>
 					<action function="wlan_connect"/>
 					<action function="wlan_saved_refresh"/>
+					<action function="overlay"/>
+					<action function="page">wlan</action>
 				</actions>
 			</button>
 
@@ -392,6 +408,38 @@ echo " "
 				<touch key="back"/>
 				<action function="set">wlan_password=</action>
 				<action function="overlay"/>
+			</action>
+		</page>
+
+		<!-- WLAN connecting popup overlay -->
+		<page name="wlan_connecting">
+			<template name="dialog_body"/>
+
+			<button>
+				<placement x="%bg_storage_x%" y="%bg_storage_y%"/>
+				<image resource="dialog_bg"/>
+			</button>
+
+			<text style="text_dlg_title">
+				<placement x="%bg_storage_hdr_x%" y="%bg_storage_hdr_y%"/>
+				<text>%wlanselectedid%</text>
+			</text>
+
+			<object type="spinningimage">
+				<placement x="%center_x%" y="%db_text2_y%" placement="5"/>
+				<offset x="40" y="0"/>
+				<image resource="wlan_loading"/>
+				<speed render="2"/>
+				<rotate speed="640" clockwise="1" start="0"/>
+			</object>
+
+			<text style="text_body1">
+				<placement x="%center_x%" y="%db_text3_y%" placement="5"/>
+				<text>%wlan_connect_text%</text>
+			</text>
+
+			<action>
+				<touch key="back"/>
 			</action>
 		</page>
 
