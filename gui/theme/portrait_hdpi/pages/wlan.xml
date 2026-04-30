@@ -49,6 +49,7 @@
 				<action function="set">wlanempty=</action>
 				<action function="set">wlan_connected_name=</action>
 				<action function="set">wlan_connect_text=</action>
+				<action function="set">wlan_refreshing=0</action>
 				<action function="page">wlan</action>
 			</button>
 
@@ -102,24 +103,32 @@
 				<text>{@wlan_list}</text>
 			</text>
 
-			<!-- WLAN scan/refresh button.
-			     Visible icon is anchored like the settings icon.
-			     Touch target is explicit and slightly taller/lower for better alignment. -->
+			<!-- WLAN scan/refresh button. The visible reset icon spins while scanning. -->
 			<button style="actionbar">
 				<condition var1="tw_wlan_enabled" var2="1"/>
 				<placement x="%ab_btn1_x%" y="%row2_1a_y%" w="96" h="112" placement="4"/>
-				<action function="set">of_file_to_read=</action>
-				<action function="set">wlanlistdisplay=0</action>
-				<action function="wlan_scan"/>
-				<action function="wlan_saved_refresh"/>
-				<action function="page">wlan</action>
+				<action function="set">wlan_refreshing=1</action>
+				<action function="page">wlan_refresh</action>
 			</button>
 
+			<!-- Normal refresh icon -->
 			<image>
 				<condition var1="tw_wlan_enabled" var2="1"/>
+				<condition var1="wlan_refreshing" op="!=" var2="1"/>
 				<placement x="%ab_btn1_x%" y="%row2_1a_y%" placement="4"/>
 				<image resource="actionbar_reset"/>
 			</image>
+
+			<!-- Spinning refresh icon while scanning -->
+			<object type="spinningimage">
+				<condition var1="tw_wlan_enabled" var2="1"/>
+				<condition var1="wlan_refreshing" var2="1"/>
+				<placement x="%ab_btn1_x%" y="%row2_1a_y%" placement="4"/>
+				<offset x="0" y="0"/>
+				<image resource="actionbar_reset"/>
+				<speed render="2"/>
+				<rotate speed="640" clockwise="0" start="0"/>
+			</object>
 
 			<text style="text_body2_hl">
 				<condition var1="tw_wlan_enabled" var2="1"/>
@@ -145,6 +154,7 @@
 				<touch key="home"/>
 				<action function="set">wlanlistdisplay=</action>
 				<action function="set">of_file_to_read=</action>
+				<action function="set">wlan_refreshing=0</action>
 				<action function="page">main</action>
 			</action>
 
@@ -152,6 +162,7 @@
 				<touch key="back"/>
 				<action function="set">wlanlistdisplay=</action>
 				<action function="set">of_file_to_read=</action>
+				<action function="set">wlan_refreshing=0</action>
 				<action function="page">advanced</action>
 			</action>
 		</page>
@@ -335,6 +346,19 @@ echo " "
 				<action function="wlan_connect_saved"/>
 				<action function="wlan_saved_refresh"/>
 				<action function="overlay"/>
+				<action function="page">wlan</action>
+			</action>
+		</page>
+
+		<!-- WLAN refresh flow: keeps WLAN page visible and spins the refresh icon -->
+		<page name="wlan_refresh">
+			<action>
+				<action function="page">wlan</action>
+				<action function="set">of_file_to_read=</action>
+				<action function="set">wlanlistdisplay=0</action>
+				<action function="wlan_scan"/>
+				<action function="wlan_saved_refresh"/>
+				<action function="set">wlan_refreshing=0</action>
 				<action function="page">wlan</action>
 			</action>
 		</page>
