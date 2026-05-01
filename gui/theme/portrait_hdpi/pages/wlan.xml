@@ -49,6 +49,7 @@
 				<action function="set">wlanempty=</action>
 				<action function="set">wlan_connected_name=</action>
 				<action function="set">wlan_connect_text=</action>
+				<action function="set">wlan_connect_done=0</action>
 				<action function="set">wlan_refreshing=0</action>
 				<action function="page">wlan</action>
 			</button>
@@ -74,6 +75,7 @@
 			<button style="bs_btn">
 				<condition var1="tw_wlan_enabled" op="!=" var2="1"/>
 				<placement x="0" y="%ab_h%" w="%screen_w%" h="%ab_btn_h%"/>
+				<action function="set">wlan_connect_done=0</action>
 				<action function="wlan_enable"/>
 				<action function="page">wlan</action>
 			</button>
@@ -155,6 +157,7 @@
 				<action function="set">wlanlistdisplay=</action>
 				<action function="set">of_file_to_read=</action>
 				<action function="set">wlan_refreshing=0</action>
+				<action function="set">wlan_connect_done=0</action>
 				<action function="page">main</action>
 			</action>
 
@@ -163,6 +166,7 @@
 				<action function="set">wlanlistdisplay=</action>
 				<action function="set">of_file_to_read=</action>
 				<action function="set">wlan_refreshing=0</action>
+				<action function="set">wlan_connect_done=0</action>
 				<action function="page">advanced</action>
 			</action>
 		</page>
@@ -312,6 +316,7 @@ echo " "
 			<action>
 				<action function="set">wlan_password=</action>
 				<action function="set">of_show_pass=1</action>
+				<action function="set">wlan_connect_done=0</action>
 				<action function="setvaluebyfile">wlanencryption,/tmp/wlan/list/%wlanselectedid%</action>
 				<action function="page">wlan_connect_decide</action>
 			</action>
@@ -329,6 +334,7 @@ echo " "
 				<condition var1="wlanencryption" var2="OPEN"/>
 				<action function="page">wlan</action>
 				<action function="set">wlan_connect_text=Connecting</action>
+				<action function="set">wlan_connect_done=0</action>
 				<action function="overlay">wlan_connecting</action>
 				<action function="wlan_connect"/>
 				<action function="wlan_saved_refresh"/>
@@ -342,6 +348,7 @@ echo " "
 			<action>
 				<action function="page">wlan</action>
 				<action function="set">wlan_connect_text=Connecting</action>
+				<action function="set">wlan_connect_done=0</action>
 				<action function="overlay">wlan_connecting</action>
 				<action function="wlan_connect_saved"/>
 				<action function="wlan_saved_refresh"/>
@@ -397,6 +404,7 @@ echo " "
 				<action function="overlay"/>
 				<action function="page">wlan</action>
 				<action function="set">wlan_connect_text=Connecting</action>
+				<action function="set">wlan_connect_done=0</action>
 				<action function="overlay">wlan_connecting</action>
 				<action function="wlan_connect"/>
 				<action function="wlan_saved_refresh"/>
@@ -409,6 +417,7 @@ echo " "
 				<text>{@cancel_btn}</text>
 				<actions>
 					<action function="set">wlan_password=</action>
+					<action function="set">wlan_connect_done=0</action>
 					<action function="overlay"/>
 				</actions>
 			</button>
@@ -420,6 +429,7 @@ echo " "
 					<action function="overlay"/>
 					<action function="page">wlan</action>
 					<action function="set">wlan_connect_text=Connecting</action>
+					<action function="set">wlan_connect_done=0</action>
 					<action function="overlay">wlan_connecting</action>
 					<action function="wlan_connect"/>
 					<action function="wlan_saved_refresh"/>
@@ -431,6 +441,7 @@ echo " "
 			<action>
 				<touch key="back"/>
 				<action function="set">wlan_password=</action>
+				<action function="set">wlan_connect_done=0</action>
 				<action function="overlay"/>
 			</action>
 		</page>
@@ -449,13 +460,22 @@ echo " "
 				<text>%wlanselectedid%</text>
 			</text>
 
+			<!-- Spinning icon while connecting / getting IP -->
 			<object type="spinningimage">
+				<condition var1="wlan_connect_done" op="!=" var2="1"/>
 				<placement x="%center_x%" y="%db_text2_y%" placement="5"/>
 				<offset x="40" y="0"/>
 				<image resource="wlan_loading"/>
 				<speed render="2"/>
 				<rotate speed="640" clockwise="1" start="0"/>
 			</object>
+
+			<!-- Check icon after connected -->
+			<image>
+				<condition var1="wlan_connect_done" var2="1"/>
+				<placement x="%wlan_connect_icon_x%" y="%db_text2_y%" placement="5"/>
+				<image resource="check"/>
+			</image>
 
 			<text style="text_body1">
 				<placement x="%center_x%" y="%db_text3_y%" placement="5"/>
@@ -520,12 +540,14 @@ echo " "
 			<action>
 				<touch key="home"/>
 				<action function="set">of_file_to_read=</action>
+				<action function="set">wlan_connect_done=0</action>
 				<action function="page">main</action>
 			</action>
 
 			<action>
 				<touch key="back"/>
 				<action function="set">of_file_to_read=</action>
+				<action function="set">wlan_connect_done=0</action>
 				<action function="page">wlan_settings</action>
 			</action>
 		</page>

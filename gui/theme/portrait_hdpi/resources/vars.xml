@@ -348,6 +348,9 @@
 		<variable name="wlan_x" value="830-%status_indent_right%"/>
 		<variable name="wlan_y" value="%status_info_y%"/>
 		
+		<!-- WLAN -->
+		<variable name="wlan_connect_icon_x" value="%center_x%+40"/>
+		
 		<!-- Big invisible button -->
 		<variable name="mb_h_hide" value="120"/>
 		
