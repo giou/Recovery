@@ -525,7 +525,7 @@ echo " "
 			<listbox style="group_list">
 				<condition var1="fileexists" var2="/tmp/wlan/saved.txt"/>
 				<placement x="0" y="%row2_2a_y%" w="%screen_w%" h="%bl_h4%"/>
-				<icon selected="wlan_saved" unselected="wlan_saved"/>
+				<icon selected="wlan_saved" unselected="wlan_saved" delete="delete"/>
 				<data name="of_file_to_read"/>
 			</listbox>
 
@@ -550,6 +550,14 @@ echo " "
 				<action function="set">wlan_connect_done=0</action>
 				<action function="page">wlan_settings</action>
 			</action>
+		</page>
+
+		<!-- WLAN forget saved network flow -->
+		<page name="wlan_forget_saved">
+		    <action>
+		        <action function="wlan_forget_saved"/>
+		        <action function="page">wlan_saved</action>
+		    </action>
 		</page>
 
 	</pages>
