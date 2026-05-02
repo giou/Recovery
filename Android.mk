@@ -317,10 +317,10 @@ endif
 ifneq ($(TW_NO_NETWORK), true)
     TWRP_REQUIRED_MODULES += \
         microhttpd \
+        microhttpd.rc \
         index.html \
         fox_icon.png \
-        microhttpd.rc \
-        ttyd \
+        ttyd_src \
         ttyd.rc
 endif
 ifneq ($(TW_ADDITIONAL_APEX_FILES),)
