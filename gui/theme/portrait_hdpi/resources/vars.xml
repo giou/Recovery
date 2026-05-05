@@ -350,6 +350,18 @@
 		
 		<!-- WLAN -->
 		<variable name="wlan_connect_icon_x" value="%center_x%+40"/>
+
+		<!-- NAS -->
+		<variable name="tw_nas_mounted" value="0"/>
+		<variable name="tw_nas_status_text" value="NAS not mounted"/>
+		<variable name="tw_nas_type" value="sftp" persist="1"/>
+		<variable name="tw_nas_host" value="" persist="1"/>
+		<variable name="tw_nas_port" value="22" persist="1"/>
+		<variable name="tw_nas_share" value="Backups" persist="1"/>
+		<variable name="tw_nas_path" value="" persist="1"/>
+		<variable name="tw_nas_user" value="" persist="1"/>
+		<variable name="tw_nas_pass" value="" persist="1"/>
+		<variable name="tw_nas_domain" value="WORKGROUP" persist="1"/>
 		
 		<!-- Big invisible button -->
 		<variable name="mb_h_hide" value="120"/>

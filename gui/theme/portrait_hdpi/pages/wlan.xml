@@ -151,7 +151,7 @@
 			<listbox style="group_list">
 				<condition var1="tw_wlan_enabled" var2="1"/>
 				<condition var1="fileexists" var2="/tmp/wlan/list.txt"/>
-				<placement x="0" y="%row2_2a_y%" w="%screen_w%" h="%bl_h4%"/>
+				<placement x="0" y="%row2_2a_y%" w="%screen_w%" h="%bl_h5%"/>
 				<icon selected="wlan_saved" unselected="wlan" locked="wlan_locked"/>
 				<data name="of_file_to_read"/>
 			</listbox>
@@ -200,7 +200,7 @@
 			</text>
 
 			<listbox style="group_list">
-				<placement x="0" y="%row2_2a_y%" w="%screen_w%" h="%bl_h3%"/>
+				<placement x="0" y="%row2_2a_y%" w="%screen_w%" h="%bl_h4%"/>
 
 				<listitem name="Saved networks">
 					<icon res="wlan_saved"/>
@@ -228,6 +228,11 @@ echo " "
 					<icon res="rwa"/>
 					<action function="page">remote_web_access_settings</action>
 				</listitem>
+
+				<listitem name="Network Storage (NAS)">
+					<icon res="smb_share"/>
+					<action function="page">nas_settings</action>
+				</listitem>
 			</listbox>
 
 			<template name="gestures"/>
@@ -240,6 +245,479 @@ echo " "
 			<action>
 				<touch key="back"/>
 				<action function="page">wlan</action>
+			</action>
+		</page>
+
+		<!-- NAS / Network Storage settings page -->
+		<page name="nas_settings">
+			<action>
+				<action function="nas_info"/>
+			</action>
+
+			<template name="base"/>
+
+			<text style="text_ab_title">
+				<placement x="%col1_x_indent%" y="%ab_bc_y%"/>
+				<text>Network Storage</text>
+			</text>
+
+			<image>
+				<condition var1="tw_nas_mounted" var2="1"/>
+				<placement x="40" y="%ab_h%"/>
+				<image resource="main_switch_card_active"/>
+			</image>
+
+			<text style="text_ab_switch_on">
+				<condition var1="tw_nas_mounted" var2="1"/>
+				<placement x="%switch_text_x%" y="%ab_bc2_y%"/>
+				<text>NAS mounted</text>
+			</text>
+
+			<image>
+				<condition var1="tw_nas_mounted" op="!=" var2="1"/>
+				<placement x="40" y="%ab_h%"/>
+				<image resource="main_switch_card_not_active"/>
+			</image>
+
+			<text style="text_ab_switch_off">
+				<condition var1="tw_nas_mounted" op="!=" var2="1"/>
+				<placement x="%switch_text_x%" y="%ab_bc2_y%"/>
+				<text>NAS not mounted</text>
+			</text>
+
+			<text style="caption">
+				<placement x="%gl_text_x%" y="%row2_2_y%"/>
+				<text>Status</text>
+			</text>
+
+			<text style="text_body2_hl">
+				<placement x="%gl_text_x%" y="%row2_3a_y%"/>
+				<text>%tw_nas_status_text%</text>
+			</text>
+
+			<text style="caption">
+				<placement x="%gl_text_x%" y="%row3_1a_y%"/>
+				<text>Connection</text>
+			</text>
+
+			<listbox style="group_list">
+				<placement x="0" y="%row3_2a_y%" w="%screen_w%" h="%bl_h6%"/>
+				<data requireReload="1"/>
+
+				<listitem name="Type: %tw_nas_type%">
+					<icon res="smb_share"/>
+					<action function="page">nas_type_select</action>
+				</listitem>
+
+				<listitem name="Host / IP: %tw_nas_host%">
+					<icon res="wlan"/>
+					<action function="page">nas_edit_host</action>
+				</listitem>
+
+				<listitem name="Username: %tw_nas_user%">
+					<icon res="wlan_saved"/>
+					<action function="page">nas_edit_user</action>
+				</listitem>
+
+				<listitem name="Password: ***">
+					<condition var1="tw_nas_pass" op="!=" var2=""/>
+					<icon res="wlan_locked"/>
+					<action function="page">nas_edit_pass</action>
+				</listitem>
+
+				<listitem name="Password">
+					<condition var1="tw_nas_pass" var2=""/>
+					<icon res="wlan_locked"/>
+					<action function="page">nas_edit_pass</action>
+				</listitem>
+
+				<listitem name="Share: %tw_nas_share%">
+					<icon res="smb_share"/>
+					<action function="page">nas_edit_share</action>
+				</listitem>
+
+				<listitem name="Path: %tw_nas_path%">
+					<icon res="rwa"/>
+					<action function="page">nas_edit_path</action>
+				</listitem>
+
+				<listitem name="Domain: %tw_nas_domain%">
+					<icon res="smb_share"/>
+					<action function="page">nas_edit_domain</action>
+				</listitem>
+
+				<listitem name="Port: %tw_nas_port%">
+					<icon res="wlan"/>
+					<action function="page">nas_edit_port</action>
+				</listitem>
+			</listbox>
+
+			<button style="btn_raised_hl">
+				<condition var1="tw_nas_mounted" op="!=" var2="1"/>
+				<placement x="%btn_raised_left_x%" y="%row_btn2_y%"/>
+				<text>Mount + Use</text>
+				<action function="nas_mount"/>
+				<action function="nas_select"/>
+				<action function="page">nas_settings</action>
+			</button>
+
+			<button style="btn_raised_hl">
+				<condition var1="tw_nas_mounted" var2="1"/>
+				<placement x="%btn_raised_left_x%" y="%row_btn2_y%"/>
+				<text>Use NAS</text>
+				<action function="nas_select"/>
+				<action function="page">nas_settings</action>
+			</button>
+
+			<button style="btn_raised">
+				<condition var1="tw_nas_mounted" var2="1"/>
+				<placement x="%btn_raised_right_x%" y="%row_btn2_y%" placement="1"/>
+				<text>Unmount</text>
+				<action function="nas_unmount"/>
+				<action function="page">nas_settings</action>
+			</button>
+
+			<template name="gestures"/>
+
+			<action>
+				<touch key="home"/>
+				<action function="page">main</action>
+			</action>
+
+			<action>
+				<touch key="back"/>
+				<action function="page">wlan_settings</action>
+			</action>
+		</page>
+
+		<!-- NAS type selector -->
+		<page name="nas_type_select">
+			<template name="base"/>
+
+			<text style="text_ab_title">
+				<placement x="%col1_x_indent%" y="%ab_bc_y%"/>
+				<text>Select NAS Type</text>
+			</text>
+
+			<text style="caption">
+				<placement x="%gl_text_x%" y="%row2_1a_y%"/>
+				<text>Current type</text>
+			</text>
+
+			<text style="text_body2_hl">
+				<placement x="%gl_text_x%" y="%row2_2a_y%"/>
+				<text>%tw_nas_type%</text>
+			</text>
+
+			<text style="caption">
+				<placement x="%gl_text_x%" y="%row3_1a_y%"/>
+				<text>Connection type</text>
+			</text>
+
+			<listbox style="group_list">
+				<placement x="0" y="%row3_2a_y%" w="%screen_w%" h="%bl_h2%"/>
+
+				<listitem name="SFTP">
+					<icon res="wlan_locked"/>
+					<action function="set">tw_nas_type=sftp</action>
+					<action function="set">tw_nas_port=22</action>
+					<action function="page">nas_settings</action>
+				</listitem>
+
+				<listitem name="SMB">
+					<icon res="smb_share"/>
+					<action function="set">tw_nas_type=smb</action>
+					<action function="page">nas_settings</action>
+				</listitem>
+			</listbox>
+
+			<template name="gestures"/>
+
+			<action>
+				<touch key="back"/>
+				<action function="page">nas_settings</action>
+			</action>
+		</page>
+
+		<!-- NAS edit: Host / IP -->
+		<page name="nas_edit_host">
+			<template name="dialog_body"/>
+			<template name="keyboardtemplate"/>
+
+			<button>
+				<placement x="%bg_storage_x%" y="%bg_storage_y%"/>
+				<image resource="dialog_bg"/>
+			</button>
+
+			<text style="text_dlg_title">
+				<placement x="%bg_storage_hdr_x%" y="%bg_storage_hdr_y%"/>
+				<text>Host / IP</text>
+			</text>
+
+			<input>
+				<placement x="%bg_storage_hdr_x%" y="%db_text3_y%" w="700" h="%input_height%"/>
+				<data name="tw_nas_host"/>
+				<restrict maxlen="128"/>
+				<action function="page">nas_settings</action>
+			</input>
+
+			<button style="btn_dlg">
+				<placement x="%db_left_x%" y="%db_y%"/>
+				<text>{@cancel_btn}</text>
+				<action function="page">nas_settings</action>
+			</button>
+
+			<button style="btn_dlg_hl">
+				<placement x="%db_right_x%" y="%db_y%"/>
+				<text>{@ok_btn}</text>
+				<action function="page">nas_settings</action>
+			</button>
+
+			<action>
+				<touch key="back"/>
+				<action function="page">nas_settings</action>
+			</action>
+		</page>
+
+		<!-- NAS edit: Username -->
+		<page name="nas_edit_user">
+			<template name="dialog_body"/>
+			<template name="keyboardtemplate"/>
+
+			<button>
+				<placement x="%bg_storage_x%" y="%bg_storage_y%"/>
+				<image resource="dialog_bg"/>
+			</button>
+
+			<text style="text_dlg_title">
+				<placement x="%bg_storage_hdr_x%" y="%bg_storage_hdr_y%"/>
+				<text>Username</text>
+			</text>
+
+			<input>
+				<placement x="%bg_storage_hdr_x%" y="%db_text3_y%" w="700" h="%input_height%"/>
+				<data name="tw_nas_user"/>
+				<restrict maxlen="128"/>
+				<action function="page">nas_settings</action>
+			</input>
+
+			<button style="btn_dlg">
+				<placement x="%db_left_x%" y="%db_y%"/>
+				<text>{@cancel_btn}</text>
+				<action function="page">nas_settings</action>
+			</button>
+
+			<button style="btn_dlg_hl">
+				<placement x="%db_right_x%" y="%db_y%"/>
+				<text>{@ok_btn}</text>
+				<action function="page">nas_settings</action>
+			</button>
+
+			<action>
+				<touch key="back"/>
+				<action function="page">nas_settings</action>
+			</action>
+		</page>
+
+		<!-- NAS edit: Password -->
+		<page name="nas_edit_pass">
+			<action function="set">of_show_pass=1</action>
+
+			<template name="dialog_body"/>
+			<template name="keyboardtemplate"/>
+
+			<button>
+				<placement x="%bg_storage_x%" y="%bg_storage_y%"/>
+				<image resource="dialog_bg"/>
+			</button>
+
+			<text style="text_dlg_title">
+				<placement x="%bg_storage_hdr_x%" y="%bg_storage_hdr_y%"/>
+				<text>Password</text>
+			</text>
+
+			<input>
+				<placement x="%bg_storage_hdr_x%" y="%db_text3_y%" w="700" h="%input_height%"/>
+				<data name="tw_nas_pass" mask="*" maskvariable="pass_enter_mask"/>
+				<restrict maxlen="254"/>
+				<action function="page">nas_settings</action>
+			</input>
+
+			<button style="btn_dlg">
+				<placement x="%db_left_x%" y="%db_y%"/>
+				<text>{@cancel_btn}</text>
+				<action function="page">nas_settings</action>
+			</button>
+
+			<button style="btn_dlg_hl">
+				<placement x="%db_right_x%" y="%db_y%"/>
+				<text>{@ok_btn}</text>
+				<action function="page">nas_settings</action>
+			</button>
+
+			<action>
+				<touch key="back"/>
+				<action function="page">nas_settings</action>
+			</action>
+		</page>
+
+		<!-- NAS edit: SMB share -->
+		<page name="nas_edit_share">
+			<template name="dialog_body"/>
+			<template name="keyboardtemplate"/>
+
+			<button>
+				<placement x="%bg_storage_x%" y="%bg_storage_y%"/>
+				<image resource="dialog_bg"/>
+			</button>
+
+			<text style="text_dlg_title">
+				<placement x="%bg_storage_hdr_x%" y="%bg_storage_hdr_y%"/>
+				<text>SMB Share Name</text>
+			</text>
+
+			<input>
+				<placement x="%bg_storage_hdr_x%" y="%db_text3_y%" w="700" h="%input_height%"/>
+				<data name="tw_nas_share"/>
+				<restrict maxlen="128"/>
+				<action function="page">nas_settings</action>
+			</input>
+
+			<button style="btn_dlg">
+				<placement x="%db_left_x%" y="%db_y%"/>
+				<text>{@cancel_btn}</text>
+				<action function="page">nas_settings</action>
+			</button>
+
+			<button style="btn_dlg_hl">
+				<placement x="%db_right_x%" y="%db_y%"/>
+				<text>{@ok_btn}</text>
+				<action function="page">nas_settings</action>
+			</button>
+
+			<action>
+				<touch key="back"/>
+				<action function="page">nas_settings</action>
+			</action>
+		</page>
+
+		<!-- NAS edit: remote path -->
+		<page name="nas_edit_path">
+			<template name="dialog_body"/>
+			<template name="keyboardtemplate"/>
+
+			<button>
+				<placement x="%bg_storage_x%" y="%bg_storage_y%"/>
+				<image resource="dialog_bg"/>
+			</button>
+
+			<text style="text_dlg_title">
+				<placement x="%bg_storage_hdr_x%" y="%bg_storage_hdr_y%"/>
+				<text>Remote Folder / Path</text>
+			</text>
+
+			<input>
+				<placement x="%bg_storage_hdr_x%" y="%db_text3_y%" w="700" h="%input_height%"/>
+				<data name="tw_nas_path"/>
+				<restrict maxlen="256"/>
+				<action function="page">nas_settings</action>
+			</input>
+
+			<button style="btn_dlg">
+				<placement x="%db_left_x%" y="%db_y%"/>
+				<text>{@cancel_btn}</text>
+				<action function="page">nas_settings</action>
+			</button>
+
+			<button style="btn_dlg_hl">
+				<placement x="%db_right_x%" y="%db_y%"/>
+				<text>{@ok_btn}</text>
+				<action function="page">nas_settings</action>
+			</button>
+
+			<action>
+				<touch key="back"/>
+				<action function="page">nas_settings</action>
+			</action>
+		</page>
+
+		<!-- NAS edit: domain/workgroup -->
+		<page name="nas_edit_domain">
+			<template name="dialog_body"/>
+			<template name="keyboardtemplate"/>
+
+			<button>
+				<placement x="%bg_storage_x%" y="%bg_storage_y%"/>
+				<image resource="dialog_bg"/>
+			</button>
+
+			<text style="text_dlg_title">
+				<placement x="%bg_storage_hdr_x%" y="%bg_storage_hdr_y%"/>
+				<text>SMB Domain / Workgroup</text>
+			</text>
+
+			<input>
+				<placement x="%bg_storage_hdr_x%" y="%db_text3_y%" w="700" h="%input_height%"/>
+				<data name="tw_nas_domain"/>
+				<restrict maxlen="128"/>
+				<action function="page">nas_settings</action>
+			</input>
+
+			<button style="btn_dlg">
+				<placement x="%db_left_x%" y="%db_y%"/>
+				<text>{@cancel_btn}</text>
+				<action function="page">nas_settings</action>
+			</button>
+
+			<button style="btn_dlg_hl">
+				<placement x="%db_right_x%" y="%db_y%"/>
+				<text>{@ok_btn}</text>
+				<action function="page">nas_settings</action>
+			</button>
+
+			<action>
+				<touch key="back"/>
+				<action function="page">nas_settings</action>
+			</action>
+		</page>
+
+		<!-- NAS edit: SFTP port -->
+		<page name="nas_edit_port">
+			<template name="dialog_body"/>
+			<template name="keyboardtemplate"/>
+
+			<button>
+				<placement x="%bg_storage_x%" y="%bg_storage_y%"/>
+				<image resource="dialog_bg"/>
+			</button>
+
+			<text style="text_dlg_title">
+				<placement x="%bg_storage_hdr_x%" y="%bg_storage_hdr_y%"/>
+				<text>SFTP Port</text>
+			</text>
+
+			<input>
+				<placement x="%bg_storage_hdr_x%" y="%db_text3_y%" w="700" h="%input_height%"/>
+				<data name="tw_nas_port"/>
+				<restrict minlen="1" maxlen="5"/>
+				<action function="page">nas_settings</action>
+			</input>
+
+			<button style="btn_dlg">
+				<placement x="%db_left_x%" y="%db_y%"/>
+				<text>{@cancel_btn}</text>
+				<action function="page">nas_settings</action>
+			</button>
+
+			<button style="btn_dlg_hl">
+				<placement x="%db_right_x%" y="%db_y%"/>
+				<text>{@ok_btn}</text>
+				<action function="page">nas_settings</action>
+			</button>
+
+			<action>
+				<touch key="back"/>
+				<action function="page">nas_settings</action>
 			</action>
 		</page>
 

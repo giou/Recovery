@@ -1279,5 +1279,13 @@
 		<string name="wlan_password">Enter password for WLAN</string>
 		<string name="wlan_encryption">WLAN Encryption:</string>
 		<string name="wlan_empty">Scan failed or list empty, rescan please!</string>
+
+		<!-- NAS -->
+		<string name="nas_mounted">NAS mounted successfully.</string>
+		<string name="nas_mount_failed">Failed to mount NAS: {1}</string>
+		<string name="nas_unmounted">NAS unmounted.</string>
+		<string name="nas_unmount_failed">Failed to unmount NAS: {1}</string>
+		<string name="nas_selected">NAS selected as current storage.</string>
+		<string name="nas_select_failed">Failed to select NAS storage: {1}</string>
 	</resources>
 </language>
