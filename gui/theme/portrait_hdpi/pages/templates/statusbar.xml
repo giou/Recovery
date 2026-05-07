@@ -41,28 +41,42 @@
 			<!-- WIFI icon -->
 			<!-- Center clock -->
 			<wlan style="wlan_status">
-				<placement x="%wlan_x%" y="%wlan_y%" w="46" h="46"/>
+				<placement x="%status_right_x%" y="%wlan_y%" w="46" h="46" followBattery="1"/>
 				<condition var1="center_clock" var2="1"/>
 			</wlan>
 
 			<!-- Right clock -->
 			<wlan style="wlan_status">
-				<placement x="%wlan_x%" y="%wlan_y%" w="46" h="46"/>
+				<placement x="%status_right_x%" y="%wlan_y%" w="46" h="46" followBattery="1"/>
 				<condition var1="center_clock" var2="2"/>
 			</wlan>
 
 			<!-- Left clock, 12-hour -->
 			<wlan style="wlan_status">
-				<placement x="%wlan_x%" y="%wlan_y%" w="46" h="46"/>
+				<placement x="%battery_12_x%" y="%wlan_y%" w="46" h="46" followBattery="1"/>
 				<condition var1="center_clock" var2="0"/>
 				<condition var1="tw_military_time" op="!=" var2="1"/>
+				<condition var1="style_battery" op="!=" var2="2"/>
+			</wlan>
+			<wlan style="wlan_status">
+				<placement x="%battery_2_12_x%" y="%wlan_y%" w="46" h="46" followBattery="1"/>
+				<condition var1="center_clock" var2="0"/>
+				<condition var1="tw_military_time" op="!=" var2="1"/>
+				<condition var1="style_battery" var2="2"/>
 			</wlan>
 
 			<!-- Left clock, 24-hour -->
 			<wlan style="wlan_status">
-				<placement x="%wlan_x%" y="%wlan_y%" w="46" h="46"/>
+				<placement x="%battery_24_x%" y="%wlan_y%" w="46" h="46" followBattery="1"/>
 				<condition var1="center_clock" var2="0"/>
 				<condition var1="tw_military_time" var2="1"/>
+				<condition var1="style_battery" op="!=" var2="2"/>
+			</wlan>
+			<wlan style="wlan_status">
+				<placement x="%battery_2_24_x%" y="%wlan_y%" w="46" h="46" followBattery="1"/>
+				<condition var1="center_clock" var2="0"/>
+				<condition var1="tw_military_time" var2="1"/>
+				<condition var1="style_battery" var2="2"/>
 			</wlan>
 
 			<!-- Battery -->

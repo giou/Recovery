@@ -216,6 +216,7 @@
 		<image name="wlan_saved" filename="SVG/Icons/wlan_saved.svg" retainaspect="1" scale="3.25" tint="#202124"/>
 		<image name="wlan_locked" filename="SVG/Icons/wlan_locked.svg" retainaspect="1" scale="3.25" tint="#202124"/>
 		<image name="wlan_loading" filename="SVG/Icons/wlan_loading.svg" retainaspect="1" scale="3.25" tint="#202124"/>
+		<image name="wlan_test" filename="SVG/Icons/wlan_test.svg" retainaspect="1" scale="3.25" tint="#202124"/>
 		<image name="smb_share" filename="SVG/Icons/smb_share.svg" retainaspect="1" scale="3.25" tint="#202124"/>
 		<image name="rwa" filename="SVG/Icons/rwa.svg" retainaspect="1" scale="3.25" tint="#202124"/>
 		<image name="check" filename="SVG/Icons/check.svg" retainaspect="1" scale="3.25" tint="#202124"/>

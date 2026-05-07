@@ -200,7 +200,7 @@
 			</text>
 
 			<listbox style="group_list">
-				<placement x="0" y="%row2_2a_y%" w="%screen_w%" h="%bl_h4%"/>
+				<placement x="0" y="%row2_2a_y%" w="%screen_w%" h="%bl_h5%"/>
 
 				<listitem name="Saved networks">
 					<icon res="wlan_saved"/>
@@ -208,7 +208,7 @@
 				</listitem>
 
 				<listitem name="Test Network Connection">
-					<icon res="wlan"/>
+					<icon res="wlan_test"/>
 					<action function="page">wlan_settings</action>
 					<action function="overlay">console</action>
 					<action function="terminalcommand">
@@ -222,6 +222,11 @@ echo " "
 echo " "
 echo " "
 					</action>
+				</listitem>
+
+				<listitem name="OrangeFox Updates">
+					<icon res="overview"/>
+					<action function="page">fox_updates</action>
 				</listitem>
 
 				<listitem name="Remote Web Access">
@@ -245,6 +250,363 @@ echo " "
 			<action>
 				<touch key="back"/>
 				<action function="page">wlan</action>
+			</action>
+		</page>
+
+		<!-- OrangeFox updater main page -->
+		<page name="fox_updates">
+			<template name="base"/>
+
+			<action>
+				<action function="set">wlanlistdisplay=0</action>
+				<action function="set">wlansaveddisplay=0</action>
+			</action>
+
+			<text style="text_ab_title">
+				<placement x="%col1_x_indent%" y="%ab_bc_y%"/>
+				<text>OrangeFox Updates</text>
+			</text>
+
+			<button style="actionbar">
+				<placement x="%ab_btn1_x%" y="%ab_y%" placement="4"/>
+				<action function="page">fox_update_settings</action>
+			</button>
+
+			<image>
+				<placement x="%ab_btn1_x%" y="%ab_y%" placement="4"/>
+				<image resource="actionbar_settings"/>
+			</image>
+
+			<image>
+				<placement x="40" y="%ab_h%"/>
+				<image resource="main_switch_card_active"/>
+			</image>
+
+			<image>
+				<placement x="%main_switch_icon_x%" y="%ab2_y%" placement="4"/>
+				<image resource="overview"/>
+			</image>
+
+			<text style="text_ab_switch_on">
+				<placement x="%switch_text_x%" y="%ab_bc2_y%"/>
+				<text>Recovery Updater</text>
+			</text>
+
+			<text style="caption">
+				<placement x="%gl_text_x%" y="%row2_1a_y%"/>
+				<text>Status</text>
+			</text>
+
+			<text style="text_body2_hl">
+				<placement x="%gl_text_x%" y="%row2_2a_y%"/>
+				<text>%fox_update_status%</text>
+			</text>
+
+			<text style="caption">
+				<placement x="%gl_text_x%" y="%row3_1a_y%"/>
+				<text>Update details</text>
+			</text>
+
+			<listbox style="group_list_flat">
+				<placement x="0" y="%row3_2a_y%" w="%screen_w%" h="%bl_h6%"/>
+				<data requireReload="1"/>
+				<listitem name="Device: %fox_update_device_name%">
+					<icon res="devices"/>
+				</listitem>
+				<listitem name="Current: %fox_update_current_version% / %fox_update_current_type%">
+					<icon res="check"/>
+				</listitem>
+				<listitem name="Latest: %fox_update_latest_version% / %fox_update_latest_type%">
+					<icon res="overview"/>
+					<action function="fox_update_prepare_available"/>
+					<action function="page">fox_update_releases</action>
+				</listitem>
+				<listitem name="Variant: %fox_update_latest_variant%">
+					<icon res="category"/>
+				</listitem>
+				<listitem name="File: %fox_update_latest_filename%">
+					<icon res="archive"/>
+				</listitem>
+				<listitem name="MD5: %fox_update_latest_md5%">
+					<icon res="text_snippet"/>
+				</listitem>
+			</listbox>
+
+			<button style="btn_raised_hl">
+				<placement x="%btn_raised_left_x%" y="%row_btn_y%"/>
+				<text>Check</text>
+				<action function="fox_update_check"/>
+				<action function="page">fox_update_after_check</action>
+			</button>
+
+			<button style="btn_raised">
+				<placement x="%btn_raised_right_x%" y="%row_btn_y%" placement="1"/>
+				<text>Changelog</text>
+				<action function="set">wlanlistdisplay=0</action>
+				<action function="set">wlansaveddisplay=0</action>
+				<action function="set">of_file_to_read=</action>
+				<action function="set">of_file_to_read=/tmp/fox_update/changelog.txt</action>
+				<action function="page">fox_update_changelog</action>
+			</button>
+
+			<button style="btn_raised">
+				<condition var1="fox_update_available" var2="1"/>
+				<condition var1="fox_update_downloaded" op="!=" var2="1"/>
+				<placement x="%btn_raised_left_x%" y="%row_btn1_y%"/>
+				<text>Download</text>
+				<action function="fox_update_download"/>
+				<action function="page">fox_updates</action>
+			</button>
+
+			<button style="btn_raised_hl">
+				<condition var1="fox_update_downloaded" var2="1"/>
+				<placement x="%btn_raised_left_x%" y="%row_btn1_y%"/>
+				<text>Install</text>
+				<action function="fox_update_install"/>
+				<action function="page">fox_update_queue_zip</action>
+			</button>
+
+			<template name="gestures"/>
+
+			<action>
+				<touch key="home"/>
+				<action function="set">of_file_to_read=</action>
+				<action function="page">main</action>
+			</action>
+
+			<action>
+				<touch key="back"/>
+				<action function="set">of_file_to_read=</action>
+				<action function="page">wlan_settings</action>
+			</action>
+		</page>
+
+		<!-- OrangeFox updater settings -->
+		<page name="fox_update_settings">
+			<template name="base"/>
+
+			<text style="text_ab_title">
+				<placement x="%col1_x_indent%" y="%ab_bc_y%"/>
+				<text>Updater Settings</text>
+			</text>
+
+			<text style="caption">
+				<placement x="%gl_text_x%" y="%row2_1a_y%"/>
+				<text>Update channel</text>
+			</text>
+
+			<listbox style="settingslist_group">
+				<placement x="0" y="%row2_2a_y%" w="%screen_w%" h="%lb_group_l1%"/>
+				<listitem name="Receive beta updates">
+					<data variable="fox_update_allow_beta"/>
+				</listitem>
+			</listbox>
+
+			<template name="gestures"/>
+
+			<action>
+				<touch key="home"/>
+				<action function="page">main</action>
+			</action>
+
+			<action>
+				<touch key="back"/>
+				<action function="page">fox_updates</action>
+			</action>
+		</page>
+
+		<!-- Queue updater ZIP using the standard file-browser install flow -->
+		<page name="fox_update_queue_zip">
+			<action>
+				<action function="queueclear"/>
+				<action function="queuezip"/>
+				<action function="set">tw_q_1=%tw_file%</action>
+				<action function="page">flash_confirm</action>
+			</action>
+		</page>
+
+		<!-- Route after checking: open variant picker only when needed -->
+		<page name="fox_update_after_check">
+			<action>
+				<condition var1="fox_update_need_variant" var2="1"/>
+				<action function="page">fox_update_variants</action>
+			</action>
+
+			<action>
+				<condition var1="fox_update_need_variant" op="!=" var2="1"/>
+				<action function="page">fox_updates</action>
+			</action>
+		</page>
+
+		<!-- Available update releases -->
+		<page name="fox_update_releases">
+			<template name="base"/>
+
+			<action>
+				<action function="set">wlanlistdisplay=0</action>
+				<action function="set">wlansaveddisplay=0</action>
+				<action function="set">fox_update_release_selection=/tmp/fox_update/available_list.txt</action>
+			</action>
+
+			<text style="text_ab_title">
+				<placement x="%col1_x_indent%" y="%ab_bc_y%"/>
+				<text>Available Releases</text>
+			</text>
+
+			<text style="caption">
+				<placement x="%gl_text_x%" y="%row2_1a_y%"/>
+				<text>%fox_update_available_count% releases found</text>
+			</text>
+
+			<listbox style="group_list_flat">
+				<placement x="0" y="%row2_2a_y%" w="%screen_w%" h="%bl_h5%"/>
+				<iconsize w="55" h="%bl_h1%" padding="0"/>
+				<data name="fox_update_release_selection"/>
+			</listbox>
+
+			<template name="gestures"/>
+
+			<action>
+				<touch key="home"/>
+				<action function="set">fox_update_release_selection=</action>
+				<action function="page">main</action>
+			</action>
+
+			<action>
+				<touch key="back"/>
+				<action function="set">fox_update_release_selection=</action>
+				<action function="page">fox_updates</action>
+			</action>
+		</page>
+
+		<!-- OrangeFox update changelog page -->
+		<page name="fox_update_changelog">
+			<template name="base"/>
+
+			<action>
+				<action function="set">wlanlistdisplay=0</action>
+				<action function="set">wlansaveddisplay=0</action>
+				<action function="set">of_file_to_read=</action>
+				<action function="set">of_file_to_read=/tmp/fox_update/changelog.txt</action>
+			</action>
+
+			<text style="text_ab_title">
+				<placement x="%col1_x_indent%" y="%ab_bc_y%"/>
+				<text>Update Changelog</text>
+			</text>
+
+			<text style="caption">
+				<placement x="%gl_text_x%" y="%row2_1a_y%"/>
+				<text>Changelog</text>
+			</text>
+
+			<text style="text_body2_hl">
+				<condition var1="fileexists" op="!=" var2="/tmp/fox_update/changelog.txt"/>
+				<placement x="%gl_text_x%" y="%row2_2a_y%"/>
+				<text>No changelog loaded</text>
+			</text>
+
+			<listbox style="group_list_flat">
+				<condition var1="fileexists" var2="/tmp/fox_update/changelog.txt"/>
+				<placement x="0" y="%row2_2a_y%" w="%screen_w%" h="%bl_h5%"/>
+				<iconsize w="55" h="%bl_h1%" padding="0"/>
+				<data name="of_file_to_read"/>
+			</listbox>
+
+			<template name="gestures"/>
+
+			<action>
+				<touch key="home"/>
+				<action function="set">of_file_to_read=</action>
+				<action function="page">main</action>
+			</action>
+
+			<action>
+				<touch key="back"/>
+				<action function="set">of_file_to_read=</action>
+				<action function="page">fox_updates</action>
+			</action>
+		</page>
+
+		<!-- Variant picker page -->
+		<page name="fox_update_variants">
+			<template name="base"/>
+
+			<action>
+				<action function="set">of_file_to_read=/tmp/fox_update/changelog.txt</action>
+			</action>
+
+			<text style="text_ab_title">
+				<placement x="%col1_x_indent%" y="%ab_bc_y%"/>
+				<text>Select Update Variant</text>
+			</text>
+
+			<button style="actionbar">
+				<placement x="%ab_btn1_x%" y="%ab_y%" placement="4"/>
+				<action function="page">fox_updates</action>
+			</button>
+
+			<image>
+				<placement x="%ab_btn1_x%" y="%ab_y%" placement="4"/>
+				<image resource="actionbar_back"/>
+			</image>
+
+			<text style="caption">
+				<placement x="%gl_text_x%" y="%row2_1a_y%"/>
+				<text>Multiple variants found</text>
+			</text>
+
+			<text style="text_body2_hl">
+				<placement x="%gl_text_x%" y="%row2_2a_y%"/>
+				<text>Variant %fox_update_variant_index% of %fox_update_variant_count%</text>
+			</text>
+
+			<text style="text_body2">
+				<placement x="%gl_text_x%" y="%row3_1a_y%"/>
+				<text>%fox_update_variant_text%</text>
+			</text>
+
+			<text style="text_body2">
+				<placement x="%gl_text_x%" y="%row4_1a_y%"/>
+				<text>File: %fox_update_variant_filename%</text>
+			</text>
+
+			<text style="text_body2">
+				<placement x="%gl_text_x%" y="%row5_1a_y%"/>
+				<text>MD5: %fox_update_variant_md5%</text>
+			</text>
+
+			<button style="btn_flat_qw">
+				<placement x="%btn_raised_left_x%" y="%row8_1a_y%"/>
+				<text>Previous</text>
+				<action function="fox_update_variant_prev"/>
+				<action function="page">fox_update_variants</action>
+			</button>
+
+			<button style="btn_flat_qw">
+				<placement x="%btn_raised_center_x%" y="%row8_1a_y%"/>
+				<text>Use</text>
+				<action function="fox_update_select_variant"/>
+				<action function="page">fox_updates</action>
+			</button>
+
+			<button style="btn_flat_qw">
+				<placement x="%btn_raised_right_x%" y="%row8_1a_y%"/>
+				<text>Next</text>
+				<action function="fox_update_variant_next"/>
+				<action function="page">fox_update_variants</action>
+			</button>
+
+			<template name="gestures"/>
+
+			<action>
+				<touch key="home"/>
+				<action function="page">main</action>
+			</action>
+
+			<action>
+				<touch key="back"/>
+				<action function="page">fox_updates</action>
 			</action>
 		</page>
 
@@ -301,7 +663,7 @@ echo " "
 			</text>
 
 			<listbox style="group_list">
-				<placement x="0" y="%row3_2a_y%" w="%screen_w%" h="%bl_h6%"/>
+				<placement x="0" y="%row3_2a_y%" w="%screen_w%" h="1152"/>
 				<data requireReload="1"/>
 
 				<listitem name="Type: %tw_nas_type%">
@@ -354,7 +716,7 @@ echo " "
 
 			<button style="btn_raised_hl">
 				<condition var1="tw_nas_mounted" op="!=" var2="1"/>
-				<placement x="%btn_raised_left_x%" y="%row_btn2_y%"/>
+				<placement x="%btn_raised_left_x%" y="%row_btn1_y%"/>
 				<text>Mount + Use</text>
 				<action function="nas_mount"/>
 				<action function="nas_select"/>
@@ -363,7 +725,7 @@ echo " "
 
 			<button style="btn_raised_hl">
 				<condition var1="tw_nas_mounted" var2="1"/>
-				<placement x="%btn_raised_left_x%" y="%row_btn2_y%"/>
+				<placement x="%btn_raised_left_x%" y="%row_btn1_y%"/>
 				<text>Use NAS</text>
 				<action function="nas_select"/>
 				<action function="page">nas_settings</action>
@@ -371,7 +733,7 @@ echo " "
 
 			<button style="btn_raised">
 				<condition var1="tw_nas_mounted" var2="1"/>
-				<placement x="%btn_raised_right_x%" y="%row_btn2_y%" placement="1"/>
+				<placement x="%btn_raised_right_x%" y="%row_btn1_y%" placement="1"/>
 				<text>Unmount</text>
 				<action function="nas_unmount"/>
 				<action function="page">nas_settings</action>

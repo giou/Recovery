@@ -351,6 +351,11 @@
 		<!-- WLAN -->
 		<variable name="wlan_connect_icon_x" value="%center_x%+40"/>
 
+		<!-- OrangeFox updater -->
+		<variable name="fox_update_allow_beta" value="0" persist="1"/>
+		<variable name="fox_update_available_count" value="0"/>
+		<variable name="fox_update_release_selection" value=""/>
+
 		<!-- NAS -->
 		<variable name="tw_nas_mounted" value="0"/>
 		<variable name="tw_nas_status_text" value="NAS not mounted"/>

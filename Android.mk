@@ -52,6 +52,7 @@ LOCAL_SRC_FILES := \
     orangefox.cpp \
     wlan.cpp \
     nas/NasManager.cpp \
+    fox_updater.cpp \
     gui/nanosvg.cpp \
     twrpDigestDriver.cpp \
     openrecoveryscript.cpp \
