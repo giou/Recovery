@@ -73,7 +73,7 @@
 
 			<text style="text_ab_switch_off">
 				<condition var1="tw_wlan_enabled" op="!=" var2="1"/>
-				<placement x="%gl_text_x%" y="%ab_bc2_y%"/>
+				<placement x="%switch_text_x%" y="%ab_bc2_y%"/>
 				<text>WLAN</text>
 			</text>
 
@@ -1130,7 +1130,7 @@ echo " "
 
 			<text style="text_ab_switch_off">
 				<condition var1="of_remote_web_access_enabled" op="!=" var2="1"/>
-				<placement x="%gl_text_x%" y="%ab_bc2_y%"/>
+				<placement x="%switch_text_x%" y="%ab_bc2_y%"/>
 				<text>Enable Remote Web Access</text>
 			</text>
 
