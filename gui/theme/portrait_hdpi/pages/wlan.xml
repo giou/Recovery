@@ -209,19 +209,15 @@
 
 				<listitem name="Test Network Connection">
 					<icon res="wlan_test"/>
-					<action function="page">wlan_settings</action>
-					<action function="overlay">console</action>
-					<action function="terminalcommand">
-echo "Trying test net connection with ping bing.com ..."
-echo "=============Ping bing.com==========="
-echo " "
-busybox ping -w 4 bing.com
-echo " "
-echo "====================================="
-echo " "
-echo " "
-echo " "
-					</action>
+					<action function="set">wlan_test_title=Network Connection</action>
+					<action function="set">wlan_test_line1=Testing network connection...</action>
+					<action function="set">wlan_test_line2=</action>
+					<action function="set">wlan_test_line3=</action>
+					<action function="set">wlan_test_line4=</action>
+					<action function="set">wlan_test_line5=</action>
+					<action function="set">wlan_test_done=0</action>
+					<action function="overlay">wlan_test_connection</action>
+					<action function="wlan_test_connection"/>
 				</listitem>
 
 				<listitem name="OrangeFox Updates">
@@ -1391,6 +1387,68 @@ echo " "
 
 			<action>
 				<touch key="back"/>
+			</action>
+		</page>
+
+		<!-- WLAN test connection popup overlay -->
+		<page name="wlan_test_connection">
+			<template name="dialog_body"/>
+
+			<button>
+				<placement x="%bg_storage_x%" y="%bg_storage_y%"/>
+				<image resource="dialog_bg"/>
+			</button>
+
+			<text style="text_dlg_title">
+				<placement x="%bg_storage_hdr_x%" y="%bg_storage_hdr_y%"/>
+				<text>%wlan_test_title%</text>
+			</text>
+
+			<object type="spinningimage">
+				<condition var1="wlan_test_done" op="!=" var2="1"/>
+				<placement x="%center_x%" y="%db_text2_y%" placement="5"/>
+				<offset x="40" y="0"/>
+				<image resource="wlan_loading"/>
+				<speed render="2"/>
+				<rotate speed="640" clockwise="1" start="0"/>
+			</object>
+
+			<text style="text_body1">
+				<placement x="%bg_storage_hdr_x%" y="%db_text1_y%"/>
+				<text>%wlan_test_line1%</text>
+			</text>
+
+			<text style="text_body1">
+				<placement x="%bg_storage_hdr_x%" y="%db_text2_y%"/>
+				<text>%wlan_test_line2%</text>
+			</text>
+
+			<text style="text_body1">
+				<placement x="%bg_storage_hdr_x%" y="%db_text3_y%"/>
+				<text>%wlan_test_line3%</text>
+			</text>
+
+			<text style="text_body1">
+				<placement x="%bg_storage_hdr_x%" y="%db_text4_y%"/>
+				<text>%wlan_test_line4%</text>
+			</text>
+
+			<text style="text_body1">
+				<placement x="%bg_storage_hdr_x%" y="1072"/>
+				<text>%wlan_test_line5%</text>
+			</text>
+
+			<button style="btn_dlg_hl">
+				<placement x="%db_right_x%" y="%db_y%"/>
+				<text>{@ok_btn}</text>
+				<actions>
+					<action function="overlay"/>
+				</actions>
+			</button>
+
+			<action>
+				<touch key="back"/>
+				<action function="overlay"/>
 			</action>
 		</page>
 
