@@ -1287,5 +1287,6 @@
 		<string name="nas_unmount_failed">Failed to unmount NAS: {1}</string>
 		<string name="nas_selected">NAS selected as current storage.</string>
 		<string name="nas_select_failed">Failed to select NAS storage: {1}</string>
+		<string name="nas_wait_upload">Waiting for NAS upload to finish...</string>
 	</resources>
 </language>

@@ -712,6 +712,11 @@ echo " "
 					<icon res="wlan"/>
 					<action function="page">nas_edit_port</action>
 				</listitem>
+
+				<listitem name="Cache: %tw_nas_cache_mode%">
+					<icon res="hard_disk"/>
+					<action function="page">nas_cache_select</action>
+				</listitem>
 			</listbox>
 
 			<button style="btn_raised_hl">
@@ -749,6 +754,54 @@ echo " "
 			<action>
 				<touch key="back"/>
 				<action function="page">wlan_settings</action>
+			</action>
+		</page>
+
+		<!-- NAS cache selector -->
+		<page name="nas_cache_select">
+			<template name="base"/>
+
+			<text style="text_ab_title">
+				<placement x="%col1_x_indent%" y="%ab_bc_y%"/>
+				<text>Select NAS Cache</text>
+			</text>
+
+			<text style="caption">
+				<placement x="%gl_text_x%" y="%row2_1a_y%"/>
+				<text>Current cache</text>
+			</text>
+
+			<text style="text_body2_hl">
+				<placement x="%gl_text_x%" y="%row2_2a_y%"/>
+				<text>%tw_nas_cache_mode%</text>
+			</text>
+
+			<text style="caption">
+				<placement x="%gl_text_x%" y="%row3_1a_y%"/>
+				<text>Cache mode</text>
+			</text>
+
+			<listbox style="group_list">
+				<placement x="0" y="%row3_2a_y%" w="%screen_w%" h="%bl_h2%"/>
+
+				<listitem name="No cache">
+					<icon res="rwa"/>
+					<action function="set">tw_nas_cache_mode=off</action>
+					<action function="page">nas_settings</action>
+				</listitem>
+
+				<listitem name="/data cache">
+					<icon res="hard_disk"/>
+					<action function="set">tw_nas_cache_mode=data</action>
+					<action function="page">nas_settings</action>
+				</listitem>
+			</listbox>
+
+			<template name="gestures"/>
+
+			<action>
+				<touch key="back"/>
+				<action function="page">nas_settings</action>
 			</action>
 		</page>
 
