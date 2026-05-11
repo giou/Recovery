@@ -647,23 +647,18 @@ echo " "
 				<text>NAS not mounted</text>
 			</text>
 
-			<text style="caption">
-				<placement x="%gl_text_x%" y="%row2_2_y%"/>
-				<text>Status</text>
-			</text>
-
 			<text style="text_body2_hl">
-				<placement x="%gl_text_x%" y="%row2_3a_y%"/>
+				<placement x="%gl_text_x%" y="%row2_1_y%"/>
 				<text>%tw_nas_status_text%</text>
 			</text>
 
 			<text style="caption">
-				<placement x="%gl_text_x%" y="%row3_1a_y%"/>
+				<placement x="%gl_text_x%" y="%row2_2a_y%"/>
 				<text>Connection</text>
 			</text>
 
 			<listbox style="group_list">
-				<placement x="0" y="%row3_2a_y%" w="%screen_w%" h="1152"/>
+				<placement x="0" y="%row2_3a_y%" w="%screen_w%" h="1320"/>
 				<data requireReload="1"/>
 
 				<listitem name="Type: %tw_nas_type%">
