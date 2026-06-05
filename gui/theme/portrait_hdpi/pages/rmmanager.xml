@@ -230,36 +230,36 @@
 
 			<!-- Enabled -->
 			<image>
-				<condition var1="mmodule_disable" var2="1"/>
+				<condition var1="mmodule_disable" op="!=" var2="1"/>
 				<placement x="40" y="%ab_ex_h%"/>
 				<image resource="main_switch_card_active" />
 			</image>
 
 			<image style="switch_on">
-				<condition var1="mmodule_disable" var2="1"/>
+				<condition var1="mmodule_disable" op="!=" var2="1"/>
 				<placement x="%main_switch_icon_x%" y="%ab3_y%" placement="4"/>
 			</image>
 
 			<text style="text_ab_switch_on">
-				<condition var1="mmodule_disable" var2="1"/>
+				<condition var1="mmodule_disable" op="!=" var2="1"/>
 				<placement x="%switch_text_x%" y="%ab_bc3_y%"/>
 				<text>{@mm_module_active}</text>
 			</text>
 
 			<!-- Disabled -->
 			<image>
-				<condition var1="mmodule_disable" op="!=" var2="1"/>
+				<condition var1="mmodule_disable" var2="1"/>
 				<placement x="40" y="%ab_ex_h%"/>
 				<image resource="main_switch_card_not_active" />
 			</image>
 
 			<image style="switch_off">
-				<condition var1="mmodule_disable" op="!=" var2="1"/>
+				<condition var1="mmodule_disable" var2="1"/>
 				<placement x="%main_switch_icon_x%" y="%ab3_y%" placement="4"/>
 			</image>
 
 			<text style="text_ab_switch_off">
-				<condition var1="mmodule_disable" op="!=" var2="1"/>
+				<condition var1="mmodule_disable" var2="1"/>
 				<placement x="%gl_text_x%" y="%ab_bc3_y%"/>
 				<text>{@mm_module_active}</text>
 			</text>
