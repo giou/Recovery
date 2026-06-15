@@ -29,7 +29,7 @@
 					<action function="page">sideload</action>
 				</listitem>
 				<listitem name="{@wlan_menu}">
-					<condition var1="tw_no_network" op="!=" var2="1"/>
+					<condition var1="tw_enable_network" var2="1"/>
 					<icon res="wlan"/>
 					<action function="page">wlan</action>
 				</listitem>

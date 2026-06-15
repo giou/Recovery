@@ -48,7 +48,9 @@
 
 #include "../data.hpp"
 #include "../gui.hpp"
+#ifdef OF_ENABLE_WLAN
 #include "../wlan.hpp"
+#endif
 #include "../nas/NasManager.hpp"
 #include "../fox_updater.hpp"
 
@@ -265,10 +267,7 @@ GUIAction::GUIAction(xml_node <> *node):GUIObject(node)
       ADD_ACTION(set_chmod);
       ADD_ACTION(setpassword);
       ADD_ACTION(passwordcheck);
-      
-      // OrangeFox NAS
-      ADD_ACTION(nas_info);
- 
+
       // remember actions that run in the caller thread
       for (mapFunc::const_iterator it = mf.begin(); it != mf.end(); ++it)
 	setActionsRunningInCallerThread.insert(it->first);
@@ -292,6 +291,7 @@ GUIAction::GUIAction(xml_node <> *node):GUIObject(node)
       ADD_ACTION(fixsu);
 
       // OrangeFox WLAN
+      #ifdef OF_ENABLE_WLAN
       ADD_ACTION(wlan_enable);
       ADD_ACTION(wlan_disable);
       ADD_ACTION(wlan_scan);
@@ -303,9 +303,11 @@ GUIAction::GUIAction(xml_node <> *node):GUIObject(node)
       ADD_ACTION(wlan_test_connection);
 
       // OrangeFox NAS
+      ADD_ACTION(nas_info);
       ADD_ACTION(nas_mount);
       ADD_ACTION(nas_unmount);
       ADD_ACTION(nas_select);
+      #endif
 
       ADD_ACTION(decrypt_backup);
       ADD_ACTION(repair);
@@ -3166,6 +3168,7 @@ int GUIAction::setvaluebyfile(std::string arg) {
   return 0;
 }
 
+#ifdef OF_ENABLE_WLAN
 int GUIAction::wlan_enable(std::string arg) {
     return Wlan::Enable() ? 0 : -1;
 }
@@ -3284,4 +3287,5 @@ int GUIAction::nas_info(std::string arg __unused) {
     NasManager::RefreshStatus();
     return 0;
 }
+#endif // OF_ENABLE_WLAN
 //
