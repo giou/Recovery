@@ -53,6 +53,10 @@ extern "C"
 #include "../openrecoveryscript.hpp"
 #include "../orscmd/orscmd.h"
 #include "../fox_cli.hpp"
+#ifdef OF_ENABLE_REMOTE
+#include "../fox_remote/fox_jobs.hpp"
+#include "../fox_remote/fox_screen.hpp"
+#endif
 #include "blanktimer.hpp"
 #include "tw_atomic.hpp"
 
@@ -661,6 +665,13 @@ void fox_command_done()
 		orsout = NULL;
 	}
 
+#ifdef OF_ENABLE_REMOTE
+	// If this was a queued remote job (rather than a FIFO command), mark it
+	// DONE now that its output FILE has been flushed and closed. This is a
+	// no-op for the FIFO path (no active job).
+	Fox_Jobs::FinishActive();
+#endif
+
 	if (DataManager::GetIntValue("tw_page_done") == 0) {
 		// Re-arm the listener (same reasoning as ors_command_done()).
 		if (fox_read_fd >= 0)
@@ -738,6 +749,45 @@ static void fox_command_read()
 	DataManager::SetValue("tw_action_text2", "");
 	gui_changePage("singleaction_page");
 }
+
+#ifdef OF_ENABLE_REMOTE
+// Drain one queued remote job, if the engine is idle. Called from the GUI main
+// loop. This mirrors fox_command_read()'s dispatch, but the command's output is
+// mirrored into the job's buffer (via a fopencookie FILE stored in orsout)
+// instead of the foxout FIFO, and there is no client holding a pipe open.
+static void fox_job_poll()
+{
+	if (orsout)  // a command (FIFO or job) is already running
+		return;
+	if (DataManager::GetIntValue("tw_busy") != 0)
+		return;
+	if (!Fox_Jobs::HasPending())
+		return;
+
+	FILE* jobout = NULL;
+	std::vector<std::string> argv;
+	if (!Fox_Jobs::BeginNext(&jobout, argv) || !jobout)
+		return;
+
+	LOGINFO("fox job '%s' (%zu args) dispatched\n", argv[0].c_str(), argv.size());
+
+	// Reuse the same single-command guard + foxcmd action path as the FIFO
+	// channel. orsout doubles as the "busy" guard and as the FILE that
+	// fox_command_done() closes when the command finishes.
+	orsout = jobout;
+	Fox_CLI::Set_Args(argv);
+	gui_set_FILE(orsout);
+	DataManager::SetValue("tw_action", "foxcmd");
+	DataManager::SetValue("tw_action_param", "");
+	std::string currentPage = PageManager::GetCurrentPage();
+	DataManager::SetValue("tw_has_action2", "1");
+	DataManager::SetValue("tw_action2", "page");
+	DataManager::SetValue("tw_action2_param", currentPage);
+	DataManager::SetValue("tw_action_text1", gui_lookup("running_recovery_commands", "Running Recovery Commands"));
+	DataManager::SetValue("tw_action_text2", "");
+	gui_changePage("singleaction_page");
+}
+#endif // OF_ENABLE_REMOTE
 
 // ---- Out-of-band cancel channel --------------------------------------------
 // Unlike foxin, this FIFO is watched even while a fox command is running, so a
@@ -893,6 +943,14 @@ static int runPages(const char *page_name, const int stop_on_page_done)
 			if (fox_cancel_read_fd > 0 && FD_ISSET(fox_cancel_read_fd, &fdset))
 				fox_cancel_read();
 		}
+#ifdef OF_ENABLE_REMOTE
+		// Drain a queued remote job when the engine is idle.
+		fox_job_poll();
+		// When a remote viewer is watching but the UI is idle, force a full
+		// render so a fresh frame is produced (and captured below).
+		if (Fox_Screen::ShouldForceRender())
+			gForceRender.set_value(1);
+#endif
 
 		if (!gForceRender.get_value())
 		{
@@ -909,6 +967,13 @@ static int runPages(const char *page_name, const int stop_on_page_done)
 #ifndef PRINT_RENDER_TIME
 			if (ret > 1)
 				PageManager::Render();
+
+#ifdef OF_ENABLE_REMOTE
+			// Capture the just-rendered complete frame before flip() repoints
+			// gr_mem_surface to the back buffer (GUI thread, no race).
+			if (ret > 1)
+				Fox_Screen::CaptureFrameIfWanted();
+#endif
 
 			if (ret > 0)
 				flip();
@@ -936,6 +1001,9 @@ static int runPages(const char *page_name, const int stop_on_page_done)
 		{
 			gForceRender.set_value(0);
 			PageManager::Render();
+#ifdef OF_ENABLE_REMOTE
+			Fox_Screen::CaptureFrameIfWanted();
+#endif
 			flip();
 			input_timeout_ms = 0;
 		}

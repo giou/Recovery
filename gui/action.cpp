@@ -46,6 +46,9 @@
 #include "../twrpRepacker.hpp"
 #include "../openrecoveryscript.hpp"
 #include "../fox_cli.hpp"
+#ifdef OF_ENABLE_REMOTE
+#include "../fox_remote/fox_jobs.hpp"
+#endif
 #include "../orscmd/orscmd.h"
 
 #include "../data.hpp"
@@ -2493,6 +2496,11 @@ int GUIAction::foxcmd(std::string arg __unused)
     simulate_progress_bar();
   else
     code = Fox_CLI::Run_Command();
+#ifdef OF_ENABLE_REMOTE
+  // Record the exit code for the active remote job, if any (no-op for the FIFO
+  // path). Done before the sentinel/output FILE is flushed and closed.
+  Fox_Jobs::NotifyExit(code);
+#endif
   // Emit the exit-code sentinel on the mirrored output (foxout) before the
   // listener closes it, so the fox client can report the real exit status.
   gui_print("%s%d\n", FOX_EXIT_SENTINEL, code);

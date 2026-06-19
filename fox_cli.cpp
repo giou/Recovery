@@ -43,6 +43,13 @@
 #include "wlan.hpp"
 #endif
 
+#ifdef OF_ENABLE_REMOTE
+#include "fox_remote/fox_httpd.hpp"
+#include "fox_remote/fox_input.hpp"
+#include "minuitwrp/minui.h"
+#include <linux/input.h>
+#endif
+
 std::vector<std::string> Fox_CLI::args;
 
 void Fox_CLI::Set_Args(const std::vector<std::string>& a) {
@@ -921,6 +928,157 @@ int Fox_CLI::Cmd_Addons(const std::vector<std::string>& a) {
 	return 2;
 }
 
+#ifdef OF_ENABLE_REMOTE
+// Map a friendly key name to a Linux input KEY_* code (or -1 if unknown).
+static int fox_key_code(const std::string& name) {
+	if (name == "back")    return KEY_BACK;
+	if (name == "home")    return KEY_HOMEPAGE;
+	if (name == "menu")    return KEY_MENU;
+	if (name == "power")   return KEY_POWER;
+	if (name == "volup")   return KEY_VOLUMEUP;
+	if (name == "voldown") return KEY_VOLUMEDOWN;
+	if (name == "enter")   return KEY_ENTER;
+	if (name == "up")      return KEY_UP;
+	if (name == "down")    return KEY_DOWN;
+	if (name == "left")    return KEY_LEFT;
+	if (name == "right")   return KEY_RIGHT;
+	return -1;
+}
+#endif
+
+int Fox_CLI::Cmd_Screencap(const std::vector<std::string>& a) {
+#ifndef OF_ENABLE_REMOTE
+	(void)a;
+	gui_print("fox: remote control is not enabled in this build\n");
+	return 1;
+#else
+	// Capture the live framebuffer to a PNG file (tmpfs by default) so a client
+	// can read it back over an ADB sync/pull -- no network stack involved.
+	std::string path = a.empty() ? "/tmp/.fox_screen.png" : a[0];
+	if (gr_save_screenshot(path.c_str()) != 0) {
+		gui_print("fox: screencap failed\n");
+		return 1;
+	}
+	gui_print("%s\n", path.c_str());
+	return 0;
+#endif
+}
+
+int Fox_CLI::Cmd_Input(const std::vector<std::string>& a) {
+#ifndef OF_ENABLE_REMOTE
+	(void)a;
+	gui_print("fox: remote control is not enabled in this build\n");
+	return 1;
+#else
+	if (a.empty()) {
+		gui_print("fox: input requires a subcommand (tap|swipe|key|down|move|up)\n");
+		return 2;
+	}
+	if (!Fox_Input::Init()) {
+		gui_print("fox: unable to create virtual input device\n");
+		return 1;
+	}
+	const std::string& sub = a[0];
+
+	if (sub == "tap") {
+		if (a.size() < 3) { gui_print("fox: input tap requires X Y\n"); return 2; }
+		Fox_Input::Tap(atoi(a[1].c_str()), atoi(a[2].c_str()));
+		return 0;
+	}
+	if (sub == "down") {
+		if (a.size() < 3) { gui_print("fox: input down requires X Y\n"); return 2; }
+		Fox_Input::TouchDown(atoi(a[1].c_str()), atoi(a[2].c_str()));
+		return 0;
+	}
+	if (sub == "move") {
+		if (a.size() < 3) { gui_print("fox: input move requires X Y\n"); return 2; }
+		Fox_Input::TouchMove(atoi(a[1].c_str()), atoi(a[2].c_str()));
+		return 0;
+	}
+	if (sub == "up") {
+		Fox_Input::TouchUp();
+		return 0;
+	}
+	if (sub == "swipe") {
+		if (a.size() < 5) { gui_print("fox: input swipe requires X1 Y1 X2 Y2 [ms]\n"); return 2; }
+		int x1 = atoi(a[1].c_str()), y1 = atoi(a[2].c_str());
+		int x2 = atoi(a[3].c_str()), y2 = atoi(a[4].c_str());
+		int ms = a.size() > 5 ? atoi(a[5].c_str()) : 200;
+		if (ms < 0) ms = 0;
+		const int steps = 16;
+		Fox_Input::TouchDown(x1, y1);
+		for (int i = 1; i <= steps; i++) {
+			int x = x1 + (x2 - x1) * i / steps;
+			int y = y1 + (y2 - y1) * i / steps;
+			Fox_Input::TouchMove(x, y);
+			struct timespec ts = { 0, (long)(ms) * 1000000L / steps };
+			nanosleep(&ts, nullptr);
+		}
+		Fox_Input::TouchUp();
+		return 0;
+	}
+	if (sub == "key") {
+		if (a.size() < 2) { gui_print("fox: input key requires a name or numeric code\n"); return 2; }
+		int code = isdigit((unsigned char)a[1][0]) ? atoi(a[1].c_str()) : fox_key_code(a[1]);
+		if (code < 0) { gui_print("fox: unknown key '%s'\n", a[1].c_str()); return 2; }
+		Fox_Input::KeyTap(code);
+		return 0;
+	}
+	gui_print("fox: unknown input subcommand '%s' (tap|swipe|key|down|move|up)\n", sub.c_str());
+	return 2;
+#endif
+}
+
+int Fox_CLI::Cmd_Remote(const std::vector<std::string>& a) {
+#ifndef OF_ENABLE_REMOTE
+	(void)a;
+	gui_print("fox: remote control is not enabled in this build\n");
+	return 1;
+#else
+	std::string sub = a.empty() ? "status" : a[0];
+
+	if (sub == "start") {
+		std::vector<std::string> rest(a.begin() + (a.empty() ? 0 : 1), a.end());
+		std::string port_s = take_option(rest, "--port");
+		int port = port_s.empty() ? 8080 : atoi(port_s.c_str());
+		if (Fox_Httpd::IsRunning()) {
+			gui_print("Remote already running on %s:%d\n",
+			          Fox_Httpd::LocalAddress().c_str(), Fox_Httpd::Port());
+			gui_print("token=%s\n", Fox_Httpd::Token().c_str());
+			return 0;
+		}
+		if (!Fox_Httpd::Start(port)) {
+			gui_print("fox: failed to start remote server\n");
+			return 1;
+		}
+		gui_print("Remote control started\n");
+		gui_print("url=http://%s:%d/\n", Fox_Httpd::LocalAddress().c_str(), Fox_Httpd::Port());
+		gui_print("port=%d\n", Fox_Httpd::Port());
+		gui_print("token=%s\n", Fox_Httpd::Token().c_str());
+		return 0;
+	}
+	if (sub == "stop") {
+		Fox_Httpd::Stop();
+		gui_print("Remote control stopped\n");
+		return 0;
+	}
+	if (sub == "status") {
+		gui_print("FOX_STATUS_BEGIN\n");
+		gui_print("running=%d\n", Fox_Httpd::IsRunning() ? 1 : 0);
+		if (Fox_Httpd::IsRunning()) {
+			gui_print("address=%s\n", Fox_Httpd::LocalAddress().c_str());
+			gui_print("port=%d\n", Fox_Httpd::Port());
+			gui_print("url=http://%s:%d/\n", Fox_Httpd::LocalAddress().c_str(), Fox_Httpd::Port());
+			gui_print("token=%s\n", Fox_Httpd::Token().c_str());
+		}
+		gui_print("FOX_STATUS_END\n");
+		return 0;
+	}
+	gui_print("fox: unknown remote subcommand '%s' (start|stop|status)\n", sub.c_str());
+	return 2;
+#endif // OF_ENABLE_REMOTE
+}
+
 int Fox_CLI::Cmd_Storages(const std::vector<std::string>& /*a*/) {
 	PartitionManager.Mount_All_Storage();
 	std::vector<PartitionList> storage_list;
@@ -985,6 +1143,12 @@ int Fox_CLI::Run_Command() {
 		return Cmd_Addons(rest);
 	if (verb == "storages")
 		return Cmd_Storages(rest);
+	if (verb == "remote")
+		return Cmd_Remote(rest);
+	if (verb == "input")
+		return Cmd_Input(rest);
+	if (verb == "screencap")
+		return Cmd_Screencap(rest);
 	if (verb == "ors")
 		return Cmd_Ors(rest);
 	if (verb == "ors-cmd") {

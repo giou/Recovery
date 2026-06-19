@@ -63,6 +63,13 @@ private:
 	static int Cmd_Partition(const std::vector<std::string>& a);
 	static int Cmd_Addons(const std::vector<std::string>& a);
 	static int Cmd_Storages(const std::vector<std::string>& a);
+	// fox remote {start|stop|status}: control the remote-control HTTP server.
+	static int Cmd_Remote(const std::vector<std::string>& a);
+	// fox input {tap|swipe|key|down|move|up}: inject touch/keys via uinput.
+	// Usable over a plain `adb shell` (no network stack).
+	static int Cmd_Input(const std::vector<std::string>& a);
+	// fox screencap [path]: write the framebuffer to a PNG for ADB sync/pull.
+	static int Cmd_Screencap(const std::vector<std::string>& a);
 
 	// Build a ;-delimited backup/restore list from explicit partition specs
 	// (mount points like "/system" or partition display names). Validates

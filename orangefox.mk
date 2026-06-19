@@ -926,6 +926,21 @@ endif
 
 endif
 
+# enable the remote-control feature (REST dashboard + screen share + input
+# injection). Opt-in; intended to be used over WLAN. The HTTP server is started
+# explicitly via "fox remote start" and is protected by a per-session token.
+ifeq ($(OF_ENABLE_REMOTE),1)
+    ifneq ($(OF_ENABLE_WLAN),1)
+        $(warning OF_ENABLE_REMOTE is enabled without OF_ENABLE_WLAN; the dashboard will only be reachable over USB/adb networking.)
+    endif
+    LOCAL_CFLAGS += -DOF_ENABLE_REMOTE
+    LOCAL_SRC_FILES += \
+        fox_remote/fox_jobs.cpp \
+        fox_remote/fox_screen.cpp \
+        fox_remote/fox_input.cpp \
+        fox_remote/fox_httpd.cpp
+endif
+
 # whether to skip substituting some permissions
 ifeq ($(OF_DONT_SUBSTITUTE_PERMISSIONS),1)
     LOCAL_CFLAGS += -DOF_DONT_SUBSTITUTE_PERMISSIONS
