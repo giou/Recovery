@@ -56,6 +56,7 @@ LOCAL_SRC_FILES := \
     gui/nanosvg.cpp \
     twrpDigestDriver.cpp \
     openrecoveryscript.cpp \
+    fox_cli.cpp \
     tarWrite.c \
     twrpAdbBuFifo.cpp \
     twrpRepacker.cpp
@@ -650,6 +651,7 @@ ifeq ($(TW_INCLUDE_FB2PNG), true)
 endif
 ifneq ($(TW_OEM_BUILD),true)
     TWRP_REQUIRED_MODULES += orscmd
+    TWRP_REQUIRED_MODULES += foxcli
 endif
 ifeq ($(BOARD_USES_BML_OVER_MTD),true)
     TWRP_REQUIRED_MODULES += bml_over_mtd

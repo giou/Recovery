@@ -19,4 +19,13 @@
 #define ORS_INPUT_FILE "/system/bin/orsin"
 #define ORS_OUTPUT_FILE "/system/bin/orsout"
 
+// Modern "fox" CLI channel. Parallel to the legacy ORS FIFOs so the old "twrp"
+// tool keeps working unchanged. The request is a NUL-delimited ('\0') argv
+// vector terminated by an empty field, which preserves spaces in passwords and
+// paths. The response is streamed log output followed by a final sentinel line
+// "\x04EXIT <int>\n" carrying the command's exit code.
+#define FOX_INPUT_FILE "/system/bin/foxin"
+#define FOX_OUTPUT_FILE "/system/bin/foxout"
+#define FOX_EXIT_SENTINEL "\x04""EXIT "
+
 #endif //__ORSCMD_H

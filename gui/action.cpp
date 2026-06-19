@@ -45,9 +45,12 @@
 #include "../twrp-functions.hpp"
 #include "../twrpRepacker.hpp"
 #include "../openrecoveryscript.hpp"
+#include "../fox_cli.hpp"
+#include "../orscmd/orscmd.h"
 
 #include "../data.hpp"
 #include "../gui.hpp"
+#include "gui.h"
 #ifdef OF_ENABLE_WLAN
 #include "../wlan.hpp"
 #endif
@@ -315,6 +318,7 @@ GUIAction::GUIAction(xml_node <> *node):GUIObject(node)
       ADD_ACTION(changefilesystem);
       ADD_ACTION(flashimage);
       ADD_ACTION(twcmd);
+      ADD_ACTION(foxcmd);
       ADD_ACTION(setbootslot);
       ADD_ACTION(repackimage);
       ADD_ACTION(reflashtwrp);
@@ -2477,6 +2481,22 @@ int GUIAction::twcmd(std::string arg)
     simulate_progress_bar();
   else
     OpenRecoveryScript::Run_CLI_Command(arg.c_str());
+  operation_end(0);
+  return 0;
+}
+
+int GUIAction::foxcmd(std::string arg __unused)
+{
+  operation_start("FOX CLI Command");
+  int code = 0;
+  if (simulate)
+    simulate_progress_bar();
+  else
+    code = Fox_CLI::Run_Command();
+  // Emit the exit-code sentinel on the mirrored output (foxout) before the
+  // listener closes it, so the fox client can report the real exit status.
+  gui_print("%s%d\n", FOX_EXIT_SENTINEL, code);
+  fox_command_done();
   operation_end(0);
   return 0;
 }

@@ -33,6 +33,10 @@ func fox_globalFlags(ctx android.BaseContext) []string {
 		foxflags = append(foxflags, "-DOF_ENABLE_LAB=1")
 	}
 
+	if ctx.AConfig().Getenv("OF_ENABLE_WLAN") == "1" {
+		foxflags = append(foxflags, "-DOF_ENABLE_WLAN")
+	}
+
 	if ctx.AConfig().Getenv("OF_SUPPORT_OZIP_DECRYPTION") == "1" {
 		foxflags = append(foxflags, "-DOF_SUPPORT_OZIP_DECRYPTION=1")
 	}

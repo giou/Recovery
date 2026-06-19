@@ -456,6 +456,7 @@ protected:
 	int setlanguage(std::string arg);
 	int togglebacklight(std::string arg);
 	int twcmd(std::string arg);
+	int foxcmd(std::string arg);
 	int setbootslot(std::string arg);
 	int flashlight(std::string arg) { return GUIAction::flashlightImpl(arg); }
 	int fileextension(std::string arg);

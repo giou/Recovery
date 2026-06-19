@@ -52,6 +52,7 @@ extern "C"
 #include "../twrp-functions.hpp"
 #include "../openrecoveryscript.hpp"
 #include "../orscmd/orscmd.h"
+#include "../fox_cli.hpp"
 #include "blanktimer.hpp"
 #include "tw_atomic.hpp"
 
@@ -71,7 +72,8 @@ static int gGuiInitialized = 0;
 static TWAtomicInt gForceRender;
 blanktimer blankTimer;
 int ors_read_fd = -1;
-static FILE* orsout = NULL;
+int fox_read_fd = -1;        // modern "fox" CLI input FIFO
+static FILE* orsout = NULL;  // shared output FILE + single-command guard for both ORS and fox
 static float scale_theme_w = 1;
 static float scale_theme_h = 1;
 
@@ -501,6 +503,8 @@ void InputHandler::handleDrag()
 
 void set_select_fd() {
 	select_fd = ors_read_fd + 1;
+	if (fox_read_fd >= select_fd)
+		select_fd = fox_read_fd + 1;
 	if (g_pty_fd >= select_fd)
 		select_fd = g_pty_fd + 1;
 	if (PartitionManager.uevent_pfd.fd >= select_fd)
@@ -616,6 +620,120 @@ static void ors_command_read()
 	}
 }
 
+// ---- Modern "fox" CLI channel (parallel to the ORS channel above) ----------
+
+static void setup_fox_command()
+{
+	fox_read_fd = -1;
+	set_select_fd();
+
+	unlink(FOX_INPUT_FILE);
+	if (mkfifo(FOX_INPUT_FILE, 06660) != 0) {
+		LOGINFO("Unable to mkfifo %s\n", FOX_INPUT_FILE);
+		return;
+	}
+	unlink(FOX_OUTPUT_FILE);
+	if (mkfifo(FOX_OUTPUT_FILE, 06666) != 0) {
+		LOGINFO("Unable to mkfifo %s\n", FOX_OUTPUT_FILE);
+		unlink(FOX_INPUT_FILE);
+		return;
+	}
+
+	fox_read_fd = open(FOX_INPUT_FILE, O_RDONLY | O_NONBLOCK);
+	if (fox_read_fd < 0) {
+		LOGINFO("Unable to open %s\n", FOX_INPUT_FILE);
+		unlink(FOX_INPUT_FILE);
+		unlink(FOX_OUTPUT_FILE);
+	}
+	set_select_fd();
+}
+
+// Called (from the foxcmd GUI action) after a fox command has finished.
+void fox_command_done()
+{
+	gui_set_FILE(NULL);
+	if (orsout) {
+		fclose(orsout);
+		orsout = NULL;
+	}
+
+	if (DataManager::GetIntValue("tw_page_done") == 0) {
+		// Re-arm the listener (same reasoning as ors_command_done()).
+		if (fox_read_fd >= 0)
+			close(fox_read_fd);
+		setup_fox_command();
+	}
+}
+
+static void fox_command_read()
+{
+	char buffer[4096];
+	int read_ret = read(fox_read_fd, &buffer, sizeof(buffer));
+	if (read_ret < 0)
+		return;
+	if (read_ret == 0) {
+		close(fox_read_fd);
+		setup_fox_command();
+		return;
+	}
+
+	// The request is a NUL-delimited argv vector terminated by an empty field.
+	std::vector<std::string> argv;
+	int start = 0;
+	for (int i = 0; i < read_ret; i++) {
+		if (buffer[i] == '\0') {
+			if (i == start)
+				break;  // empty field => end of argv
+			argv.push_back(std::string(buffer + start, i - start));
+			start = i + 1;
+		}
+	}
+	if (argv.empty()) {
+		close(fox_read_fd);
+		setup_fox_command();
+		return;
+	}
+
+	LOGINFO("fox command '%s' (%zu args) received\n", argv[0].c_str(), argv.size());
+
+	orsout = fopen(FOX_OUTPUT_FILE, "w");
+	if (!orsout) {
+		close(fox_read_fd);
+		fox_read_fd = -1;
+		set_select_fd();
+		LOGINFO("Unable to fopen %s\n", FOX_OUTPUT_FILE);
+		unlink(FOX_INPUT_FILE);
+		unlink(FOX_OUTPUT_FILE);
+		return;
+	}
+	if (DataManager::GetIntValue("tw_busy") != 0) {
+		fputs("Failed, operation in progress\n", orsout);
+		fputs(FOX_EXIT_SENTINEL "1\n", orsout);
+		LOGINFO("fox command cannot be performed, operation in progress.\n");
+		fclose(orsout);
+		orsout = NULL;  // release the guard so the listener keeps running
+		if (fox_read_fd >= 0)
+			close(fox_read_fd);
+		setup_fox_command();
+		return;
+	}
+
+	Fox_CLI::Set_Args(argv);
+
+	// mirror output messages to foxout, then run on the action thread
+	gui_set_FILE(orsout);
+	DataManager::SetValue("tw_action", "foxcmd");
+	DataManager::SetValue("tw_action_param", "");
+	// switch back to the current page when finished
+	std::string currentPage = PageManager::GetCurrentPage();
+	DataManager::SetValue("tw_has_action2", "1");
+	DataManager::SetValue("tw_action2", "page");
+	DataManager::SetValue("tw_action2_param", currentPage);
+	DataManager::SetValue("tw_action_text1", gui_lookup("running_recovery_commands", "Running Recovery Commands"));
+	DataManager::SetValue("tw_action_text2", "");
+	gui_changePage("singleaction_page");
+}
+
 // Get and dispatch input events until it's time to draw the next frame
 // This special function will return immediately the first time, but then
 // always returns 1/30th of a second (or immediately if called later) from
@@ -703,6 +821,9 @@ static int runPages(const char *page_name, const int stop_on_page_done)
 		if (ors_read_fd > 0 && !orsout) { // orsout is non-NULL if a command is still running
 			FD_SET(ors_read_fd, &fdset);
 		}
+		if (fox_read_fd > 0 && !orsout) {
+			FD_SET(fox_read_fd, &fdset);
+		}
 #endif
 		// TODO: combine this select with the poll done by input handling
 		has_data = select(select_fd, &fdset, NULL, NULL, &timeout);
@@ -713,6 +834,8 @@ static int runPages(const char *page_name, const int stop_on_page_done)
 				PartitionManager.read_uevent();
 			if (ors_read_fd > 0 && !orsout && FD_ISSET(ors_read_fd, &fdset))
 				ors_command_read();
+			if (fox_read_fd > 0 && !orsout && FD_ISSET(fox_read_fd, &fdset))
+				fox_command_read();
 		}
 
 		if (!gForceRender.get_value())
@@ -773,6 +896,9 @@ static int runPages(const char *page_name, const int stop_on_page_done)
 	if (ors_read_fd > 0)
 		close(ors_read_fd);
 	ors_read_fd = -1;
+	if (fox_read_fd > 0)
+		close(fox_read_fd);
+	fox_read_fd = -1;
 	set_select_fd();
 	gGuiRunning = 0;
 	return 0;
@@ -1057,10 +1183,16 @@ extern "C" int gui_startPage(const char *page_name, const int allow_commands, in
 	{
 		if (ors_read_fd < 0)
 			setup_ors_command();
+		if (fox_read_fd < 0)
+			setup_fox_command();
 	} else {
 		if (ors_read_fd >= 0) {
 			close(ors_read_fd);
 			ors_read_fd = -1;
+		}
+		if (fox_read_fd >= 0) {
+			close(fox_read_fd);
+			fox_read_fd = -1;
 		}
 	}
 #endif
