@@ -35,7 +35,6 @@
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <sys/mount.h>
-#include <signal.h>
 #include <time.h>
 #include <unistd.h>
 #include <vector>
@@ -55,9 +54,13 @@ extern "C"
 #include "../twrp-functions.hpp"
 #include "../openrecoveryscript.hpp"
 #include "../orscmd/orscmd.h"
-#include "../fox_fifo/fox_fifo.hpp"
-#include "../fox_webserver/fox_jobs.hpp"
-#include "../fox_fifo/fox_screen.hpp"
+#include "../fox_fifo/fox_channel.hpp"
+#include "../fox_fifo/fox_remote_state.hpp"
+#include "../fox_fifo/fox_screen_service.hpp"
+#include "../fox_fifo/fox_screen_stream.hpp"
+#ifdef OF_ENABLE_WLAN
+#include "../fox_webserver/fox_job_dispatcher.hpp"
+#endif
 #include "blanktimer.hpp"
 #include "tw_atomic.hpp"
 
@@ -77,21 +80,9 @@ static int gGuiInitialized = 0;
 static TWAtomicInt gForceRender;
 blanktimer blankTimer;
 int ors_read_fd = -1;
-int fox_read_fd = -1;        // modern "fox" CLI input FIFO
-int fox_cancel_read_fd = -1; // out-of-band cancel FIFO, watched even while a command runs
-static FILE* orsout = NULL;  // shared output FILE + single-command guard for both ORS and fox
+static FILE* orsout = NULL;  // legacy ORS output FILE + command guard
 static float scale_theme_w = 1;
 static float scale_theme_h = 1;
-
-static pthread_mutex_t fox_stream_lock = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t fox_stream_cond = PTHREAD_COND_INITIALIZER;
-static pthread_t fox_stream_thread;
-static bool fox_stream_thread_running = false;
-static bool fox_stream_active = false;
-static bool fox_stream_have_frame = false;
-static std::string fox_stream_frame;
-static int fox_stream_fps = 10;
-static long long fox_stream_last_capture_ms = 0;
 
 // Needed by pages.cpp too
 int gGuiRunning = 0;
@@ -519,10 +510,10 @@ void InputHandler::handleDrag()
 
 void set_select_fd() {
 	select_fd = ors_read_fd + 1;
-	if (fox_read_fd >= select_fd)
-		select_fd = fox_read_fd + 1;
-	if (fox_cancel_read_fd >= select_fd)
-		select_fd = fox_cancel_read_fd + 1;
+	if (Fox_Channel::InputFd() >= select_fd)
+		select_fd = Fox_Channel::InputFd() + 1;
+	if (Fox_Channel::CancelFd() >= select_fd)
+		select_fd = Fox_Channel::CancelFd() + 1;
 	if (g_pty_fd >= select_fd)
 		select_fd = g_pty_fd + 1;
 	if (PartitionManager.uevent_pfd.fd >= select_fd)
@@ -638,502 +629,6 @@ static void ors_command_read()
 	}
 }
 
-// ---- Modern "fox" CLI channel (parallel to the ORS channel above) ----------
-
-static void setup_fox_command()
-{
-	fox_read_fd = -1;
-	set_select_fd();
-
-	unlink(FOX_INPUT_FILE);
-	if (mkfifo(FOX_INPUT_FILE, 06660) != 0) {
-		LOGINFO("Unable to mkfifo %s\n", FOX_INPUT_FILE);
-		return;
-	}
-	unlink(FOX_OUTPUT_FILE);
-	if (mkfifo(FOX_OUTPUT_FILE, 06666) != 0) {
-		LOGINFO("Unable to mkfifo %s\n", FOX_OUTPUT_FILE);
-		unlink(FOX_INPUT_FILE);
-		return;
-	}
-
-	fox_read_fd = open(FOX_INPUT_FILE, O_RDONLY | O_NONBLOCK);
-	if (fox_read_fd < 0) {
-		LOGINFO("Unable to open %s\n", FOX_INPUT_FILE);
-		unlink(FOX_INPUT_FILE);
-		unlink(FOX_OUTPUT_FILE);
-	}
-	set_select_fd();
-}
-
-// Called (from the foxcmd GUI action) after a fox command has finished.
-void fox_command_done()
-{
-	gui_fox_progress_end();
-	gui_set_FILE(NULL);
-	if (orsout) {
-		fclose(orsout);
-		orsout = NULL;
-	}
-
-	// If this was a queued remote job (rather than a FIFO command), mark it
-	// DONE now that its output FILE has been flushed and closed. This is a
-	// no-op for the FIFO path (no active job).
-	Fox_Jobs::FinishActive();
-
-	if (DataManager::GetIntValue("tw_page_done") == 0) {
-		// Re-arm the listener (same reasoning as ors_command_done()).
-		if (fox_read_fd >= 0)
-			close(fox_read_fd);
-		setup_fox_command();
-	}
-}
-
-static std::string fox_base64_encode(const std::string& in)
-{
-	static const char table[] =
-		"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-	std::string out;
-	out.reserve(((in.size() + 2) / 3) * 4 + in.size() / 57 + 1);
-
-	for (size_t i = 0; i < in.size(); i += 3) {
-		unsigned int b0 = (unsigned char)in[i];
-		unsigned int b1 = i + 1 < in.size() ? (unsigned char)in[i + 1] : 0;
-		unsigned int b2 = i + 2 < in.size() ? (unsigned char)in[i + 2] : 0;
-		out += table[b0 >> 2];
-		out += table[((b0 & 0x03) << 4) | (b1 >> 4)];
-		out += i + 1 < in.size() ? table[((b1 & 0x0f) << 2) | (b2 >> 6)] : '=';
-		out += i + 2 < in.size() ? table[b2 & 0x3f] : '=';
-	}
-	out += '\n';
-	return out;
-}
-
-static bool fox_stream_is_active()
-{
-	pthread_mutex_lock(&fox_stream_lock);
-	bool active = fox_stream_active;
-	pthread_mutex_unlock(&fox_stream_lock);
-	return active;
-}
-
-static bool fox_stream_capture_due()
-{
-	pthread_mutex_lock(&fox_stream_lock);
-	bool active = fox_stream_active;
-	int fps = fox_stream_fps;
-	pthread_mutex_unlock(&fox_stream_lock);
-	if (!active)
-		return false;
-	if (fps < 1)
-		fps = 1;
-	long long now = nowMs();
-	return now - fox_stream_last_capture_ms >= 1000 / fps;
-}
-
-static void fox_stream_submit_frame(const std::string& png)
-{
-	pthread_mutex_lock(&fox_stream_lock);
-	if (fox_stream_active) {
-		fox_stream_frame = png;
-		fox_stream_have_frame = true;
-		fox_stream_last_capture_ms = nowMs();
-		pthread_cond_signal(&fox_stream_cond);
-	}
-	pthread_mutex_unlock(&fox_stream_lock);
-}
-
-static bool fox_stream_write_all(int fd, const std::string& data)
-{
-	size_t off = 0;
-	while (off < data.size()) {
-		pthread_mutex_lock(&fox_stream_lock);
-		bool active = fox_stream_active;
-		pthread_mutex_unlock(&fox_stream_lock);
-		if (!active)
-			return false;
-		ssize_t n = write(fd, data.data() + off, data.size() - off);
-		if (n > 0) {
-			off += (size_t)n;
-			continue;
-		}
-		if (n < 0 && errno == EINTR)
-			continue;
-		if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-			usleep(10 * 1000);
-			continue;
-		}
-		return false;
-	}
-	return true;
-}
-
-static void* fox_stream_writer_thread(void*)
-{
-	signal(SIGPIPE, SIG_IGN);
-	int fd = -1;
-	for (;;) {
-		pthread_mutex_lock(&fox_stream_lock);
-		while (fox_stream_active && !fox_stream_have_frame)
-			pthread_cond_wait(&fox_stream_cond, &fox_stream_lock);
-		if (!fox_stream_active) {
-			fox_stream_thread_running = false;
-			pthread_mutex_unlock(&fox_stream_lock);
-			if (fd >= 0) {
-				close(fd);
-				fd = -1;
-			}
-			return nullptr;
-		}
-		std::string png = fox_stream_frame;
-		fox_stream_have_frame = false;
-		pthread_mutex_unlock(&fox_stream_lock);
-
-		if (fd < 0) {
-			fd = open(FOX_SCREEN_STREAM_FILE, O_WRONLY | O_NONBLOCK);
-			if (fd < 0) {
-				usleep(100 * 1000);
-				continue;
-			}
-#ifdef F_SETPIPE_SZ
-			fcntl(fd, F_SETPIPE_SZ, 1024 * 1024);
-#endif
-		}
-
-		std::string b64 = fox_base64_encode(png);
-		if (!fox_stream_write_all(fd, b64)) {
-			close(fd);
-			fd = -1;
-		}
-	}
-}
-
-static void fox_stream_stop()
-{
-	pthread_mutex_lock(&fox_stream_lock);
-	fox_stream_active = false;
-	fox_stream_have_frame = false;
-	fox_stream_frame.clear();
-	pthread_cond_signal(&fox_stream_cond);
-	pthread_mutex_unlock(&fox_stream_lock);
-
-	// If a client is blocked opening/reading the stream FIFO, briefly pair it
-	// with a writer so it sees EOF and the dashboard's cat process can exit.
-	int fd = open(FOX_SCREEN_STREAM_FILE, O_WRONLY | O_NONBLOCK);
-	if (fd >= 0)
-		close(fd);
-}
-
-static int fox_stream_start(int fps)
-{
-	if (fps < 1)
-		fps = 1;
-	if (fps > 30)
-		fps = 30;
-
-	pthread_mutex_lock(&fox_stream_lock);
-	if (fox_stream_active) {
-		fox_stream_fps = fps;
-		pthread_mutex_unlock(&fox_stream_lock);
-		return 0;
-	}
-	pthread_mutex_unlock(&fox_stream_lock);
-
-	unlink(FOX_SCREEN_STREAM_FILE);
-	if (mkfifo(FOX_SCREEN_STREAM_FILE, 06666) != 0) {
-		LOGINFO("Unable to mkfifo %s\n", FOX_SCREEN_STREAM_FILE);
-		return 1;
-	}
-
-	pthread_mutex_lock(&fox_stream_lock);
-	fox_stream_fps = fps;
-	fox_stream_active = true;
-	fox_stream_have_frame = false;
-	fox_stream_frame.clear();
-	fox_stream_last_capture_ms = 0;
-	bool need_thread = !fox_stream_thread_running;
-	if (need_thread)
-		fox_stream_thread_running = true;
-	pthread_cond_signal(&fox_stream_cond);
-	pthread_mutex_unlock(&fox_stream_lock);
-
-	if (need_thread && pthread_create(&fox_stream_thread, nullptr, fox_stream_writer_thread, nullptr) != 0) {
-		pthread_mutex_lock(&fox_stream_lock);
-		fox_stream_active = false;
-		fox_stream_thread_running = false;
-		pthread_mutex_unlock(&fox_stream_lock);
-		unlink(FOX_SCREEN_STREAM_FILE);
-		return 1;
-	}
-	if (need_thread)
-		pthread_detach(fox_stream_thread);
-	return 0;
-}
-
-static bool fox_is_screenstream(const std::vector<std::string>& argv)
-{
-	return !argv.empty() && argv[0] == "screenstream";
-}
-
-static bool fox_is_silent_screencap(const std::vector<std::string>& argv)
-{
-	if (argv.empty() || argv[0] != "screencap")
-		return false;
-	for (size_t i = 1; i < argv.size(); i++)
-		if (argv[i] == "--base64")
-			return true;
-	return false;
-}
-
-static bool fox_is_silent_input(const std::vector<std::string>& argv)
-{
-	return !argv.empty() && argv[0] == "input";
-}
-
-static void fox_finish_fifo_response(int code)
-{
-	fprintf(orsout, "%s%d\n", FOX_EXIT_SENTINEL, code);
-	gui_set_FILE(NULL);
-	fclose(orsout);
-	orsout = NULL;
-	if (fox_read_fd >= 0)
-		close(fox_read_fd);
-	setup_fox_command();
-}
-
-static bool fox_try_silent_command(const std::vector<std::string>& argv)
-{
-	if (fox_is_screenstream(argv)) {
-		std::string sub = argv.size() > 1 ? argv[1] : "status";
-		if (sub == "start") {
-			int fps = 10;
-			for (size_t i = 2; i + 1 < argv.size(); i++) {
-				if (argv[i] == "--fps")
-					fps = atoi(argv[i + 1].c_str());
-			}
-			int code = fox_stream_start(fps);
-			if (code == 0) {
-				fprintf(orsout, "FOX_SCREENSTREAM_BEGIN\n");
-				fprintf(orsout, "path=%s\n", FOX_SCREEN_STREAM_FILE);
-				fprintf(orsout, "fps=%d\n", fps < 1 ? 1 : (fps > 30 ? 30 : fps));
-				fprintf(orsout, "format=base64-png-lines\n");
-				fprintf(orsout, "FOX_SCREENSTREAM_END\n");
-			} else {
-				fprintf(orsout, "fox: unable to start screen stream\n");
-			}
-			fox_finish_fifo_response(code);
-			return true;
-		}
-		if (sub == "stop") {
-			fox_stream_stop();
-			fprintf(orsout, "Screen stream stopped\n");
-			fox_finish_fifo_response(0);
-			return true;
-		}
-		if (sub == "status") {
-			pthread_mutex_lock(&fox_stream_lock);
-			int fps = fox_stream_fps;
-			pthread_mutex_unlock(&fox_stream_lock);
-			fprintf(orsout, "FOX_SCREENSTREAM_BEGIN\n");
-			fprintf(orsout, "running=%d\n", fox_stream_is_active() ? 1 : 0);
-			fprintf(orsout, "path=%s\n", FOX_SCREEN_STREAM_FILE);
-			fprintf(orsout, "fps=%d\n", fps);
-			fprintf(orsout, "FOX_SCREENSTREAM_END\n");
-			fox_finish_fifo_response(0);
-			return true;
-		}
-		fprintf(orsout, "fox: unknown screenstream subcommand '%s' (start|stop|status)\n", sub.c_str());
-		fox_finish_fifo_response(2);
-		return true;
-	}
-
-	if (fox_is_silent_screencap(argv)) {
-		std::string png;
-		PageManager::Render();
-		bool ok = Fox_Screen::CaptureFrameNow(png);
-		flip();
-		if (ok) {
-			std::string b64 = fox_base64_encode(png);
-			fwrite(b64.data(), 1, b64.size(), orsout);
-			fox_finish_fifo_response(0);
-		} else {
-			fputs("fox: screencap failed\n", orsout);
-			fox_finish_fifo_response(1);
-		}
-		return true;
-	}
-
-	if (fox_is_silent_input(argv)) {
-		Fox_Fifo::Set_Args(argv);
-		gui_set_FILE(orsout);
-		int code = Fox_Fifo::Run_Command();
-		gui_set_FILE(NULL);
-		fox_finish_fifo_response(code);
-		return true;
-	}
-
-	return false;
-}
-
-static void fox_command_read()
-{
-	char buffer[4096];
-	int read_ret = read(fox_read_fd, &buffer, sizeof(buffer));
-	if (read_ret < 0)
-		return;
-	if (read_ret == 0) {
-		close(fox_read_fd);
-		setup_fox_command();
-		return;
-	}
-
-	// The request is a NUL-delimited argv vector terminated by an empty field.
-	std::vector<std::string> argv;
-	int start = 0;
-	for (int i = 0; i < read_ret; i++) {
-		if (buffer[i] == '\0') {
-			if (i == start)
-				break;  // empty field => end of argv
-			argv.push_back(std::string(buffer + start, i - start));
-			start = i + 1;
-		}
-	}
-	if (argv.empty()) {
-		close(fox_read_fd);
-		setup_fox_command();
-		return;
-	}
-
-	LOGINFO("fox command '%s' (%zu args) received\n", argv[0].c_str(), argv.size());
-
-	orsout = fopen(FOX_OUTPUT_FILE, "w");
-	if (!orsout) {
-		close(fox_read_fd);
-		fox_read_fd = -1;
-		set_select_fd();
-		LOGINFO("Unable to fopen %s\n", FOX_OUTPUT_FILE);
-		unlink(FOX_INPUT_FILE);
-		unlink(FOX_OUTPUT_FILE);
-		return;
-	}
-	if (DataManager::GetIntValue("tw_busy") != 0) {
-		fputs("Failed, operation in progress\n", orsout);
-		fputs(FOX_EXIT_SENTINEL "1\n", orsout);
-		LOGINFO("fox command cannot be performed, operation in progress.\n");
-		fclose(orsout);
-		orsout = NULL;  // release the guard so the listener keeps running
-		if (fox_read_fd >= 0)
-			close(fox_read_fd);
-		setup_fox_command();
-		return;
-	}
-
-	if (fox_try_silent_command(argv))
-		return;
-
-	Fox_Fifo::Set_Args(argv);
-
-	// mirror output messages to foxout, then run on the action thread
-	gui_set_FILE(orsout);
-	gui_fox_progress_begin();  // start mirroring ui_progress to the fox client
-	DataManager::SetValue("tw_action", "foxcmd");
-	DataManager::SetValue("tw_action_param", "");
-	// switch back to the current page when finished
-	std::string currentPage = PageManager::GetCurrentPage();
-	DataManager::SetValue("tw_has_action2", "1");
-	DataManager::SetValue("tw_action2", "page");
-	DataManager::SetValue("tw_action2_param", currentPage);
-	DataManager::SetValue("tw_action_text1", gui_lookup("running_recovery_commands", "Running Recovery Commands"));
-	DataManager::SetValue("tw_action_text2", "");
-	gui_changePage("singleaction_page");
-}
-
-// Drain one queued remote job, if the engine is idle. Called from the GUI main
-// loop. This mirrors fox_command_read()'s dispatch, but the command's output is
-// mirrored into the job's buffer (via a fopencookie FILE stored in orsout)
-// instead of the foxout FIFO, and there is no client holding a pipe open.
-static void fox_job_poll()
-{
-	if (orsout)  // a command (FIFO or job) is already running
-		return;
-	if (DataManager::GetIntValue("tw_busy") != 0)
-		return;
-	if (!Fox_Jobs::HasPending())
-		return;
-
-	FILE* jobout = NULL;
-	std::vector<std::string> argv;
-	if (!Fox_Jobs::BeginNext(&jobout, argv) || !jobout)
-		return;
-
-	LOGINFO("fox job '%s' (%zu args) dispatched\n", argv[0].c_str(), argv.size());
-
-	// Reuse the same single-command guard + foxcmd action path as the FIFO
-	// channel. orsout doubles as the "busy" guard and as the FILE that
-	// fox_command_done() closes when the command finishes.
-	orsout = jobout;
-	Fox_Fifo::Set_Args(argv);
-	gui_set_FILE(orsout);
-	DataManager::SetValue("tw_action", "foxcmd");
-	DataManager::SetValue("tw_action_param", "");
-	std::string currentPage = PageManager::GetCurrentPage();
-	DataManager::SetValue("tw_has_action2", "1");
-	DataManager::SetValue("tw_action2", "page");
-	DataManager::SetValue("tw_action2_param", currentPage);
-	DataManager::SetValue("tw_action_text1", gui_lookup("running_recovery_commands", "Running Recovery Commands"));
-	DataManager::SetValue("tw_action_text2", "");
-	gui_changePage("singleaction_page");
-}
-
-// ---- Out-of-band cancel channel --------------------------------------------
-// Unlike foxin, this FIFO is watched even while a fox command is running, so a
-// client can request cancellation of a cancellable operation (e.g. backup)
-// mid-flight. The read end is recreated after each EOF (same readiness reset
-// the command FIFOs use) so select() stays quiet until a client connects.
-
-static void setup_fox_cancel()
-{
-	if (fox_cancel_read_fd >= 0) {
-		close(fox_cancel_read_fd);
-		fox_cancel_read_fd = -1;
-	}
-	unlink(FOX_CANCEL_FILE);
-	if (mkfifo(FOX_CANCEL_FILE, 06660) != 0) {
-		LOGINFO("Unable to mkfifo %s\n", FOX_CANCEL_FILE);
-		set_select_fd();
-		return;
-	}
-	fox_cancel_read_fd = open(FOX_CANCEL_FILE, O_RDONLY | O_NONBLOCK);
-	if (fox_cancel_read_fd < 0) {
-		LOGINFO("Unable to open %s\n", FOX_CANCEL_FILE);
-		unlink(FOX_CANCEL_FILE);
-	}
-	set_select_fd();
-}
-
-static void fox_cancel_read()
-{
-	char buffer[64];
-	int read_ret = read(fox_cancel_read_fd, &buffer, sizeof(buffer));
-	if (read_ret <= 0) {
-		// Writer closed (EOF) or error: recreate the FIFO to reset readiness.
-		setup_fox_cancel();
-		return;
-	}
-	// Only meaningful while a fox command is actually running (orsout is the
-	// in-progress guard). Cancelling a backup is safe to invoke from this (GUI)
-	// thread while the backup runs on the action thread -- it mirrors the GUI's
-	// cancel button, which runs Cancel_Backup() off the main backup thread.
-	if (fox_stream_is_active()) {
-		LOGINFO("fox: screen stream cancel request received\n");
-		fox_stream_stop();
-	}
-	if (orsout) {
-		LOGINFO("fox: cancel request received\n");
-		PartitionManager.Cancel_Backup();
-	}
-}
-
 // Get and dispatch input events until it's time to draw the next frame
 // This special function will return immediately the first time, but then
 // always returns 1/30th of a second (or immediately if called later) from
@@ -1218,15 +713,16 @@ static int runPages(const char *page_name, const int stop_on_page_done)
 			FD_SET(PartitionManager.uevent_pfd.fd, &fdset);
 		}
 #ifndef TW_OEM_BUILD
-		if (ors_read_fd > 0 && !orsout) { // orsout is non-NULL if a command is still running
+		bool command_active = Fox_Remote_State::CommandActive(orsout != NULL);
+		if (ors_read_fd > 0 && !command_active) {
 			FD_SET(ors_read_fd, &fdset);
 		}
-		if (fox_read_fd > 0 && !orsout) {
-			FD_SET(fox_read_fd, &fdset);
+		if (Fox_Channel::InputFd() > 0 && !command_active) {
+			FD_SET(Fox_Channel::InputFd(), &fdset);
 		}
 		// Watched unconditionally -- cancellation must work while a command runs.
-		if (fox_cancel_read_fd > 0) {
-			FD_SET(fox_cancel_read_fd, &fdset);
+		if (Fox_Channel::CancelFd() > 0) {
+			FD_SET(Fox_Channel::CancelFd(), &fdset);
 		}
 #endif
 		// TODO: combine this select with the poll done by input handling
@@ -1236,21 +732,23 @@ static int runPages(const char *page_name, const int stop_on_page_done)
 				terminal_pty_read();
 			if (PartitionManager.uevent_pfd.fd > 0 && FD_ISSET(PartitionManager.uevent_pfd.fd, &fdset))
 				PartitionManager.read_uevent();
-			if (ors_read_fd > 0 && !orsout && FD_ISSET(ors_read_fd, &fdset))
+#ifndef TW_OEM_BUILD
+			if (ors_read_fd > 0 && !command_active && FD_ISSET(ors_read_fd, &fdset))
 				ors_command_read();
-			if (fox_read_fd > 0 && !orsout && FD_ISSET(fox_read_fd, &fdset))
-				fox_command_read();
-			if (fox_cancel_read_fd > 0 && FD_ISSET(fox_cancel_read_fd, &fdset))
-				fox_cancel_read();
+			if (Fox_Channel::InputFd() > 0 && !command_active && FD_ISSET(Fox_Channel::InputFd(), &fdset))
+				Fox_Channel::HandleInput();
+			if (Fox_Channel::CancelFd() > 0 && FD_ISSET(Fox_Channel::CancelFd(), &fdset)) {
+				if (Fox_Channel::HandleCancel(orsout != NULL))
+					PartitionManager.Cancel_Backup();
+			}
+#endif
 		}
 		// Drain a queued remote job when the engine is idle.
-		fox_job_poll();
-		bool stream_capture = fox_stream_capture_due();
-		if (stream_capture)
-			gForceRender.set_value(1);
-		// When a remote viewer is watching but the UI is idle, force a full
-		// render so a fresh frame is produced (and captured below).
-		if (Fox_Screen::ShouldForceRender())
+#if !defined(TW_OEM_BUILD) && defined(OF_ENABLE_WLAN)
+		if (!orsout)
+			Fox_Job_Dispatcher::Poll();
+#endif
+		if (Fox_Remote_State::ShouldForceRender())
 			gForceRender.set_value(1);
 
 		if (!gForceRender.get_value())
@@ -1272,13 +770,9 @@ static int runPages(const char *page_name, const int stop_on_page_done)
 			// Capture the just-rendered complete frame before flip() repoints
 			// gr_mem_surface to the back buffer (GUI thread, no race).
 			if (ret > 1) {
-				if (stream_capture) {
-					std::string png;
-					if (Fox_Screen::CaptureFrameNow(png))
-						fox_stream_submit_frame(png);
-				} else {
-					Fox_Screen::CaptureFrameIfWanted();
-				}
+				if (!Fox_Channel::CapturePendingFrameIfNeeded() &&
+				    !Fox_Screen_Stream::CaptureRenderedFrameIfDue())
+					Fox_Screen_Service::CaptureRenderedFrameIfWanted();
 			}
 
 			if (ret > 0)
@@ -1307,13 +801,9 @@ static int runPages(const char *page_name, const int stop_on_page_done)
 		{
 			gForceRender.set_value(0);
 			PageManager::Render();
-			if (stream_capture) {
-				std::string png;
-				if (Fox_Screen::CaptureFrameNow(png))
-					fox_stream_submit_frame(png);
-			} else {
-				Fox_Screen::CaptureFrameIfWanted();
-			}
+			if (!Fox_Channel::CapturePendingFrameIfNeeded() &&
+			    !Fox_Screen_Stream::CaptureRenderedFrameIfDue())
+				Fox_Screen_Service::CaptureRenderedFrameIfWanted();
 			flip();
 			input_timeout_ms = 0;
 		}
@@ -1330,12 +820,7 @@ static int runPages(const char *page_name, const int stop_on_page_done)
 	if (ors_read_fd > 0)
 		close(ors_read_fd);
 	ors_read_fd = -1;
-	if (fox_read_fd > 0)
-		close(fox_read_fd);
-	fox_read_fd = -1;
-	if (fox_cancel_read_fd > 0)
-		close(fox_cancel_read_fd);
-	fox_cancel_read_fd = -1;
+	Fox_Channel::Shutdown();
 	set_select_fd();
 	gGuiRunning = 0;
 	return 0;
@@ -1620,23 +1105,13 @@ extern "C" int gui_startPage(const char *page_name, const int allow_commands, in
 	{
 		if (ors_read_fd < 0)
 			setup_ors_command();
-		if (fox_read_fd < 0)
-			setup_fox_command();
-		if (fox_cancel_read_fd < 0)
-			setup_fox_cancel();
+		Fox_Channel::Setup();
 	} else {
 		if (ors_read_fd >= 0) {
 			close(ors_read_fd);
 			ors_read_fd = -1;
 		}
-		if (fox_read_fd >= 0) {
-			close(fox_read_fd);
-			fox_read_fd = -1;
-		}
-		if (fox_cancel_read_fd >= 0) {
-			close(fox_cancel_read_fd);
-			fox_cancel_read_fd = -1;
-		}
+		Fox_Channel::Shutdown();
 	}
 #endif
 	return runPages(page_name, stop_on_page_done);

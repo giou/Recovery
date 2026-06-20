@@ -8,7 +8,7 @@
 #include <cstring>
 #include <fstream>
 #include <functional>
-#include <map>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <sys/stat.h>
@@ -17,6 +17,7 @@
 #include <vector>
 
 #include <cutils/properties.h>
+#include <json/json.h>
 
 #include "data.hpp"
 #include "partitions.hpp"
@@ -24,7 +25,6 @@
 #include "twrp-functions.hpp"
 #include "twinstall.h"
 
-using std::map;
 using std::string;
 using std::vector;
 
@@ -35,259 +35,6 @@ static const string STATE_DIR = "/tmp/fox_update";
 static const string DOWNLOAD_DIR = "/sdcard/OrangeFoxUpdates";
 static const string TMP_DOWNLOAD_DIR = "/tmp/OrangeFoxUpdates";
 static const string USER_AGENT = "OrangeFoxRecovery-FoxUpdater/1.0";
-
-struct JsonValue {
-	enum Type {
-		NIL,
-		BOOL,
-		NUMBER,
-		STRING,
-		ARRAY,
-		OBJECT
-	};
-
-	Type type = NIL;
-	bool bool_value = false;
-	string string_value;
-	vector<JsonValue> array_value;
-	map<string, JsonValue> object_value;
-};
-
-class JsonParser {
-public:
-	explicit JsonParser(const string& input) : data(input), pos(0) {}
-
-	bool Parse(JsonValue& out) {
-		SkipWs();
-		if (!ParseValue(out))
-			return false;
-		SkipWs();
-		return true;
-	}
-
-private:
-	const string& data;
-	size_t pos;
-
-	void SkipWs() {
-		while (pos < data.size() && std::isspace(static_cast<unsigned char>(data[pos])))
-			pos++;
-	}
-
-	bool Consume(char c) {
-		SkipWs();
-		if (pos < data.size() && data[pos] == c) {
-			pos++;
-			return true;
-		}
-		return false;
-	}
-
-	bool ParseValue(JsonValue& out) {
-		SkipWs();
-
-		if (pos >= data.size())
-			return false;
-
-		char c = data[pos];
-
-		if (c == '"') {
-			out.type = JsonValue::STRING;
-			return ParseString(out.string_value);
-		}
-
-		if (c == '{') {
-			out.type = JsonValue::OBJECT;
-			return ParseObject(out.object_value);
-		}
-
-		if (c == '[') {
-			out.type = JsonValue::ARRAY;
-			return ParseArray(out.array_value);
-		}
-
-		if (c == 't') {
-			if (data.compare(pos, 4, "true") == 0) {
-				pos += 4;
-				out.type = JsonValue::BOOL;
-				out.bool_value = true;
-				return true;
-			}
-			return false;
-		}
-
-		if (c == 'f') {
-			if (data.compare(pos, 5, "false") == 0) {
-				pos += 5;
-				out.type = JsonValue::BOOL;
-				out.bool_value = false;
-				return true;
-			}
-			return false;
-		}
-
-		if (c == 'n') {
-			if (data.compare(pos, 4, "null") == 0) {
-				pos += 4;
-				out.type = JsonValue::NIL;
-				return true;
-			}
-			return false;
-		}
-
-		if (c == '-' || std::isdigit(static_cast<unsigned char>(c))) {
-			out.type = JsonValue::NUMBER;
-			return ParseNumber(out.string_value);
-		}
-
-		return false;
-	}
-
-	bool ParseString(string& out) {
-		if (pos >= data.size() || data[pos] != '"')
-			return false;
-
-		pos++;
-		out.clear();
-
-		while (pos < data.size()) {
-			char c = data[pos++];
-
-			if (c == '"')
-				return true;
-
-			if (c != '\\') {
-				out.push_back(c);
-				continue;
-			}
-
-			if (pos >= data.size())
-				return false;
-
-			char e = data[pos++];
-
-			switch (e) {
-				case '"': out.push_back('"'); break;
-				case '\\': out.push_back('\\'); break;
-				case '/': out.push_back('/'); break;
-				case 'b': out.push_back('\b'); break;
-				case 'f': out.push_back('\f'); break;
-				case 'n': out.push_back('\n'); break;
-				case 'r': out.push_back('\r'); break;
-				case 't': out.push_back('\t'); break;
-				case 'u':
-					/*
-					 * Recovery UI strings are normally already ASCII/UTF-8.
-					 * Keep this small and skip \uXXXX escapes.
-					 */
-					if (pos + 4 <= data.size())
-						pos += 4;
-					break;
-				default:
-					out.push_back(e);
-					break;
-			}
-		}
-
-		return false;
-	}
-
-	bool ParseNumber(string& out) {
-		size_t start = pos;
-
-		if (pos < data.size() && data[pos] == '-')
-			pos++;
-
-		while (pos < data.size() && std::isdigit(static_cast<unsigned char>(data[pos])))
-			pos++;
-
-		if (pos < data.size() && data[pos] == '.') {
-			pos++;
-			while (pos < data.size() && std::isdigit(static_cast<unsigned char>(data[pos])))
-				pos++;
-		}
-
-		if (pos < data.size() && (data[pos] == 'e' || data[pos] == 'E')) {
-			pos++;
-			if (pos < data.size() && (data[pos] == '+' || data[pos] == '-'))
-				pos++;
-			while (pos < data.size() && std::isdigit(static_cast<unsigned char>(data[pos])))
-				pos++;
-		}
-
-		if (pos <= start)
-			return false;
-
-		out = data.substr(start, pos - start);
-		return true;
-	}
-
-	bool ParseArray(vector<JsonValue>& out) {
-		if (!Consume('['))
-			return false;
-
-		out.clear();
-		SkipWs();
-
-		if (Consume(']'))
-			return true;
-
-		while (pos < data.size()) {
-			JsonValue item;
-			if (!ParseValue(item))
-				return false;
-
-			out.push_back(item);
-			SkipWs();
-
-			if (Consume(']'))
-				return true;
-
-			if (!Consume(','))
-				return false;
-		}
-
-		return false;
-	}
-
-	bool ParseObject(map<string, JsonValue>& out) {
-		if (!Consume('{'))
-			return false;
-
-		out.clear();
-		SkipWs();
-
-		if (Consume('}'))
-			return true;
-
-		while (pos < data.size()) {
-			string key;
-
-			SkipWs();
-			if (!ParseString(key))
-				return false;
-
-			if (!Consume(':'))
-				return false;
-
-			JsonValue value;
-			if (!ParseValue(value))
-				return false;
-
-			out[key] = value;
-
-			SkipWs();
-
-			if (Consume('}'))
-				return true;
-
-			if (!Consume(','))
-				return false;
-		}
-
-		return false;
-	}
-};
 
 struct FoxRelease {
 	string id;          // Internal API release ID
@@ -557,42 +304,32 @@ static bool ApiGet(const string& path, const string& out_path) {
 	return HttpGetToFile(url, out_path);
 }
 
-static const JsonValue* ObjGet(const JsonValue& v, const string& key) {
-	if (v.type != JsonValue::OBJECT)
+static const Json::Value* ObjGet(const Json::Value& v, const string& key) {
+	if (!v.isObject() || !v.isMember(key))
 		return nullptr;
 
-	auto it = v.object_value.find(key);
-	if (it == v.object_value.end())
-		return nullptr;
-
-	return &it->second;
+	return &v[key];
 }
 
-static bool ObjHas(const JsonValue& v, const string& key) {
+static bool ObjHas(const Json::Value& v, const string& key) {
 	return ObjGet(v, key) != nullptr;
 }
 
-static string JsonAsString(const JsonValue* v, const string& fallback = "") {
+static string JsonAsString(const Json::Value* v, const string& fallback = "") {
 	if (!v)
 		return fallback;
 
-	if (v->type == JsonValue::STRING)
-		return v->string_value;
-
-	if (v->type == JsonValue::NUMBER)
-		return v->string_value;
-
-	if (v->type == JsonValue::BOOL)
-		return v->bool_value ? "true" : "false";
+	if (v->isString() || v->isNumeric() || v->isBool() || v->isNull())
+		return v->asString();
 
 	return fallback;
 }
 
-static string ObjString(const JsonValue& v, const string& key, const string& fallback = "") {
+static string ObjString(const Json::Value& v, const string& key, const string& fallback = "") {
 	return JsonAsString(ObjGet(v, key), fallback);
 }
 
-static string ObjStringAny(const JsonValue& v, const vector<string>& keys, const string& fallback = "") {
+static string ObjStringAny(const Json::Value& v, const vector<string>& keys, const string& fallback = "") {
 	for (const string& key : keys) {
 		string s = ObjString(v, key, "");
 		if (!s.empty())
@@ -601,22 +338,23 @@ static string ObjStringAny(const JsonValue& v, const vector<string>& keys, const
 	return fallback;
 }
 
-static vector<string> ObjStringArray(const JsonValue& v, const string& key) {
+static vector<string> ObjStringArray(const Json::Value& v, const string& key) {
 	vector<string> out;
 
-	const JsonValue* item = ObjGet(v, key);
+	const Json::Value* item = ObjGet(v, key);
 	if (!item)
 		return out;
 
-	if (item->type == JsonValue::STRING) {
-		out.push_back(item->string_value);
+	if (item->isString()) {
+		out.push_back(item->asString());
 		return out;
 	}
 
-	if (item->type != JsonValue::ARRAY)
+	if (!item->isArray())
 		return out;
 
-	for (const JsonValue& entry : item->array_value) {
+	for (Json::ArrayIndex i = 0; i < item->size(); i++) {
+		const Json::Value& entry = (*item)[i];
 		string s = JsonAsString(&entry, "");
 		if (!Trim(s).empty())
 			out.push_back(s);
@@ -625,18 +363,22 @@ static vector<string> ObjStringArray(const JsonValue& v, const string& key) {
 	return out;
 }
 
-static bool ParseJsonFile(const string& path, JsonValue& root) {
+static bool ParseJsonFile(const string& path, Json::Value& root) {
 	string data;
 
 	if (!ReadFile(path, data))
 		return false;
 
-	JsonParser parser(data);
-	return parser.Parse(root);
+	Json::CharReaderBuilder builder;
+	builder["collectComments"] = false;
+
+	std::string errors;
+	std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
+	return reader->parse(data.data(), data.data() + data.size(), &root, &errors);
 }
 
-static bool LooksLikeReleaseObject(const JsonValue& v) {
-	if (v.type != JsonValue::OBJECT)
+static bool LooksLikeReleaseObject(const Json::Value& v) {
+	if (!v.isObject())
 		return false;
 
 	bool has_id = ObjHas(v, "id") || ObjHas(v, "_id") || ObjHas(v, "build_id");
@@ -699,37 +441,39 @@ static string InferVariantFromFilename(const string& filename) {
 	return out;
 }
 
-static string PickMirrorUrl(const JsonValue& v) {
-	const JsonValue* mirrors = ObjGet(v, "mirrors");
+static string PickMirrorUrl(const Json::Value& v) {
+	const Json::Value* mirrors = ObjGet(v, "mirrors");
 
 	if (!mirrors)
 		return "";
 
-	if (mirrors->type == JsonValue::OBJECT) {
+	if (mirrors->isObject()) {
 		string dl = ObjString(*mirrors, "DL", "");
 		if (!dl.empty())
 			return dl;
 
-		for (const auto& kv : mirrors->object_value) {
-			string value = JsonAsString(&kv.second, "");
+		for (const string& key : mirrors->getMemberNames()) {
+			const Json::Value& mirror = (*mirrors)[key];
+			string value = JsonAsString(&mirror, "");
 			if (!value.empty())
 				return value;
 
-			if (kv.second.type == JsonValue::OBJECT) {
-				string url = ObjStringAny(kv.second, {"url", "download_url", "href"}, "");
+			if (mirror.isObject()) {
+				string url = ObjStringAny(mirror, {"url", "download_url", "href"}, "");
 				if (!url.empty())
 					return url;
 			}
 		}
 	}
 
-	if (mirrors->type == JsonValue::ARRAY) {
-		for (const JsonValue& item : mirrors->array_value) {
+	if (mirrors->isArray()) {
+		for (Json::ArrayIndex i = 0; i < mirrors->size(); i++) {
+			const Json::Value& item = (*mirrors)[i];
 			string value = JsonAsString(&item, "");
 			if (!value.empty())
 				return value;
 
-			if (item.type == JsonValue::OBJECT) {
+			if (item.isObject()) {
 				string url = ObjStringAny(item, {"url", "download_url", "href"}, "");
 				if (!url.empty())
 					return url;
@@ -740,7 +484,7 @@ static string PickMirrorUrl(const JsonValue& v) {
 	return "";
 }
 
-static FoxRelease ParseRelease(const JsonValue& obj, const ReleaseContext& ctx) {
+static FoxRelease ParseRelease(const Json::Value& obj, const ReleaseContext& ctx) {
 	FoxRelease r;
 
 	r.id = ObjStringAny(obj, {"id", "_id"}, "");
@@ -774,8 +518,8 @@ static FoxRelease ParseRelease(const JsonValue& obj, const ReleaseContext& ctx) 
 	return r;
 }
 
-static void CollectReleasesRecursive(const JsonValue& v, vector<FoxRelease>& out, ReleaseContext ctx) {
-	if (v.type == JsonValue::OBJECT) {
+static void CollectReleasesRecursive(const Json::Value& v, vector<FoxRelease>& out, ReleaseContext ctx) {
+	if (v.isObject()) {
 		string inherited_version = ObjStringAny(v, {"version"}, "");
 		string inherited_type = ObjStringAny(v, {"type"}, "");
 		string inherited_device = ObjStringAny(v, {"device_id"}, "");
@@ -794,15 +538,15 @@ static void CollectReleasesRecursive(const JsonValue& v, vector<FoxRelease>& out
 			out.push_back(r);
 		}
 
-		for (const auto& kv : v.object_value)
-			CollectReleasesRecursive(kv.second, out, ctx);
+		for (const string& key : v.getMemberNames())
+			CollectReleasesRecursive(v[key], out, ctx);
 
 		return;
 	}
 
-	if (v.type == JsonValue::ARRAY) {
-		for (const JsonValue& item : v.array_value)
-			CollectReleasesRecursive(item, out, ctx);
+	if (v.isArray()) {
+		for (Json::ArrayIndex i = 0; i < v.size(); i++)
+			CollectReleasesRecursive(v[i], out, ctx);
 	}
 }
 
@@ -1169,7 +913,7 @@ static string AvailableReleaseLine(const FoxRelease& r) {
 
 static vector<FoxRelease> LoadAvailableReleasesFromState() {
 	vector<FoxRelease> releases;
-	JsonValue root;
+	Json::Value root;
 	string releases_json_path = STATE_DIR + "/available_releases.json";
 
 	if (!ParseJsonFile(releases_json_path, root))
@@ -1251,25 +995,25 @@ static string PickDownloadDir() {
 	return TMP_DOWNLOAD_DIR;
 }
 
-static void SaveDeviceVarsFromJson(const JsonValue& root, const string& fallback_id) {
-	vector<const JsonValue*> objects;
+static void SaveDeviceVarsFromJson(const Json::Value& root, const string& fallback_id) {
+	vector<const Json::Value*> objects;
 
-	std::function<void(const JsonValue&)> collect = [&](const JsonValue& v) {
-		if (v.type == JsonValue::OBJECT) {
+	std::function<void(const Json::Value&)> collect = [&](const Json::Value& v) {
+		if (v.isObject()) {
 			objects.push_back(&v);
-			for (const auto& kv : v.object_value)
-				collect(kv.second);
-		} else if (v.type == JsonValue::ARRAY) {
-			for (const JsonValue& item : v.array_value)
-				collect(item);
+			for (const string& key : v.getMemberNames())
+				collect(v[key]);
+		} else if (v.isArray()) {
+			for (Json::ArrayIndex i = 0; i < v.size(); i++)
+				collect(v[i]);
 		}
 	};
 
 	collect(root);
 
-	const JsonValue* device = nullptr;
+	const Json::Value* device = nullptr;
 
-	for (const JsonValue* obj : objects) {
+	for (const Json::Value* obj : objects) {
 		string id = ObjStringAny(*obj, {"id", "_id"}, "");
 		if (!fallback_id.empty() && id == fallback_id) {
 			device = obj;
@@ -1278,7 +1022,7 @@ static void SaveDeviceVarsFromJson(const JsonValue& root, const string& fallback
 	}
 
 	if (!device) {
-		for (const JsonValue* obj : objects) {
+		for (const Json::Value* obj : objects) {
 			if (ObjHas(*obj, "codenames") || ObjHas(*obj, "model_names") || ObjHas(*obj, "codename") || ObjHas(*obj, "model_name")) {
 				device = obj;
 				break;
@@ -1386,7 +1130,7 @@ int Init() {
 		return 1;
 	}
 
-	JsonValue current_root;
+	Json::Value current_root;
 
 	if (!ParseJsonFile(current_json_path, current_root)) {
 		Status("Failed to parse current release response");
@@ -1427,7 +1171,7 @@ int Init() {
 		string device_json_path = STATE_DIR + "/device.json";
 
 		if (ApiGet("/devices/get?id=" + UrlEncode(g_current_release.device_id), device_json_path)) {
-			JsonValue device_root;
+			Json::Value device_root;
 			if (ParseJsonFile(device_json_path, device_root))
 				SaveDeviceVarsFromJson(device_root, g_current_release.device_id);
 		}
@@ -1503,7 +1247,7 @@ int Check() {
 		return 1;
 	}
 
-	JsonValue root;
+	Json::Value root;
 
 	if (!ParseJsonFile(releases_json_path, root)) {
 		Status("Failed to parse newer releases response");

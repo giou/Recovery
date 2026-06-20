@@ -928,23 +928,19 @@ endif
 
 # Remote-control dashboard (optional static web UI).
 #
-# The remote-control engine itself -- the HTTP API server, screen capture and
-# input injection -- is always built (see Android.mk). It is started explicitly
-# via "fox webserver start" and "fox control start", and protected by a
-# per-session token. By default the
-# server is API-only; this block additionally packs a prebuilt web bundle onto
-# the ramdisk so the server can serve a dashboard at "/". When no bundle is
-# present the server stays API-only.
+# The USB/FIFO remote-control engine is always built (see Android.mk), so
+# WebUSB screen capture and input stay available without WLAN. The HTTP API
+# server, ttyd bridge, NAS, WLAN UI actions, and updater are built only when
+# OF_ENABLE_WLAN=1. When WLAN is enabled, the server is API-only by default;
+# this block additionally packs a prebuilt web bundle onto the ramdisk so the
+# server can serve a dashboard at "/".
 #
 #   FOX_REMOTE_DASHBOARD := 1       enable packing the dashboard bundle
 #   FOX_DASHBOARD_DIR    := <path>  source web dir to pack (defaults to the
 #                                   bundled dashboard under fox_webserver/dashboard;
 #                                   point this at a built React dist/ instead)
 ifeq ($(FOX_REMOTE_DASHBOARD),1)
-    ifneq ($(OF_ENABLE_WLAN),1)
-        $(warning FOX_REMOTE_DASHBOARD is enabled without OF_ENABLE_WLAN; the dashboard will only be reachable over USB/adb networking.)
-    endif
-
+    ifeq ($(OF_ENABLE_WLAN),1)
     FOX_DASHBOARD_DIR ?= $(commands_TWRP_local_path)/fox_webserver/dashboard
     FOX_DASHBOARD_OUT := $(TARGET_RECOVERY_ROOT_OUT)/system/etc/fox/dashboard
 
@@ -957,6 +953,9 @@ $(FOX_DASHBOARD_OUT): $(FOX_DASHBOARD_DIR)
 
 ALL_DEFAULT_INSTALLED_MODULES += $(FOX_DASHBOARD_OUT)
 endif
+    else
+        $(warning FOX_REMOTE_DASHBOARD is enabled without OF_ENABLE_WLAN; skipping packaged dashboard because the HTTP server is not built.)
+    endif
 endif
 
 # whether to skip substituting some permissions

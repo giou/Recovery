@@ -45,8 +45,11 @@
 #include "../twrp-functions.hpp"
 #include "../twrpRepacker.hpp"
 #include "../openrecoveryscript.hpp"
+#include "../fox_fifo/fox_command_dispatcher.hpp"
 #include "../fox_fifo/fox_fifo.hpp"
+#ifdef OF_ENABLE_WLAN
 #include "../fox_webserver/fox_jobs.hpp"
+#endif
 #include "../orscmd/orscmd.h"
 
 #include "../data.hpp"
@@ -54,9 +57,9 @@
 #include "gui.h"
 #ifdef OF_ENABLE_WLAN
 #include "../wlan.hpp"
-#endif
 #include "../nas/NasManager.hpp"
 #include "../fox_updater.hpp"
+#endif
 
 #include "twinstall/adb_install.h"
 
@@ -665,6 +668,7 @@ int GUIAction::doAction(Action action)
     return (this->*funcitr->second) (arg);
 
   // OrangeFox built-in updater actions
+#ifdef OF_ENABLE_WLAN
   if (function == "fox_update_refresh")
     return FoxUpdater::Refresh();
 
@@ -694,6 +698,7 @@ int GUIAction::doAction(Action action)
 
   if (function == "fox_update_install")
     return FoxUpdater::Install();
+#endif
 
   if (!Hide_Reboot_Kludge_Fix(function))
     LOGERR("Unknown action '%s'\n", function.c_str());
@@ -2496,11 +2501,13 @@ int GUIAction::foxcmd(std::string arg __unused)
     code = Fox_Fifo::Run_Command();
   // Record the exit code for the active remote job, if any (no-op for the FIFO
   // path). Done before the sentinel/output FILE is flushed and closed.
+#ifdef OF_ENABLE_WLAN
   Fox_Jobs::NotifyExit(code);
+#endif
   // Emit the exit-code sentinel on the mirrored output (foxout) before the
   // listener closes it, so the fox client can report the real exit status.
   gui_print("%s%d\n", FOX_EXIT_SENTINEL, code);
-  fox_command_done();
+  Fox_Command_Dispatcher::CommandDone();
   operation_end(0);
   return 0;
 }

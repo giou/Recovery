@@ -26,6 +26,7 @@
   .keys button { flex:1 1 auto; }
   .tabs button { flex:1 1 0; }
   pre { background:#100d13; border-radius:6px; padding:.6rem; max-height:42vh; overflow:auto; white-space:pre-wrap; font-size:.8rem; margin:0; }
+  iframe.terminal { width:100%; height:360px; border:1px solid #3a3340; border-radius:6px; background:#000; }
   .muted { color:var(--muted); font-size:.8rem; }
   code { background:#100d13; padding:.05rem .3rem; border-radius:4px; }
   .quick button { flex:1 1 30%; }
@@ -101,6 +102,16 @@
       <h3>Output</h3>
       <pre id="out">(no job yet)</pre>
     </div>
+    <div class="card">
+      <h3>Terminal</h3>
+      <div class="row" style="margin-bottom:.5rem">
+        <button id="ttyd-start" class="accent">Start ttyd</button>
+        <button id="ttyd-open">Open</button>
+        <button id="ttyd-stop">Stop</button>
+      </div>
+      <iframe id="ttyd-frame" class="terminal" title="ttyd terminal"></iframe>
+      <div id="ttyd-status" class="muted" style="margin-top:.4rem"></div>
+    </div>
   </div>
 </div>
 <script>
@@ -156,7 +167,7 @@ const RestProvider = {
   base() {
     const host = $('#host').value.trim();
     if (!host || host === location.hostname) return '';
-    const port = location.port || '8080';
+    const port = location.port || '80';
     const proto = location.protocol.startsWith('http') ? location.protocol : 'http:';
     return proto + '//' + host + ':' + port;
   },
@@ -579,7 +590,7 @@ const UsbStreamProvider = Object.assign(Object.create(UsbProvider), {
 
 const UsbTunnelProvider = Object.assign(Object.create(UsbBase), {
   id: 'usbtunnel',
-  port: 8080, token: '',
+  port: 80, token: '',
   async connect() {
     await UsbBase.connect.call(this);
     const webOut = await this._shellText('fox fifo send webserver start');
@@ -828,6 +839,73 @@ async function runCmd() {
   } catch (e) { $('#out').textContent = 'error: ' + (e.message || e); }
 }
 function quick(v) { $('#cmd').value = v === 'backup' ? 'backup' : v; runCmd(); }
+
+async function runFoxJob(argv) {
+  const r = await provider.api('POST', '/api/cmd', { body: JSON.stringify({ argv }) });
+  if (!r.ok) throw new Error('job submit failed: ' + r.status);
+  const j = r.json();
+  if (!j.id) throw new Error('job submit returned no id');
+  let off = 0, out = '';
+  for (;;) {
+    const o = await provider.api('GET', '/api/jobs/' + j.id + '/output?offset=' + off);
+    if (!o.ok) throw new Error('job output failed: ' + o.status);
+    const s = o.json();
+    if (s.data) out += s.data;
+    off = s.offset;
+    if (s.state === 'done') {
+      if (s.exit_code !== 0) throw new Error(out || ('job failed: ' + s.exit_code));
+      return out;
+    }
+    await new Promise(resolve => setTimeout(resolve, 250));
+  }
+}
+
+function ttydUrl(port = 7681) {
+  let host = $('#host').value.trim() || location.hostname || 'localhost';
+  if (host.includes('/')) {
+    try { host = new URL(host).hostname; } catch (e) {}
+  }
+  if (host.startsWith('[')) host = host.slice(1, host.indexOf(']'));
+  else if (host.includes(':')) host = host.split(':')[0];
+  return 'http://' + host + ':' + port + '/';
+}
+
+async function startTtyd() {
+  if (!connected) { $('#ttyd-status').textContent = 'connect first'; return; }
+  $('#ttyd-status').textContent = 'starting...';
+  try {
+    const out = await runFoxJob(['webserver', 'terminal', 'start']);
+    const portM = out.match(/port=(\d+)/);
+    const url = ttydUrl(portM ? parseInt(portM[1], 10) : 7681);
+    $('#ttyd-frame').src = url;
+    $('#ttyd-status').textContent = url;
+  } catch (e) {
+    warn('ttyd start failed', e);
+    $('#ttyd-status').textContent = e.message || 'ttyd start failed';
+  }
+}
+
+async function stopTtyd() {
+  if (!connected) { $('#ttyd-status').textContent = 'connect first'; return; }
+  try {
+    await runFoxJob(['webserver', 'terminal', 'stop']);
+    $('#ttyd-frame').removeAttribute('src');
+    $('#ttyd-status').textContent = 'stopped';
+  } catch (e) {
+    warn('ttyd stop failed', e);
+    $('#ttyd-status').textContent = e.message || 'ttyd stop failed';
+  }
+}
+
+function openTtyd() {
+  const url = $('#ttyd-frame').src || ttydUrl();
+  $('#ttyd-frame').src = url;
+  window.open(url, '_blank', 'noopener');
+}
+
+$('#ttyd-start').addEventListener('click', startTtyd);
+$('#ttyd-stop').addEventListener('click', stopTtyd);
+$('#ttyd-open').addEventListener('click', openTtyd);
 
 async function pollJob() {
   if (!curJob) return;

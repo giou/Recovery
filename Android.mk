@@ -50,20 +50,41 @@ LOCAL_SRC_FILES := \
     startupArgs.cpp \
     twrp-functions.cpp \
     orangefox.cpp \
-    wlan.cpp \
-    nas/NasManager.cpp \
-    fox_updater.cpp \
     gui/nanosvg.cpp \
     twrpDigestDriver.cpp \
     openrecoveryscript.cpp \
+    fox_fifo/fox_channel.cpp \
+    fox_fifo/fox_command_dispatcher.cpp \
     fox_fifo/fox_fifo.cpp \
     fox_fifo/fox_input.cpp \
+    fox_fifo/fox_protocol.cpp \
+    fox_fifo/fox_remote_input.cpp \
+    fox_fifo/fox_remote_state.cpp \
     fox_fifo/fox_screen.cpp \
-    fox_webserver/fox_jobs.cpp \
-    fox_webserver/fox_httpd.cpp \
+    fox_fifo/fox_screen_service.cpp \
+    fox_fifo/fox_screen_stream.cpp \
     tarWrite.c \
     twrpAdbBuFifo.cpp \
     twrpRepacker.cpp
+
+ifeq ($(OF_ENABLE_WLAN),1)
+LOCAL_SRC_FILES += \
+    wlan.cpp \
+    nas/NasManager.cpp \
+    fox_updater.cpp \
+    fox_webserver/fox_http_api.cpp \
+    fox_webserver/fox_http_common.cpp \
+    fox_webserver/fox_job_dispatcher.cpp \
+    fox_webserver/fox_http_routes.cpp \
+    fox_webserver/fox_http_screen.cpp \
+    fox_webserver/fox_http_static.cpp \
+    fox_webserver/fox_json.cpp \
+    fox_webserver/fox_jobs.cpp \
+    fox_webserver/fox_ttyd.cpp \
+    fox_webserver/fox_httpd.cpp
+LOCAL_STATIC_LIBRARIES += libjsoncpp
+LOCAL_C_INCLUDES += external/jsoncpp/include
+endif
 
 ifeq ($(TW_EXCLUDE_APEX),)
     LOCAL_SRC_FILES += twrpApex.cpp
@@ -134,7 +155,7 @@ LOCAL_C_INCLUDES += \
 
 LOCAL_STATIC_LIBRARIES += libguitwrp libvold
 LOCAL_SHARED_LIBRARIES += libz libc libcutils libstdc++ libtar libblkid libminuitwrp libmtdutils libtwadbbu
-LOCAL_SHARED_LIBRARIES += libbootloader_message libcrecovery libtwrpdigest libc++ libaosprecovery libcrypto libbase 
+LOCAL_SHARED_LIBRARIES += libbootloader_message libcrecovery libtwrpdigest libc++ libaosprecovery libcrypto libbase
 LOCAL_SHARED_LIBRARIES += libziparchive libselinux libdl_android.bootstrap
 
 ifneq ($(wildcard system/core/libsparse/Android.mk),)
@@ -320,11 +341,9 @@ ifeq ($(TW_NO_HAPTICS), true)
 endif
 ifeq ($(TW_ENABLE_NETWORK), true)
     LOCAL_CFLAGS += -DTW_ENABLE_NETWORK
+endif
+ifeq ($(OF_ENABLE_WLAN),1)
     TWRP_REQUIRED_MODULES += \
-        microhttpd \
-        microhttpd.rc \
-        index.html \
-        fox_icon.png \
         ttyd_src \
         ttyd.rc
 endif
@@ -750,9 +769,9 @@ include $(BUILD_PHONY_PACKAGE)
 # ===============================
 include $(CLEAR_VARS)
 LOCAL_SRC_FILES := \
-    recovery-persist.cpp 
+    recovery-persist.cpp
 LOCAL_MODULE := recovery-persist
-LOCAL_SHARED_LIBRARIES := liblog libbase 
+LOCAL_SHARED_LIBRARIES := liblog libbase
 LOCAL_STATIC_LIBRARIES := libotautil librecovery_utils
 LOCAL_C_INCLUDES += $(LOCAL_PATH)/otautil/include
 LOCAL_C_INCLUDES += system/core/libstats/include

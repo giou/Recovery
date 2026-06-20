@@ -43,10 +43,12 @@
 #include "wlan.hpp"
 #endif
 
+#ifdef OF_ENABLE_WLAN
 #include "../fox_webserver/fox_httpd.hpp"
-#include "fox_input.hpp"
+#include "../fox_webserver/fox_ttyd.hpp"
+#endif
+#include "fox_remote_input.hpp"
 #include "minuitwrp/minui.h"
-#include <linux/input.h>
 
 std::vector<std::string> Fox_Fifo::args;
 
@@ -926,22 +928,6 @@ int Fox_Fifo::Cmd_Addons(const std::vector<std::string>& a) {
 	return 2;
 }
 
-// Map a friendly key name to a Linux input KEY_* code (or -1 if unknown).
-static int fox_key_code(const std::string& name) {
-	if (name == "back")    return KEY_BACK;
-	if (name == "home")    return KEY_HOMEPAGE;
-	if (name == "menu")    return KEY_MENU;
-	if (name == "power")   return KEY_POWER;
-	if (name == "volup")   return KEY_VOLUMEUP;
-	if (name == "voldown") return KEY_VOLUMEDOWN;
-	if (name == "enter")   return KEY_ENTER;
-	if (name == "up")      return KEY_UP;
-	if (name == "down")    return KEY_DOWN;
-	if (name == "left")    return KEY_LEFT;
-	if (name == "right")   return KEY_RIGHT;
-	return -1;
-}
-
 int Fox_Fifo::Cmd_Screencap(const std::vector<std::string>& a) {
 	// Capture the live framebuffer to a PNG file (tmpfs by default) so a client
 	// can read it back over an ADB sync/pull -- no network stack involved.
@@ -955,74 +941,29 @@ int Fox_Fifo::Cmd_Screencap(const std::vector<std::string>& a) {
 }
 
 int Fox_Fifo::Cmd_Input(const std::vector<std::string>& a) {
-	if (a.empty()) {
-		gui_print("fox: input requires a subcommand (tap|swipe|key|down|move|up)\n");
-		return 2;
-	}
-	if (!Fox_Input::Init()) {
-		gui_print("fox: unable to create virtual input device\n");
-		return 1;
-	}
-	const std::string& sub = a[0];
-
-	if (sub == "tap") {
-		if (a.size() < 3) { gui_print("fox: input tap requires X Y\n"); return 2; }
-		Fox_Input::Tap(atoi(a[1].c_str()), atoi(a[2].c_str()));
-		return 0;
-	}
-	if (sub == "down") {
-		if (a.size() < 3) { gui_print("fox: input down requires X Y\n"); return 2; }
-		Fox_Input::TouchDown(atoi(a[1].c_str()), atoi(a[2].c_str()));
-		return 0;
-	}
-	if (sub == "move") {
-		if (a.size() < 3) { gui_print("fox: input move requires X Y\n"); return 2; }
-		Fox_Input::TouchMove(atoi(a[1].c_str()), atoi(a[2].c_str()));
-		return 0;
-	}
-	if (sub == "up") {
-		Fox_Input::TouchUp();
-		return 0;
-	}
-	if (sub == "swipe") {
-		if (a.size() < 5) { gui_print("fox: input swipe requires X1 Y1 X2 Y2 [ms]\n"); return 2; }
-		int x1 = atoi(a[1].c_str()), y1 = atoi(a[2].c_str());
-		int x2 = atoi(a[3].c_str()), y2 = atoi(a[4].c_str());
-		int ms = a.size() > 5 ? atoi(a[5].c_str()) : 200;
-		if (ms < 0) ms = 0;
-		const int steps = 16;
-		Fox_Input::TouchDown(x1, y1);
-		for (int i = 1; i <= steps; i++) {
-			int x = x1 + (x2 - x1) * i / steps;
-			int y = y1 + (y2 - y1) * i / steps;
-			Fox_Input::TouchMove(x, y);
-			struct timespec ts = { 0, (long)(ms) * 1000000L / steps };
-			nanosleep(&ts, nullptr);
-		}
-		Fox_Input::TouchUp();
-		return 0;
-	}
-	if (sub == "key") {
-		if (a.size() < 2) { gui_print("fox: input key requires a name or numeric code\n"); return 2; }
-		int code = isdigit((unsigned char)a[1][0]) ? atoi(a[1].c_str()) : fox_key_code(a[1]);
-		if (code < 0) { gui_print("fox: unknown key '%s'\n", a[1].c_str()); return 2; }
-		Fox_Input::KeyTap(code);
-		return 0;
-	}
-	gui_print("fox: unknown input subcommand '%s' (tap|swipe|key|down|move|up)\n", sub.c_str());
-	return 2;
+	std::string output;
+	int code = Fox_Remote_Input::RunCommand(a, &output);
+	if (!output.empty())
+		gui_print("%s", output.c_str());
+	return code;
 }
 
-// fox webserver {start [--port N]|stop|status}: control the HTTP server (the
-// dashboard + REST/job control plane) on its own. The remote-control plane
-// (screen + input) is governed separately by `fox control`.
+// fox webserver {start [--port N]|stop|status|terminal ...}: control the HTTP
+// server (dashboard + REST/job control plane) on its own. The remote-control
+// plane (screen + input) is governed separately by `fox control`.
 int Fox_Fifo::Cmd_Webserver(const std::vector<std::string>& a) {
+#ifndef OF_ENABLE_WLAN
+	(void)a;
+	gui_print("fox: webserver is not available in this build (OF_ENABLE_WLAN=0)\n");
+	gui_print("fox: direct WebUSB remains available via screencap/input/screenstream FIFO commands\n");
+	return 1;
+#else
 	std::string sub = a.empty() ? "status" : a[0];
 
 	if (sub == "start") {
 		std::vector<std::string> rest(a.begin() + (a.empty() ? 0 : 1), a.end());
 		std::string port_s = take_option(rest, "--port");
-		int port = port_s.empty() ? 8080 : atoi(port_s.c_str());
+		int port = port_s.empty() ? 80 : atoi(port_s.c_str());
 		if (Fox_Httpd::IsRunning()) {
 			gui_print("Web server already running on %s:%d\n",
 			          Fox_Httpd::LocalAddress().c_str(), Fox_Httpd::Port());
@@ -1041,6 +982,7 @@ int Fox_Fifo::Cmd_Webserver(const std::vector<std::string>& a) {
 		return 0;
 	}
 	if (sub == "stop") {
+		Fox_Ttyd::Stop();
 		Fox_Httpd::Stop();
 		gui_print("Web server stopped\n");
 		return 0;
@@ -1058,8 +1000,42 @@ int Fox_Fifo::Cmd_Webserver(const std::vector<std::string>& a) {
 		gui_print("FOX_STATUS_END\n");
 		return 0;
 	}
-	gui_print("fox: unknown webserver subcommand '%s' (start|stop|status)\n", sub.c_str());
+	if (sub == "terminal" || sub == "ttyd") {
+		std::string action = a.size() > 1 ? a[1] : "status";
+		if (action == "start") {
+			std::vector<std::string> rest(a.begin() + 2, a.end());
+			std::string port_s = take_option(rest, "--port");
+			int port = port_s.empty() ? 7681 : atoi(port_s.c_str());
+			if (!Fox_Ttyd::Start(port)) {
+				gui_print("fox: failed to start ttyd\n");
+				return 1;
+			}
+			gui_print("ttyd started\n");
+			gui_print("port=%d\n", Fox_Ttyd::Port());
+			gui_print("url=http://%s:%d/\n", Fox_Httpd::LocalAddress().c_str(), Fox_Ttyd::Port());
+			gui_print("shell=%s\n", Fox_Ttyd::Shell().c_str());
+			return 0;
+		}
+		if (action == "stop") {
+			Fox_Ttyd::Stop();
+			gui_print("ttyd stopped\n");
+			return 0;
+		}
+		if (action == "status") {
+			gui_print("FOX_TTYD_BEGIN\n");
+			gui_print("running=%d\n", Fox_Ttyd::IsRunning() ? 1 : 0);
+			gui_print("port=%d\n", Fox_Ttyd::Port());
+			gui_print("url=http://%s:%d/\n", Fox_Httpd::LocalAddress().c_str(), Fox_Ttyd::Port());
+			gui_print("shell=%s\n", Fox_Ttyd::Shell().c_str());
+			gui_print("FOX_TTYD_END\n");
+			return 0;
+		}
+		gui_print("fox: unknown webserver terminal subcommand '%s' (start|stop|status)\n", action.c_str());
+		return 2;
+	}
+	gui_print("fox: unknown webserver subcommand '%s' (start|stop|status|terminal)\n", sub.c_str());
 	return 2;
+#endif
 }
 
 // fox control {start|stop|status}: toggle the remote-control plane (screen
@@ -1067,6 +1043,12 @@ int Fox_Fifo::Cmd_Webserver(const std::vector<std::string>& a) {
 // whether the server is running. Does not gate the `fox input`/`fox screencap`
 // CLI commands (those need adb shell access already).
 int Fox_Fifo::Cmd_Control(const std::vector<std::string>& a) {
+#ifndef OF_ENABLE_WLAN
+	(void)a;
+	gui_print("fox: HTTP control plane is not available in this build (OF_ENABLE_WLAN=0)\n");
+	gui_print("fox: direct WebUSB remains available via input/screencap/screenstream FIFO commands\n");
+	return 1;
+#else
 	std::string sub = a.empty() ? "status" : a[0];
 
 	if (sub == "start" || sub == "enable" || sub == "on") {
@@ -1082,12 +1064,13 @@ int Fox_Fifo::Cmd_Control(const std::vector<std::string>& a) {
 	if (sub == "status") {
 		gui_print("FOX_STATUS_BEGIN\n");
 		gui_print("control=%d\n", Fox_Httpd::ControlEnabled() ? 1 : 0);
-		gui_print("input_ready=%d\n", Fox_Input::IsReady() ? 1 : 0);
+		gui_print("input_ready=%d\n", Fox_Remote_Input::IsReady() ? 1 : 0);
 		gui_print("FOX_STATUS_END\n");
 		return 0;
 	}
 	gui_print("fox: unknown control subcommand '%s' (start|stop|status)\n", sub.c_str());
 	return 2;
+#endif
 }
 
 int Fox_Fifo::Cmd_Storages(const std::vector<std::string>& /*a*/) {

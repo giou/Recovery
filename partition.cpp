@@ -46,7 +46,9 @@
 #include "partitions.hpp"
 #include "data.hpp"
 #include "twrp-functions.hpp"
+#ifdef OF_ENABLE_WLAN
 #include "nas/NasManager.hpp"
+#endif
 #include "twrpTar.hpp"
 #include "exclude.hpp"
 #include "infomanager.hpp"
@@ -1647,7 +1649,11 @@ bool TWPartition::Mount(bool Display_Error) {
 	}
 
 	if (Mount_Point == TW_NAS_MOUNT_POINT || Current_File_System == "fuse.nas") {
+#ifdef OF_ENABLE_WLAN
 		bool mounted = NasManager::IsMounted();
+#else
+		bool mounted = false;
+#endif
 		DataManager::SetValue(TW_NAS_MOUNTED, mounted ? 1 : 0);
 		return mounted;
 	}
@@ -1811,7 +1817,12 @@ bool TWPartition::Bind_Mount(bool Display_Error) {
 
 bool TWPartition::UnMount(bool Display_Error, int flags) {
 	if (Mount_Point == TW_NAS_MOUNT_POINT || Current_File_System == "fuse.nas") {
+#ifdef OF_ENABLE_WLAN
 	    return NasManager::Unmount();
+#else
+	    DataManager::SetValue(TW_NAS_MOUNTED, 0);
+	    return false;
+#endif
 	}
 	if (Is_Mounted()) {
 		int never_unmount_system;
@@ -3259,7 +3270,11 @@ bool TWPartition::Update_Size(bool Display_Error) {
 	bool ret = false, Was_Already_Mounted = false, ro = false;
 	
 	if (Mount_Point == TW_NAS_MOUNT_POINT || Current_File_System == "fuse.nas") {
+#ifdef OF_ENABLE_WLAN
 	    Is_Present = NasManager::IsMounted();
+#else
+	    Is_Present = false;
+#endif
 	    DataManager::SetValue(TW_NAS_MOUNTED, Is_Present ? 1 : 0);
 	    
 	    if (!Is_Present) {

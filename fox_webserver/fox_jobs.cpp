@@ -21,6 +21,7 @@
 #include <memory>
 #include <pthread.h>
 
+#include "fox_json.hpp"
 #include "fox_jobs.hpp"
 
 namespace {
@@ -82,26 +83,6 @@ int cookie_write(void* cookie, const char* buf, int size) {
 int cookie_close(void* /*cookie*/) {
 	// The Job outlives the FILE; nothing to release here.
 	return 0;
-}
-
-void append_json_escaped(std::string& out, const std::string& s) {
-	for (char c : s) {
-		switch (c) {
-			case '"':  out += "\\\""; break;
-			case '\\': out += "\\\\"; break;
-			case '\n': out += "\\n";  break;
-			case '\r': out += "\\r";  break;
-			case '\t': out += "\\t";  break;
-			default:
-				if (static_cast<unsigned char>(c) < 0x20) {
-					char buf[8];
-					snprintf(buf, sizeof(buf), "\\u%04x", c);
-					out += buf;
-				} else {
-					out += c;
-				}
-		}
-	}
 }
 
 const char* state_name(Fox_Jobs::State s) {
@@ -185,38 +166,28 @@ bool Fox_Jobs::ReadOutputAndSnapshot(int id, size_t& offset, std::string& out,
 
 std::string Fox_Jobs::ListJson() {
 	pthread_mutex_lock(&g_lock);
-	std::string out = "[";
-	bool first = true;
+	Fox_Json_Array out;
 	// Newest first.
 	for (auto it = g_jobs.rbegin(); it != g_jobs.rend(); ++it) {
 		Job* j = it->get();
-		if (!first)
-			out += ",";
-		first = false;
-		out += "{\"id\":";
-		out += std::to_string(j->id);
-		out += ",\"state\":\"";
-		out += state_name(j->state);
-		out += "\",\"exit_code\":";
-		out += std::to_string(j->exit_code);
-		out += ",\"output_size\":";
-		out += std::to_string(j->output.size());
-		out += ",\"created\":";
-		out += std::to_string((long long)j->created);
-		out += ",\"finished\":";
-		out += std::to_string((long long)j->finished);
-		out += ",\"cmd\":\"";
 		std::string joined;
 		for (size_t i = 0; i < j->argv.size(); i++) {
 			if (i) joined += " ";
 			joined += j->argv[i];
 		}
-		append_json_escaped(out, joined);
-		out += "\"}";
+		Fox_Json_Object job;
+		job.AddInt("id", j->id)
+		   .AddString("state", state_name(j->state))
+		   .AddInt("exit_code", j->exit_code)
+		   .AddSize("output_size", j->output.size())
+		   .AddInt("created", (long long)j->created)
+		   .AddInt("finished", (long long)j->finished)
+		   .AddString("cmd", joined);
+		out.AddRaw(job.String());
 	}
-	out += "]";
+	std::string json = out.String();
 	pthread_mutex_unlock(&g_lock);
-	return out;
+	return json;
 }
 
 bool Fox_Jobs::HasPending() {

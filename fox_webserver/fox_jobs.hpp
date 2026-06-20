@@ -31,13 +31,13 @@
 // The engine itself stays serial: recovery has one action thread and mutates a
 // lot of global state (PartitionManager, DataManager), so concurrent commands
 // are unsafe. Fox_Jobs is therefore a *serialized queue*, not a parallel
-// executor. One job runs at a time, gated by the same orsout/tw_busy guard the
-// FIFO path uses.
+// executor. One job runs at a time, gated by the same active-command/tw_busy
+// guard the FIFO path uses.
 //
 // Threading:
 //   - Submit()/Get*()/List*() are called from the HTTP server thread.
 //   - BeginNext()/NotifyExit()/FinishActive() are called from the GUI thread
-//     (gui.cpp main loop + the foxcmd action), which owns dispatch.
+//     (Fox_Job_Dispatcher + the foxcmd action), which owns dispatch.
 // All state is protected by an internal mutex.
 class Fox_Jobs
 {
@@ -82,7 +82,7 @@ public:
 
 	// Promote the next PENDING job to RUNNING and hand back what the GUI needs
 	// to dispatch it: the argv to run and a FILE* that mirrors gui_print output
-	// into the job's buffer (pass to gui_set_FILE / store as orsout). Returns
+	// into the job's buffer. Returns
 	// false (and leaves *out_file/​*out_argv untouched) if nothing is pending or
 	// a job is already running. The returned FILE* is owned by the caller and
 	// must be fclose()d when the command finishes (closing it does not destroy
@@ -93,12 +93,13 @@ public:
 	// foxcmd action before the output FILE is closed.
 	static void NotifyExit(int code);
 
-	// Mark the running job DONE (no-op if none). Called from fox_command_done()
-	// after the output FILE has been closed/flushed.
+	// Mark the running job DONE (no-op if none). Called after the foxcmd output
+	// FILE has been closed/flushed.
 	static void FinishActive();
 
-private:
 	static int Active();  // id of the RUNNING job, or 0
+
+private:
 };
 
 #endif // _FOX_JOBS_HPP

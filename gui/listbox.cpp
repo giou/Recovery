@@ -31,7 +31,9 @@ extern "C" {
 #include "objects.hpp"
 #include "../data.hpp"
 #include "../partitions.hpp"
+#ifdef OF_ENABLE_WLAN
 #include "../fox_updater.hpp"
+#endif
 #include "pages.hpp"
 #include "../twrp-functions.hpp"
 
@@ -851,7 +853,9 @@ void GUIListBox::NotifySelect(size_t item_selected)
 	} else if (mVariable == "fox_update_release_selection") {
 		item.selected = 1;
 		DataManager::SetValue(mVariable, item.displayName);
+#ifdef OF_ENABLE_WLAN
 		FoxUpdater::SelectAvailableRelease();
+#endif
 		gui_changePage("fox_updates");
 
 	} else {

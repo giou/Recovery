@@ -27,12 +27,12 @@
 // dedicated FIFO pair (FOX_INPUT_FILE/FOX_OUTPUT_FILE), which keeps spaces in
 // passwords/paths intact and lets the engine report a real exit code.
 //
-// The GUI listener (gui/gui.cpp) parses the argv, stores it with Set_Args(),
-// then dispatches the "foxcmd" GUI action which calls Run_Command() on the
-// action thread (so gui_print output is mirrored back to the caller).
+// Fox_Channel parses FIFO argv, stores it with Set_Args(), then dispatches the
+// "foxcmd" GUI action which calls Run_Command() on the action thread (so
+// gui_print output is mirrored back to the caller).
 //
 // A few high-frequency remote-control commands are intentionally handled in
-// gui/gui.cpp before the foxcmd action path:
+// Fox_Channel/Fox_Screen_Stream before the foxcmd action path:
 //   fox screencap --base64
 //   fox input ...
 //   fox screenstream {start [--fps N]|stop|status}
@@ -72,8 +72,8 @@ private:
 	static int Cmd_Partition(const std::vector<std::string>& a);
 	static int Cmd_Addons(const std::vector<std::string>& a);
 	static int Cmd_Storages(const std::vector<std::string>& a);
-	// fox webserver {start|stop|status}: the HTTP server (dashboard + REST/job
-	// control plane) on its own.
+	// fox webserver {start|stop|status|terminal ...}: the HTTP server
+	// (dashboard + REST/job control plane) and optional ttyd terminal.
 	static int Cmd_Webserver(const std::vector<std::string>& a);
 	// fox control {start|stop|status}: the remote-control plane (screen + input
 	// over HTTP), toggled independently of the server.

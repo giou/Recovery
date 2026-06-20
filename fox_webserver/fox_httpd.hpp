@@ -26,7 +26,7 @@
 //
 //   - REST control plane over the async job layer (Fox_Jobs)
 //   - MJPEG screen stream (Fox_Screen)
-//   - touch/key injection (Fox_Input)
+//   - touch/key injection (Fox_Remote_Input)
 //
 // The server (the network listener + REST/job control plane) and the
 // remote-control plane (screen mirroring + input injection) are toggled
@@ -41,10 +41,10 @@
 class Fox_Httpd
 {
 public:
-	// Start the listener on 'port' (default 8080). Generates a fresh auth
+	// Start the listener on 'port' (default 80). Generates a fresh auth
 	// token and initialises the uinput device. Idempotent. Returns false on
 	// bind/listen failure.
-	static bool Start(int port = 8080);
+	static bool Start(int port = 80);
 
 	// Stop the listener and tear down the uinput device.
 	static void Stop();
