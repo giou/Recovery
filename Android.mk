@@ -56,7 +56,11 @@ LOCAL_SRC_FILES := \
     gui/nanosvg.cpp \
     twrpDigestDriver.cpp \
     openrecoveryscript.cpp \
-    fox_cli.cpp \
+    fox_fifo/fox_fifo.cpp \
+    fox_fifo/fox_input.cpp \
+    fox_fifo/fox_screen.cpp \
+    fox_webserver/fox_jobs.cpp \
+    fox_webserver/fox_httpd.cpp \
     tarWrite.c \
     twrpAdbBuFifo.cpp \
     twrpRepacker.cpp

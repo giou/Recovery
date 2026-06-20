@@ -35,22 +35,32 @@
 #include <unistd.h>
 #include <vector>
 
+#include <fstream>
+#include <sstream>
+#include <sys/stat.h>
+
 #include "fox_httpd.hpp"
 #include "fox_jobs.hpp"
-#include "fox_screen.hpp"
-#include "fox_input.hpp"
+#include "../fox_fifo/fox_screen.hpp"
+#include "../fox_fifo/fox_input.hpp"
 #include "../twcommon.h"
 
-// Dashboard markup lives in a separate header as a raw string literal.
-#include "fox_httpd_page.h"
-
 namespace {
+
+// Root of the optional static dashboard bundle on the ramdisk. The build packs
+// a web bundle here only when FOX_REMOTE_DASHBOARD=1 (see orangefox.mk); if the
+// directory is absent the server runs API-only.
+#ifndef FOX_DASHBOARD_DIR
+#define FOX_DASHBOARD_DIR "/system/etc/fox/dashboard"
+#endif
 
 volatile bool g_running = false;
 int g_listen_fd = -1;
 int g_port = 8080;
 std::string g_token;
 pthread_t g_accept_thread;
+// Remote-control plane (screen + input) gate; independent of g_running.
+volatile bool g_control_enabled = true;
 
 // ---- low-level IO ---------------------------------------------------------
 
@@ -247,12 +257,16 @@ std::vector<std::string> json_argv(const std::string& body) {
 
 void send_response(int fd, const char* status, const char* ctype, const std::string& body) {
 	char hdr[512];
+	// Permissive CORS so the dashboard can be hosted off-device and target a
+	// device by IP. Endpoints still require the session token, so '*' only
+	// widens reachability, not authority.
 	int n = snprintf(hdr, sizeof(hdr),
 		"HTTP/1.1 %s\r\n"
 		"Content-Type: %s\r\n"
 		"Content-Length: %zu\r\n"
 		"Connection: close\r\n"
 		"Cache-Control: no-store\r\n"
+		"Access-Control-Allow-Origin: *\r\n"
 		"\r\n",
 		status, ctype, body.size());
 	if (n > 0)
@@ -270,6 +284,65 @@ void send_404(int fd) {
 
 void send_401(int fd) {
 	send_response(fd, "401 Unauthorized", "text/plain", "unauthorized\n");
+}
+
+void send_403(int fd) {
+	send_response(fd, "403 Forbidden", "text/plain", "remote control disabled\n");
+}
+
+// ---- static dashboard (optional, served from the ramdisk) -----------------
+
+// Guess a Content-Type from the file extension. Defaults to octet-stream.
+const char* guess_mime(const std::string& path) {
+	auto ends = [&](const char* ext) {
+		size_t n = strlen(ext);
+		return path.size() >= n && path.compare(path.size() - n, n, ext) == 0;
+	};
+	if (ends(".html") || ends(".htm")) return "text/html; charset=utf-8";
+	if (ends(".js") || ends(".mjs"))   return "text/javascript; charset=utf-8";
+	if (ends(".css"))                  return "text/css; charset=utf-8";
+	if (ends(".json"))                 return "application/json";
+	if (ends(".svg"))                  return "image/svg+xml";
+	if (ends(".png"))                  return "image/png";
+	if (ends(".jpg") || ends(".jpeg")) return "image/jpeg";
+	if (ends(".webp"))                 return "image/webp";
+	if (ends(".ico"))                  return "image/x-icon";
+	if (ends(".woff2"))                return "font/woff2";
+	if (ends(".woff"))                 return "font/woff";
+	if (ends(".map") || ends(".txt"))  return "text/plain; charset=utf-8";
+	return "application/octet-stream";
+}
+
+bool read_file(const std::string& path, std::string& out) {
+	std::ifstream f(path.c_str(), std::ios::binary);
+	if (!f)
+		return false;
+	std::ostringstream ss;
+	ss << f.rdbuf();
+	out = ss.str();
+	return true;
+}
+
+// Serve a static asset from the dashboard bundle. 'url_path' is the request
+// path ("/" maps to index.html). Returns false if there is no bundle or the
+// asset does not exist, so the caller can fall through to a 404. Rejects any
+// path containing ".." to prevent directory traversal outside the bundle.
+bool serve_static(int fd, const std::string& url_path) {
+	struct stat st;
+	if (stat(FOX_DASHBOARD_DIR, &st) != 0 || !S_ISDIR(st.st_mode))
+		return false;  // no bundle packed: API-only mode
+
+	std::string rel = (url_path == "/") ? "/index.html" : url_path;
+	if (rel.find("..") != std::string::npos)
+		return false;
+
+	std::string full = std::string(FOX_DASHBOARD_DIR) + rel;
+	std::string body;
+	if (!read_file(full, body))
+		return false;
+
+	send_response(fd, "200 OK", guess_mime(full), body);
+	return true;
 }
 
 // ---- key name mapping -----------------------------------------------------
@@ -319,6 +392,8 @@ void handle_status(int fd) {
 	json += std::to_string(Fox_Screen::Height());
 	json += ",\"input_ready\":";
 	json += Fox_Input::IsReady() ? "true" : "false";
+	json += ",\"control\":";
+	json += g_control_enabled ? "true" : "false";
 	json += "}";
 	send_json(fd, json);
 }
@@ -530,9 +605,32 @@ void handle_connection(int fd) {
 		}
 	}
 
-	// Dashboard is static and leaks nothing, so serve it without a token.
-	if (req.method == "GET" && (req.path == "/" || req.path == "/index.html")) {
-		send_response(fd, "200 OK", "text/html; charset=utf-8", FOX_DASHBOARD_HTML);
+	// CORS preflight: a cross-origin POST carrying the JSON body and the
+	// X-Auth-Token header is preceded by an OPTIONS request. Answer it (no auth)
+	// with the allowed methods/headers so the real request can follow.
+	if (req.method == "OPTIONS") {
+		const char* resp =
+			"HTTP/1.1 204 No Content\r\n"
+			"Access-Control-Allow-Origin: *\r\n"
+			"Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n"
+			"Access-Control-Allow-Headers: X-Auth-Token, Content-Type\r\n"
+			"Access-Control-Max-Age: 600\r\n"
+			"Content-Length: 0\r\n"
+			"Connection: close\r\n"
+			"\r\n";
+		send_all(fd, resp, strlen(resp));
+		close(fd);
+		return;
+	}
+
+	// Static dashboard assets (when a bundle is packed on the ramdisk) are
+	// public and leak nothing; the APIs and the screen endpoints below require
+	// the session token. A non-API GET that is not one of the dynamic routes is
+	// treated as a static asset request.
+	if (req.method == "GET" && req.path.compare(0, 5, "/api/") != 0 &&
+	    req.path != "/screen.png" && req.path != "/stream.mjpeg") {
+		if (!serve_static(fd, req.path))
+			send_404(fd);
 		close(fd);
 		return;
 	}
@@ -571,13 +669,17 @@ void handle_connection(int fd) {
 			}
 		}
 	} else if (req.method == "GET" && req.path == "/screen.png") {
-		handle_screen_png(fd);
+		if (!g_control_enabled) send_403(fd);
+		else handle_screen_png(fd);
 	} else if (req.method == "GET" && req.path == "/stream.mjpeg") {
-		handle_stream(fd);  // blocks until disconnect
+		if (!g_control_enabled) send_403(fd);
+		else handle_stream(fd);  // blocks until disconnect
 	} else if (req.method == "POST" && req.path == "/api/input/touch") {
-		handle_touch(fd, req);
+		if (!g_control_enabled) send_403(fd);
+		else handle_touch(fd, req);
 	} else if (req.method == "POST" && req.path == "/api/input/key") {
-		handle_key(fd, req);
+		if (!g_control_enabled) send_403(fd);
+		else handle_key(fd, req);
 	} else {
 		send_404(fd);
 	}
@@ -718,6 +820,14 @@ int Fox_Httpd::Port() {
 
 std::string Fox_Httpd::Token() {
 	return g_token;
+}
+
+void Fox_Httpd::SetControlEnabled(bool on) {
+	g_control_enabled = on;
+}
+
+bool Fox_Httpd::ControlEnabled() {
+	return g_control_enabled;
 }
 
 std::string Fox_Httpd::LocalAddress() {

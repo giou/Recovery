@@ -22,7 +22,7 @@
 
 #include "fox_screen.hpp"
 
-#include "../minuitwrp/minui.h"
+#include "minuitwrp/minui.h"
 
 namespace {
 

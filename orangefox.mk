@@ -926,19 +926,36 @@ endif
 
 endif
 
-# enable the remote-control feature (REST dashboard + screen share + input
-# injection). Opt-in; intended to be used over WLAN. The HTTP server is started
-# explicitly via "fox remote start" and is protected by a per-session token.
-ifeq ($(OF_ENABLE_REMOTE),1)
+# Remote-control dashboard (optional static web UI).
+#
+# The remote-control engine itself -- the HTTP API server, screen capture and
+# input injection -- is always built (see Android.mk). It is started explicitly
+# via "fox remote start" and protected by a per-session token. By default the
+# server is API-only; this block additionally packs a prebuilt web bundle onto
+# the ramdisk so the server can serve a dashboard at "/". When no bundle is
+# present the server stays API-only.
+#
+#   FOX_REMOTE_DASHBOARD := 1       enable packing the dashboard bundle
+#   FOX_DASHBOARD_DIR    := <path>  source web dir to pack (defaults to the
+#                                   bundled dashboard under fox_webserver/dashboard;
+#                                   point this at a built React dist/ instead)
+ifeq ($(FOX_REMOTE_DASHBOARD),1)
     ifneq ($(OF_ENABLE_WLAN),1)
-        $(warning OF_ENABLE_REMOTE is enabled without OF_ENABLE_WLAN; the dashboard will only be reachable over USB/adb networking.)
+        $(warning FOX_REMOTE_DASHBOARD is enabled without OF_ENABLE_WLAN; the dashboard will only be reachable over USB/adb networking.)
     endif
-    LOCAL_CFLAGS += -DOF_ENABLE_REMOTE
-    LOCAL_SRC_FILES += \
-        fox_remote/fox_jobs.cpp \
-        fox_remote/fox_screen.cpp \
-        fox_remote/fox_input.cpp \
-        fox_remote/fox_httpd.cpp
+
+    FOX_DASHBOARD_DIR ?= $(commands_TWRP_local_path)/fox_webserver/dashboard
+    FOX_DASHBOARD_OUT := $(TARGET_RECOVERY_ROOT_OUT)/system/etc/fox/dashboard
+
+ifndef OF_DASHBOARD_RULE_DEFINED
+OF_DASHBOARD_RULE_DEFINED := true
+
+$(FOX_DASHBOARD_OUT): $(FOX_DASHBOARD_DIR)
+	@echo "Packing OrangeFox remote dashboard from $<"
+	@rm -rf $@ && mkdir -p $(dir $@) && cp -a $</. $@
+
+ALL_DEFAULT_INSTALLED_MODULES += $(FOX_DASHBOARD_OUT)
+endif
 endif
 
 # whether to skip substituting some permissions

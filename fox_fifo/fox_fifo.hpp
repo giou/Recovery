@@ -16,13 +16,13 @@
 	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef _FOX_CLI_HPP
-#define _FOX_CLI_HPP
+#ifndef _FOX_FIFO_HPP
+#define _FOX_FIFO_HPP
 
 #include <string>
 #include <vector>
 
-// Fox_CLI implements the modern "fox" command-line front-end. Unlike the
+// Fox_Fifo implements the modern "fox" command-line front-end. Unlike the
 // legacy ORS-based "twrp" tool, fox passes a NUL-delimited argv vector over a
 // dedicated FIFO pair (FOX_INPUT_FILE/FOX_OUTPUT_FILE), which keeps spaces in
 // passwords/paths intact and lets the engine report a real exit code.
@@ -30,7 +30,7 @@
 // The GUI listener (gui/gui.cpp) parses the argv, stores it with Set_Args(),
 // then dispatches the "foxcmd" GUI action which calls Run_Command() on the
 // action thread (so gui_print output is mirrored back to the caller).
-class Fox_CLI
+class Fox_Fifo
 {
 public:
 	// Stash the parsed argv before the foxcmd action runs.
@@ -63,8 +63,15 @@ private:
 	static int Cmd_Partition(const std::vector<std::string>& a);
 	static int Cmd_Addons(const std::vector<std::string>& a);
 	static int Cmd_Storages(const std::vector<std::string>& a);
-	// fox remote {start|stop|status}: control the remote-control HTTP server.
+	// fox remote {start|stop|status}: combined convenience that drives the web
+	// server and the remote-control plane together (back-compatible).
 	static int Cmd_Remote(const std::vector<std::string>& a);
+	// fox webserver {start|stop|status}: the HTTP server (dashboard + REST/job
+	// control plane) on its own.
+	static int Cmd_Webserver(const std::vector<std::string>& a);
+	// fox control {start|stop|status}: the remote-control plane (screen + input
+	// over HTTP), toggled independently of the server.
+	static int Cmd_Control(const std::vector<std::string>& a);
 	// fox input {tap|swipe|key|down|move|up}: inject touch/keys via uinput.
 	// Usable over a plain `adb shell` (no network stack).
 	static int Cmd_Input(const std::vector<std::string>& a);
@@ -87,4 +94,4 @@ private:
 	static void Emit_Partition_List(const std::string& list_type, bool enrich);
 };
 
-#endif // _FOX_CLI_HPP
+#endif // _FOX_FIFO_HPP

@@ -37,10 +37,6 @@ func fox_globalFlags(ctx android.BaseContext) []string {
 		foxflags = append(foxflags, "-DOF_ENABLE_WLAN")
 	}
 
-	if ctx.AConfig().Getenv("OF_ENABLE_REMOTE") == "1" {
-		foxflags = append(foxflags, "-DOF_ENABLE_REMOTE")
-	}
-
 	if ctx.AConfig().Getenv("OF_SUPPORT_OZIP_DECRYPTION") == "1" {
 		foxflags = append(foxflags, "-DOF_SUPPORT_OZIP_DECRYPTION=1")
 	}

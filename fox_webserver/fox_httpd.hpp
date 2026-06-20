@@ -28,10 +28,17 @@
 //   - MJPEG screen stream (Fox_Screen)
 //   - touch/key injection (Fox_Input)
 //
-// It is opt-in (built only with OF_ENABLE_REMOTE, started explicitly via
-// `fox remote start`) and every data endpoint requires a per-session bearer
-// token, because the server grants unauthenticated root with decryption powers
-// otherwise. Bind only on trusted networks.
+// The server (the network listener + REST/job control plane) and the
+// remote-control plane (screen mirroring + input injection) are toggled
+// independently, so the dashboard can run without exposing screen/input
+// ("dashboard but no remote control"), and screen/input can be driven over a
+// plain adb shell (`fox input` / `fox screencap`) without the server. The CLI
+// surfaces this as `fox webserver` and `fox control` (with `fox remote` as a
+// combined convenience).
+//
+// It is always built but started explicitly, and every data endpoint requires a
+// per-session bearer token, because the server grants unauthenticated root with
+// decryption powers otherwise. Bind only on trusted networks.
 class Fox_Httpd
 {
 public:
@@ -51,6 +58,15 @@ public:
 
 	// Best-effort first non-loopback IPv4 address, for printing the URL.
 	static std::string LocalAddress();
+
+	// Remote-control plane (screen mirroring + input injection over HTTP).
+	// Independent of the server lifecycle: the flag can be set before or while
+	// the server runs. When disabled, the /screen.png, /stream.mjpeg and
+	// /api/input/* endpoints return 403; the REST/job control plane is
+	// unaffected. The CLI `fox input` / `fox screencap` commands are not gated
+	// by this (they require adb shell access already). Enabled by default.
+	static void SetControlEnabled(bool on);
+	static bool ControlEnabled();
 };
 
 #endif // _FOX_HTTPD_HPP

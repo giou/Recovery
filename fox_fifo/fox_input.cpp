@@ -27,7 +27,7 @@
 
 #include "fox_input.hpp"
 #include "../twcommon.h"
-#include "../minuitwrp/minui.h"
+#include "minuitwrp/minui.h"
 
 namespace {
 

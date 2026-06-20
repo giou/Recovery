@@ -26,7 +26,7 @@
 #include <string>
 #include <vector>
 
-#include "fox_cli.hpp"
+#include "fox_fifo.hpp"
 #include "twrp-functions.hpp"
 #include "partitions.hpp"
 #include "twcommon.h"
@@ -43,16 +43,14 @@
 #include "wlan.hpp"
 #endif
 
-#ifdef OF_ENABLE_REMOTE
-#include "fox_remote/fox_httpd.hpp"
-#include "fox_remote/fox_input.hpp"
+#include "../fox_webserver/fox_httpd.hpp"
+#include "fox_input.hpp"
 #include "minuitwrp/minui.h"
 #include <linux/input.h>
-#endif
 
-std::vector<std::string> Fox_CLI::args;
+std::vector<std::string> Fox_Fifo::args;
 
-void Fox_CLI::Set_Args(const std::vector<std::string>& a) {
+void Fox_Fifo::Set_Args(const std::vector<std::string>& a) {
 	args = a;
 }
 
@@ -113,7 +111,7 @@ static std::string read_text_file(const std::string& path) {
 	return out.str();
 }
 
-bool Fox_CLI::Resolve_Partition_List(const std::vector<std::string>& specs,
+bool Fox_Fifo::Resolve_Partition_List(const std::vector<std::string>& specs,
                                      std::string& list_out) {
 	list_out.clear();
 	std::vector<PartitionList> backup_partitions;
@@ -138,7 +136,7 @@ bool Fox_CLI::Resolve_Partition_List(const std::vector<std::string>& specs,
 	return true;
 }
 
-bool Fox_CLI::Resolve_Storage(const std::string& spec, std::string& path_out) {
+bool Fox_Fifo::Resolve_Storage(const std::string& spec, std::string& path_out) {
 	path_out.clear();
 	if (spec.empty())
 		return false;
@@ -173,7 +171,7 @@ bool Fox_CLI::Resolve_Storage(const std::string& spec, std::string& path_out) {
 	return false;
 }
 
-void Fox_CLI::Emit_Partition_List(const std::string& list_type, bool enrich) {
+void Fox_Fifo::Emit_Partition_List(const std::string& list_type, bool enrich) {
 	std::vector<PartitionList> parts;
 	PartitionManager.Get_Partition_List(list_type, &parts);
 
@@ -198,7 +196,7 @@ void Fox_CLI::Emit_Partition_List(const std::string& list_type, bool enrich) {
 	gui_print("FOX_LIST_END\n");
 }
 
-int Fox_CLI::Cmd_Mount(const std::vector<std::string>& a, bool unmount) {
+int Fox_Fifo::Cmd_Mount(const std::vector<std::string>& a, bool unmount) {
 	if (a.empty()) {
 		// No partitions: show what is mountable and its current mount state.
 		Emit_Partition_List("mount", false);
@@ -220,7 +218,7 @@ int Fox_CLI::Cmd_Mount(const std::vector<std::string>& a, bool unmount) {
 	return rc;
 }
 
-int Fox_CLI::Cmd_Flash(const std::vector<std::string>& argv) {
+int Fox_Fifo::Cmd_Flash(const std::vector<std::string>& argv) {
 	std::vector<std::string> a = argv;
 	// Signature verification, reflash-after-flash and unmount toggles. Each only
 	// overrides the persistent (UI-configured) value when its flag is supplied,
@@ -270,7 +268,7 @@ int Fox_CLI::Cmd_Flash(const std::vector<std::string>& argv) {
 	return rc;
 }
 
-int Fox_CLI::Cmd_Backup(const std::vector<std::string>& argv) {
+int Fox_Fifo::Cmd_Backup(const std::vector<std::string>& argv) {
 	std::vector<std::string> a = argv;
 	std::string name = take_option(a, "--name");
 	std::string path = take_option(a, "--path");
@@ -360,7 +358,7 @@ int Fox_CLI::Cmd_Backup(const std::vector<std::string>& argv) {
 	return 0;
 }
 
-int Fox_CLI::Cmd_Restore(const std::vector<std::string>& argv) {
+int Fox_Fifo::Cmd_Restore(const std::vector<std::string>& argv) {
 	std::vector<std::string> a = argv;
 	std::string name = take_option(a, "--name");
 	std::string path = take_option(a, "--path");
@@ -449,7 +447,7 @@ int Fox_CLI::Cmd_Restore(const std::vector<std::string>& argv) {
 	return 0;
 }
 
-int Fox_CLI::Cmd_Decrypt(const std::vector<std::string>& argv) {
+int Fox_Fifo::Cmd_Decrypt(const std::vector<std::string>& argv) {
 	std::vector<std::string> a = argv;
 	std::string user = take_option(a, "--user");
 	if (a.empty()) {
@@ -470,7 +468,7 @@ int Fox_CLI::Cmd_Decrypt(const std::vector<std::string>& argv) {
 	return 0;
 }
 
-int Fox_CLI::Cmd_Sideload(const std::vector<std::string>& /*a*/) {
+int Fox_Fifo::Cmd_Sideload(const std::vector<std::string>& /*a*/) {
 	// Reuse the tested ORS sideload handler.
 	return OpenRecoveryScript::Run_ORS_Line("sideload");
 }
@@ -490,7 +488,7 @@ static void print_status_kv(const std::string& key, int value) {
 	gui_print("%s=%d\n", key.c_str(), value);
 }
 
-int Fox_CLI::Cmd_Status(const std::vector<std::string>& /*a*/) {
+int Fox_Fifo::Cmd_Status(const std::vector<std::string>& /*a*/) {
 	int is_encrypted = 0;
 	int is_decrypted = 0;
 	int fox_encrypted = 0;
@@ -550,12 +548,12 @@ int Fox_CLI::Cmd_Status(const std::vector<std::string>& /*a*/) {
 	return 0;
 }
 
-int Fox_CLI::Cmd_Reboot(const std::vector<std::string>& a) {
+int Fox_Fifo::Cmd_Reboot(const std::vector<std::string>& a) {
 	std::string target = a.empty() ? "system" : a[0];
 	return OpenRecoveryScript::Run_ORS_Line("reboot " + target);
 }
 
-int Fox_CLI::Cmd_Wlan(const std::vector<std::string>& a) {
+int Fox_Fifo::Cmd_Wlan(const std::vector<std::string>& a) {
 #ifndef OF_ENABLE_WLAN
 	(void)a;
 	gui_print("fox: WLAN support is not enabled in this build\n");
@@ -640,7 +638,7 @@ int Fox_CLI::Cmd_Wlan(const std::vector<std::string>& a) {
 #endif // OF_ENABLE_WLAN
 }
 
-int Fox_CLI::Cmd_Internal(const std::vector<std::string>& a) {
+int Fox_Fifo::Cmd_Internal(const std::vector<std::string>& a) {
 	if (a.empty()) {
 		gui_print("fox: internal requires a subcommand (get|set|go)\n");
 		return 2;
@@ -677,7 +675,7 @@ int Fox_CLI::Cmd_Internal(const std::vector<std::string>& a) {
 	return 2;
 }
 
-int Fox_CLI::Cmd_Ors(const std::vector<std::string>& a) {
+int Fox_Fifo::Cmd_Ors(const std::vector<std::string>& a) {
 	if (a.empty()) {
 		gui_print("fox: ors requires a script file path\n");
 		return 2;
@@ -685,7 +683,7 @@ int Fox_CLI::Cmd_Ors(const std::vector<std::string>& a) {
 	return OpenRecoveryScript::Run_ORS_File(a[0]);
 }
 
-int Fox_CLI::Cmd_Wipe(const std::vector<std::string>& a) {
+int Fox_Fifo::Cmd_Wipe(const std::vector<std::string>& a) {
 	if (a.empty()) {
 		// No targets: show what can be wiped.
 		Emit_Partition_List("wipe", false);
@@ -716,7 +714,7 @@ int Fox_CLI::Cmd_Wipe(const std::vector<std::string>& a) {
 	return rc;
 }
 
-int Fox_CLI::Cmd_Format_Data(const std::vector<std::string>& argv) {
+int Fox_Fifo::Cmd_Format_Data(const std::vector<std::string>& argv) {
 	std::vector<std::string> a = argv;
 	bool confirmed = take_flag(a, "--yes") || take_flag(a, "--confirm");
 	if (!confirmed) {
@@ -733,7 +731,7 @@ int Fox_CLI::Cmd_Format_Data(const std::vector<std::string>& argv) {
 	return 0;
 }
 
-int Fox_CLI::Cmd_Reflash(const std::vector<std::string>& /*a*/) {
+int Fox_Fifo::Cmd_Reflash(const std::vector<std::string>& /*a*/) {
 	gui_print("Reflashing OrangeFox...\n");
 	twrpRepacker repacker;
 	if (!repacker.Flash_Current_Twrp()) {
@@ -744,7 +742,7 @@ int Fox_CLI::Cmd_Reflash(const std::vector<std::string>& /*a*/) {
 	return 0;
 }
 
-int Fox_CLI::Cmd_Mtp(const std::vector<std::string>& a) {
+int Fox_Fifo::Cmd_Mtp(const std::vector<std::string>& a) {
 	std::string sub = a.empty() ? "status" : a[0];
 	if (sub == "status") {
 		int enabled = DataManager::GetIntValue("tw_mtp_enabled");
@@ -771,7 +769,7 @@ int Fox_CLI::Cmd_Mtp(const std::vector<std::string>& a) {
 	return 2;
 }
 
-int Fox_CLI::Cmd_Log(const std::vector<std::string>& /*a*/) {
+int Fox_Fifo::Cmd_Log(const std::vector<std::string>& /*a*/) {
 	// Mirror the OrangeFox log export: copy the recovery log into the Fox logs
 	// folder and compress it (pigz produces <name>.zip), as in Run_Before_Reboot.
 	TWFunc::Create_Dir_Recursive(Fox_Logs_Dir, 0777);
@@ -796,7 +794,7 @@ int Fox_CLI::Cmd_Log(const std::vector<std::string>& /*a*/) {
 	return 0;
 }
 
-int Fox_CLI::Cmd_Partition(const std::vector<std::string>& a) {
+int Fox_Fifo::Cmd_Partition(const std::vector<std::string>& a) {
 	if (a.empty()) {
 		// No path: list partitions with file system and capability flags.
 		Emit_Partition_List("part_option", true);
@@ -865,7 +863,7 @@ static void collect_zip_files(const std::string& dir, std::vector<std::string>& 
 	closedir(d);
 }
 
-int Fox_CLI::Cmd_Addons(const std::vector<std::string>& a) {
+int Fox_Fifo::Cmd_Addons(const std::vector<std::string>& a) {
 	std::vector<std::string> dirs = { Fox_Home_Files, FFiles_dir };
 
 	if (a.empty() || a[0] == "list") {
@@ -928,7 +926,6 @@ int Fox_CLI::Cmd_Addons(const std::vector<std::string>& a) {
 	return 2;
 }
 
-#ifdef OF_ENABLE_REMOTE
 // Map a friendly key name to a Linux input KEY_* code (or -1 if unknown).
 static int fox_key_code(const std::string& name) {
 	if (name == "back")    return KEY_BACK;
@@ -944,14 +941,8 @@ static int fox_key_code(const std::string& name) {
 	if (name == "right")   return KEY_RIGHT;
 	return -1;
 }
-#endif
 
-int Fox_CLI::Cmd_Screencap(const std::vector<std::string>& a) {
-#ifndef OF_ENABLE_REMOTE
-	(void)a;
-	gui_print("fox: remote control is not enabled in this build\n");
-	return 1;
-#else
+int Fox_Fifo::Cmd_Screencap(const std::vector<std::string>& a) {
 	// Capture the live framebuffer to a PNG file (tmpfs by default) so a client
 	// can read it back over an ADB sync/pull -- no network stack involved.
 	std::string path = a.empty() ? "/tmp/.fox_screen.png" : a[0];
@@ -961,15 +952,9 @@ int Fox_CLI::Cmd_Screencap(const std::vector<std::string>& a) {
 	}
 	gui_print("%s\n", path.c_str());
 	return 0;
-#endif
 }
 
-int Fox_CLI::Cmd_Input(const std::vector<std::string>& a) {
-#ifndef OF_ENABLE_REMOTE
-	(void)a;
-	gui_print("fox: remote control is not enabled in this build\n");
-	return 1;
-#else
+int Fox_Fifo::Cmd_Input(const std::vector<std::string>& a) {
 	if (a.empty()) {
 		gui_print("fox: input requires a subcommand (tap|swipe|key|down|move|up)\n");
 		return 2;
@@ -1026,15 +1011,12 @@ int Fox_CLI::Cmd_Input(const std::vector<std::string>& a) {
 	}
 	gui_print("fox: unknown input subcommand '%s' (tap|swipe|key|down|move|up)\n", sub.c_str());
 	return 2;
-#endif
 }
 
-int Fox_CLI::Cmd_Remote(const std::vector<std::string>& a) {
-#ifndef OF_ENABLE_REMOTE
-	(void)a;
-	gui_print("fox: remote control is not enabled in this build\n");
-	return 1;
-#else
+// fox webserver {start [--port N]|stop|status}: control the HTTP server (the
+// dashboard + REST/job control plane) on its own. The remote-control plane
+// (screen + input) is governed separately by `fox control`.
+int Fox_Fifo::Cmd_Webserver(const std::vector<std::string>& a) {
 	std::string sub = a.empty() ? "status" : a[0];
 
 	if (sub == "start") {
@@ -1042,29 +1024,31 @@ int Fox_CLI::Cmd_Remote(const std::vector<std::string>& a) {
 		std::string port_s = take_option(rest, "--port");
 		int port = port_s.empty() ? 8080 : atoi(port_s.c_str());
 		if (Fox_Httpd::IsRunning()) {
-			gui_print("Remote already running on %s:%d\n",
+			gui_print("Web server already running on %s:%d\n",
 			          Fox_Httpd::LocalAddress().c_str(), Fox_Httpd::Port());
 			gui_print("token=%s\n", Fox_Httpd::Token().c_str());
 			return 0;
 		}
 		if (!Fox_Httpd::Start(port)) {
-			gui_print("fox: failed to start remote server\n");
+			gui_print("fox: failed to start web server\n");
 			return 1;
 		}
-		gui_print("Remote control started\n");
+		gui_print("Web server started\n");
 		gui_print("url=http://%s:%d/\n", Fox_Httpd::LocalAddress().c_str(), Fox_Httpd::Port());
 		gui_print("port=%d\n", Fox_Httpd::Port());
 		gui_print("token=%s\n", Fox_Httpd::Token().c_str());
+		gui_print("control=%d\n", Fox_Httpd::ControlEnabled() ? 1 : 0);
 		return 0;
 	}
 	if (sub == "stop") {
 		Fox_Httpd::Stop();
-		gui_print("Remote control stopped\n");
+		gui_print("Web server stopped\n");
 		return 0;
 	}
 	if (sub == "status") {
 		gui_print("FOX_STATUS_BEGIN\n");
 		gui_print("running=%d\n", Fox_Httpd::IsRunning() ? 1 : 0);
+		gui_print("control=%d\n", Fox_Httpd::ControlEnabled() ? 1 : 0);
 		if (Fox_Httpd::IsRunning()) {
 			gui_print("address=%s\n", Fox_Httpd::LocalAddress().c_str());
 			gui_print("port=%d\n", Fox_Httpd::Port());
@@ -1074,12 +1058,56 @@ int Fox_CLI::Cmd_Remote(const std::vector<std::string>& a) {
 		gui_print("FOX_STATUS_END\n");
 		return 0;
 	}
-	gui_print("fox: unknown remote subcommand '%s' (start|stop|status)\n", sub.c_str());
+	gui_print("fox: unknown webserver subcommand '%s' (start|stop|status)\n", sub.c_str());
 	return 2;
-#endif // OF_ENABLE_REMOTE
 }
 
-int Fox_CLI::Cmd_Storages(const std::vector<std::string>& /*a*/) {
+// fox control {start|stop|status}: toggle the remote-control plane (screen
+// mirroring + input injection) exposed over the HTTP server, independently of
+// whether the server is running. Does not gate the `fox input`/`fox screencap`
+// CLI commands (those need adb shell access already).
+int Fox_Fifo::Cmd_Control(const std::vector<std::string>& a) {
+	std::string sub = a.empty() ? "status" : a[0];
+
+	if (sub == "start" || sub == "enable" || sub == "on") {
+		Fox_Httpd::SetControlEnabled(true);
+		gui_print("Remote control enabled\n");
+		return 0;
+	}
+	if (sub == "stop" || sub == "disable" || sub == "off") {
+		Fox_Httpd::SetControlEnabled(false);
+		gui_print("Remote control disabled\n");
+		return 0;
+	}
+	if (sub == "status") {
+		gui_print("FOX_STATUS_BEGIN\n");
+		gui_print("control=%d\n", Fox_Httpd::ControlEnabled() ? 1 : 0);
+		gui_print("input_ready=%d\n", Fox_Input::IsReady() ? 1 : 0);
+		gui_print("FOX_STATUS_END\n");
+		return 0;
+	}
+	gui_print("fox: unknown control subcommand '%s' (start|stop|status)\n", sub.c_str());
+	return 2;
+}
+
+// fox remote {start|stop|status}: convenience that drives the web server and the
+// remote-control plane together (the original bundled behaviour). Use
+// `fox webserver` and `fox control` for independent control.
+int Fox_Fifo::Cmd_Remote(const std::vector<std::string>& a) {
+	std::string sub = a.empty() ? "status" : a[0];
+
+	if (sub == "start") {
+		Fox_Httpd::SetControlEnabled(true);
+		return Cmd_Webserver(a);
+	}
+	if (sub == "stop" || sub == "status")
+		return Cmd_Webserver(a);
+
+	gui_print("fox: unknown remote subcommand '%s' (start|stop|status)\n", sub.c_str());
+	return 2;
+}
+
+int Fox_Fifo::Cmd_Storages(const std::vector<std::string>& /*a*/) {
 	PartitionManager.Mount_All_Storage();
 	std::vector<PartitionList> storage_list;
 	PartitionManager.Get_Partition_List("storage", &storage_list);
@@ -1096,7 +1124,7 @@ int Fox_CLI::Cmd_Storages(const std::vector<std::string>& /*a*/) {
 	return 0;
 }
 
-int Fox_CLI::Run_Command() {
+int Fox_Fifo::Run_Command() {
 	if (args.empty()) {
 		gui_print("fox: no command given\n");
 		return 2;
@@ -1145,6 +1173,10 @@ int Fox_CLI::Run_Command() {
 		return Cmd_Storages(rest);
 	if (verb == "remote")
 		return Cmd_Remote(rest);
+	if (verb == "webserver")
+		return Cmd_Webserver(rest);
+	if (verb == "control")
+		return Cmd_Control(rest);
 	if (verb == "input")
 		return Cmd_Input(rest);
 	if (verb == "screencap")
