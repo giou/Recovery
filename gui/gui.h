@@ -31,6 +31,14 @@ void gui_print_color(const char *color, const char *fmt, ...);
 void gui_set_FILE(FILE* f);
 void fox_command_done();  // called by the foxcmd action when a fox CLI command finishes
 
+// FOX CLI progress mirroring (see gui/console.cpp). begin()/end() bracket a fox
+// command; overall()/item() mirror the overall and current-item percentages
+// onto the foxout stream when active.
+void gui_fox_progress_begin();
+void gui_fox_progress_end();
+void gui_fox_progress_overall(const int percent);
+void gui_fox_progress_item(const int percent);
+
 void set_scale_values(float w, float h);
 int scale_theme_x(int initial_x);
 int scale_theme_y(int initial_y);

@@ -48,6 +48,7 @@ extern "C"
 #include "twcommon.h"
 #include "gui/pages.h"
   void gui_notifyVarChange(const char *name, const char *value);
+  void gui_fox_progress_overall(const int percent);
 }
 #include "minuitwrp/minui.h"
 
@@ -624,8 +625,15 @@ int DataManager::_SetProgress(float Fraction) {
 		Fraction = 0;
 	if (Fraction > 1.0)
 		Fraction = 1;
-	if (SetValue("ui_progress", (float) ((Portion_Start + (Portion_Size * Fraction)) * 100.0)) != 0)
+	float percent = (Portion_Start + (Portion_Size * Fraction)) * 100.0;
+	if (SetValue("ui_progress", percent) != 0)
 		return -1;
+	// Mirror the overall progress to a running fox CLI client (no-op unless a
+	// fox command is active). Emitting here -- rather than on every ui_progress
+	// SetValue -- avoids the transient 0 that SetProgress() writes via its
+	// ShowProgress(1, 0) reset just before this real value lands. Per-item
+	// progress is emitted separately from ProgressTracking::UpdateDisplayDetails.
+	gui_fox_progress_overall((int)percent);
 	return (SetValue("ui_progress_portion", 0) != 0);
 }
 

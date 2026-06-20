@@ -73,6 +73,7 @@ static TWAtomicInt gForceRender;
 blanktimer blankTimer;
 int ors_read_fd = -1;
 int fox_read_fd = -1;        // modern "fox" CLI input FIFO
+int fox_cancel_read_fd = -1; // out-of-band cancel FIFO, watched even while a command runs
 static FILE* orsout = NULL;  // shared output FILE + single-command guard for both ORS and fox
 static float scale_theme_w = 1;
 static float scale_theme_h = 1;
@@ -505,6 +506,8 @@ void set_select_fd() {
 	select_fd = ors_read_fd + 1;
 	if (fox_read_fd >= select_fd)
 		select_fd = fox_read_fd + 1;
+	if (fox_cancel_read_fd >= select_fd)
+		select_fd = fox_cancel_read_fd + 1;
 	if (g_pty_fd >= select_fd)
 		select_fd = g_pty_fd + 1;
 	if (PartitionManager.uevent_pfd.fd >= select_fd)
@@ -651,6 +654,7 @@ static void setup_fox_command()
 // Called (from the foxcmd GUI action) after a fox command has finished.
 void fox_command_done()
 {
+	gui_fox_progress_end();
 	gui_set_FILE(NULL);
 	if (orsout) {
 		fclose(orsout);
@@ -722,6 +726,7 @@ static void fox_command_read()
 
 	// mirror output messages to foxout, then run on the action thread
 	gui_set_FILE(orsout);
+	gui_fox_progress_begin();  // start mirroring ui_progress to the fox client
 	DataManager::SetValue("tw_action", "foxcmd");
 	DataManager::SetValue("tw_action_param", "");
 	// switch back to the current page when finished
@@ -732,6 +737,51 @@ static void fox_command_read()
 	DataManager::SetValue("tw_action_text1", gui_lookup("running_recovery_commands", "Running Recovery Commands"));
 	DataManager::SetValue("tw_action_text2", "");
 	gui_changePage("singleaction_page");
+}
+
+// ---- Out-of-band cancel channel --------------------------------------------
+// Unlike foxin, this FIFO is watched even while a fox command is running, so a
+// client can request cancellation of a cancellable operation (e.g. backup)
+// mid-flight. The read end is recreated after each EOF (same readiness reset
+// the command FIFOs use) so select() stays quiet until a client connects.
+
+static void setup_fox_cancel()
+{
+	if (fox_cancel_read_fd >= 0) {
+		close(fox_cancel_read_fd);
+		fox_cancel_read_fd = -1;
+	}
+	unlink(FOX_CANCEL_FILE);
+	if (mkfifo(FOX_CANCEL_FILE, 06660) != 0) {
+		LOGINFO("Unable to mkfifo %s\n", FOX_CANCEL_FILE);
+		set_select_fd();
+		return;
+	}
+	fox_cancel_read_fd = open(FOX_CANCEL_FILE, O_RDONLY | O_NONBLOCK);
+	if (fox_cancel_read_fd < 0) {
+		LOGINFO("Unable to open %s\n", FOX_CANCEL_FILE);
+		unlink(FOX_CANCEL_FILE);
+	}
+	set_select_fd();
+}
+
+static void fox_cancel_read()
+{
+	char buffer[64];
+	int read_ret = read(fox_cancel_read_fd, &buffer, sizeof(buffer));
+	if (read_ret <= 0) {
+		// Writer closed (EOF) or error: recreate the FIFO to reset readiness.
+		setup_fox_cancel();
+		return;
+	}
+	// Only meaningful while a fox command is actually running (orsout is the
+	// in-progress guard). Cancelling a backup is safe to invoke from this (GUI)
+	// thread while the backup runs on the action thread -- it mirrors the GUI's
+	// cancel button, which runs Cancel_Backup() off the main backup thread.
+	if (orsout) {
+		LOGINFO("fox: cancel request received\n");
+		PartitionManager.Cancel_Backup();
+	}
 }
 
 // Get and dispatch input events until it's time to draw the next frame
@@ -824,6 +874,10 @@ static int runPages(const char *page_name, const int stop_on_page_done)
 		if (fox_read_fd > 0 && !orsout) {
 			FD_SET(fox_read_fd, &fdset);
 		}
+		// Watched unconditionally -- cancellation must work while a command runs.
+		if (fox_cancel_read_fd > 0) {
+			FD_SET(fox_cancel_read_fd, &fdset);
+		}
 #endif
 		// TODO: combine this select with the poll done by input handling
 		has_data = select(select_fd, &fdset, NULL, NULL, &timeout);
@@ -836,6 +890,8 @@ static int runPages(const char *page_name, const int stop_on_page_done)
 				ors_command_read();
 			if (fox_read_fd > 0 && !orsout && FD_ISSET(fox_read_fd, &fdset))
 				fox_command_read();
+			if (fox_cancel_read_fd > 0 && FD_ISSET(fox_cancel_read_fd, &fdset))
+				fox_cancel_read();
 		}
 
 		if (!gForceRender.get_value())
@@ -899,6 +955,9 @@ static int runPages(const char *page_name, const int stop_on_page_done)
 	if (fox_read_fd > 0)
 		close(fox_read_fd);
 	fox_read_fd = -1;
+	if (fox_cancel_read_fd > 0)
+		close(fox_cancel_read_fd);
+	fox_cancel_read_fd = -1;
 	set_select_fd();
 	gGuiRunning = 0;
 	return 0;
@@ -1185,6 +1244,8 @@ extern "C" int gui_startPage(const char *page_name, const int allow_commands, in
 			setup_ors_command();
 		if (fox_read_fd < 0)
 			setup_fox_command();
+		if (fox_cancel_read_fd < 0)
+			setup_fox_cancel();
 	} else {
 		if (ors_read_fd >= 0) {
 			close(ors_read_fd);
@@ -1193,6 +1254,10 @@ extern "C" int gui_startPage(const char *page_name, const int allow_commands, in
 		if (fox_read_fd >= 0) {
 			close(fox_read_fd);
 			fox_read_fd = -1;
+		}
+		if (fox_cancel_read_fd >= 0) {
+			close(fox_cancel_read_fd);
+			fox_cancel_read_fd = -1;
 		}
 	}
 #endif

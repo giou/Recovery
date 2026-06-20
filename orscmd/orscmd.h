@@ -28,4 +28,9 @@
 #define FOX_OUTPUT_FILE "/system/bin/foxout"
 #define FOX_EXIT_SENTINEL "\x04""EXIT "
 
+// Out-of-band cancel channel for cancellable operations (e.g. backup). The GUI
+// event loop watches this FIFO at all times -- even while a fox command runs --
+// so a client can request cancellation mid-operation by writing any byte to it.
+#define FOX_CANCEL_FILE "/system/bin/foxcancel"
+
 #endif //__ORSCMD_H

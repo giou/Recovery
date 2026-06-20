@@ -128,6 +128,69 @@ extern "C" void gui_set_FILE(FILE* f)
 	ors_file = f;
 }
 
+// ---- FOX CLI progress mirroring --------------------------------------------
+// While a "fox" CLI command runs, progress is mirrored to the foxout stream as
+// "FOX_PROGRESS\t<field>=<n>\n" lines. The fox client consumes these to drive
+// its progress bars and strips them from the streamed log. Two fields are
+// emitted: "percent" is the overall operation progress, "item" is the current
+// partition/file progress (multi-partition backups/restores). Each field is
+// tracked independently and duplicate values are suppressed so a long operation
+// does not flood the FIFO.
+static bool fox_progress_active = false;
+static int  fox_last_overall = -1;
+static int  fox_last_item = -1;
+
+static int fox_clamp_percent(int percent)
+{
+	if (percent < 0)
+		return 0;
+	if (percent > 100)
+		return 100;
+	return percent;
+}
+
+extern "C" void gui_fox_progress_begin()
+{
+	pthread_mutex_lock(&console_lock);
+	fox_progress_active = true;
+	fox_last_overall = -1;
+	fox_last_item = -1;
+	pthread_mutex_unlock(&console_lock);
+}
+
+extern "C" void gui_fox_progress_end()
+{
+	pthread_mutex_lock(&console_lock);
+	fox_progress_active = false;
+	fox_last_overall = -1;
+	fox_last_item = -1;
+	pthread_mutex_unlock(&console_lock);
+}
+
+extern "C" void gui_fox_progress_overall(const int percent)
+{
+	int clamped = fox_clamp_percent(percent);
+	pthread_mutex_lock(&console_lock);
+	if (fox_progress_active && ors_file && clamped != fox_last_overall) {
+		fox_last_overall = clamped;
+		fprintf(ors_file, "FOX_PROGRESS\tpercent=%d\n", clamped);
+		fflush(ors_file);
+	}
+	pthread_mutex_unlock(&console_lock);
+}
+
+extern "C" void gui_fox_progress_item(const int percent)
+{
+	int clamped = fox_clamp_percent(percent);
+	pthread_mutex_lock(&console_lock);
+	if (fox_progress_active && ors_file && clamped != fox_last_item) {
+		fox_last_item = clamped;
+		fprintf(ors_file, "FOX_PROGRESS\titem=%d\n", clamped);
+		fflush(ors_file);
+	}
+	pthread_mutex_unlock(&console_lock);
+}
+
 void gui_msg(const char* text)
 {
 	if (text) {

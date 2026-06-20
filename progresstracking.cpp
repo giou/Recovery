@@ -97,6 +97,16 @@ void ProgressTracking::UpdateDisplayDetails(const bool force) {
 	progress_percent = (display_percent / 100);
 	DataManager::SetProgress((float)(progress_percent));
 
+	// Mirror the current partition's own progress to a running fox CLI client so
+	// it can show a per-item bar distinct from the overall bar (no-op unless a
+	// fox command is active). The overall value is emitted by SetProgress above.
+	if (partition_size != 0) {
+		double item_percent = (double)(current_size) / (double)(partition_size) * 100;
+		if (item_percent > 100.0)
+			item_percent = 100.0;
+		gui_fox_progress_item((int)item_percent);
+	}
+
 	if (!display_file_count || file_count == 0) {
 		DataManager::SetValue("tw_file_progress", "");
 	} else {

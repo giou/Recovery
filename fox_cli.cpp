@@ -282,25 +282,70 @@ int Fox_CLI::Cmd_Backup(const std::vector<std::string>& argv) {
 	if (!Resolve_Partition_List(a, backup_list))
 		return 1;
 
+	// Make sure storages are mounted before resolving the destination, so a real
+	// persistent location is available (mirrors Cmd_Restore). Without this the
+	// default tw_storage_path can still point at "/" (tmpfs), where a backup
+	// completes instantly and silently vanishes on reboot.
+	PartitionManager.Mount_All_Storage();
+
+	// Default the destination to internal storage when the caller did not pick a
+	// --storage or --path, so "fox backup data" lands on Internal Storage rather
+	// than wherever tw_storage_path happens to point.
+	bool storage_defaulted = false;
+	if (storage.empty() && path.empty()) {
+		storage = "internal";
+		storage_defaulted = true;
+	}
+
 	if (!storage.empty()) {
 		if (!Resolve_Storage(storage, path)) {
-			gui_print("fox: unknown storage '%s' (try 'fox storages')\n", storage.c_str());
-			return 1;
+			if (!storage_defaulted) {
+				gui_print("fox: unknown storage '%s' (try 'fox storages')\n", storage.c_str());
+				return 1;
+			}
+			// Internal storage could not be resolved by alias; fall back to the
+			// current storage path so the backup still lands somewhere real.
+			path = DataManager::GetCurrentStoragePath();
 		}
 	}
 	if (!path.empty()) {
 		DataManager::SetValue("tw_storage_path", path);
 		DataManager::SetBackupFolder();
 	}
+
+	// Guard: refuse to back up to a destination whose partition is not mounted.
+	// Writing into an unmounted mount point lands on the underlying tmpfs (RAM),
+	// where the backup finishes instantly and is silently lost on reboot. We
+	// only check paths that map to a known partition, so an arbitrary --path
+	// outside the partition table is left to the caller.
+	std::string dest = path.empty() ? DataManager::GetCurrentStoragePath() : path;
+	if (!dest.empty() && PartitionManager.Find_Partition_By_Path(dest) != NULL &&
+	    !PartitionManager.Is_Mounted_By_Path(dest)) {
+		gui_print("fox: backup destination '%s' is not mounted; aborting.\n", dest.c_str());
+		gui_print("fox: mount it first, run 'fox decrypt' if storage is encrypted, "
+		          "or pass --storage/--path.\n");
+		return 1;
+	}
+
 	DataManager::SetValue(TW_USE_COMPRESSION_VAR, compress ? 1 : 0);
 	DataManager::SetValue(TW_SKIP_DIGEST_GENERATE_VAR, no_digest ? 1 : 0);
 	if (!name.empty())
 		DataManager::SetValue(TW_BACKUP_NAME, name);
 	else
-		DataManager::SetValue(TW_BACKUP_NAME, "(Auto Generate)");
+		// Generate a real date/build-based name now. Setting the literal
+		// "(Auto Generate)" only works in the GUI, where Run_Backup matches it
+		// against the localized gui_lookup("auto_generate") string; from the CLI
+		// that comparison fails and the literal becomes the folder name.
+		TWFunc::Auto_Generate_Backup_Name();
 	DataManager::SetValue("tw_backup_list", backup_list);
 
 	if (!PartitionManager.Run_Backup(false)) {
+		// Distinguish a user cancellation (via the fox cancel channel or the GUI)
+		// from a genuine failure so the client can report it cleanly.
+		if (PartitionManager.Check_Backup_Cancel() != 0) {
+			gui_print("Backup cancelled\n");
+			return 130;  // 128 + SIGINT, the shell convention for Ctrl+C
+		}
 		gui_print("fox: backup failed\n");
 		return 1;
 	}
