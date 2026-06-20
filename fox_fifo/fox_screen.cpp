@@ -28,6 +28,7 @@ namespace {
 
 pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
 std::string g_latest;        // most recent encoded PNG (complete frame)
+uint64_t g_generation = 0;   // increments after each complete captured frame
 long g_wanted_until_ms = 0;  // viewers want frames until this time
 long g_last_capture_ms = 0;  // when we last captured
 bool g_pending = false;      // a render happened but capture was rate-limited
@@ -95,9 +96,24 @@ void Fox_Screen::CaptureFrameIfWanted() {
 
 	pthread_mutex_lock(&g_lock);
 	g_latest.swap(png);
+	++g_generation;
 	g_last_capture_ms = now;
 	g_pending = false;
 	pthread_mutex_unlock(&g_lock);
+}
+
+bool Fox_Screen::CaptureFrameNow(std::string& png) {
+	if (!capture_png(png))
+		return false;
+
+	long now = now_ms();
+	pthread_mutex_lock(&g_lock);
+	g_latest = png;
+	++g_generation;
+	g_last_capture_ms = now;
+	g_pending = false;
+	pthread_mutex_unlock(&g_lock);
+	return true;
 }
 
 bool Fox_Screen::ShouldForceRender() {
@@ -121,11 +137,14 @@ void Fox_Screen::RequestFrames() {
 	pthread_mutex_unlock(&g_lock);
 }
 
-bool Fox_Screen::GetLatest(std::string& png) {
+bool Fox_Screen::GetLatest(std::string& png, uint64_t* generation) {
 	pthread_mutex_lock(&g_lock);
 	bool ok = !g_latest.empty();
-	if (ok)
+	if (ok) {
 		png = g_latest;
+		if (generation)
+			*generation = g_generation;
+	}
 	pthread_mutex_unlock(&g_lock);
 	return ok;
 }

@@ -51,6 +51,11 @@ public:
 	// and before flip().
 	static void CaptureFrameIfWanted();
 
+	// Capture the freshly rendered frame immediately, regardless of viewer
+	// state or rate limit. MUST be called on the GUI thread, after
+	// PageManager::Render() and before flip().
+	static bool CaptureFrameNow(std::string& png);
+
 	// True when a viewer wants frames but the screen is idle, so the main loop
 	// should force a full render to produce a fresh frame. GUI thread only.
 	static bool ShouldForceRender();
@@ -61,7 +66,9 @@ public:
 	static void RequestFrames();
 
 	// Copy the latest captured PNG. Returns false if none has been produced.
-	static bool GetLatest(std::string& png);
+	// When generation is non-null, it receives a monotonically increasing
+	// snapshot id for freshness checks.
+	static bool GetLatest(std::string& png, uint64_t* generation = nullptr);
 };
 
 #endif // _FOX_SCREEN_HPP

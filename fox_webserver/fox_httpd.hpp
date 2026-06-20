@@ -33,8 +33,7 @@
 // independently, so the dashboard can run without exposing screen/input
 // ("dashboard but no remote control"), and screen/input can be driven over a
 // plain adb shell (`fox input` / `fox screencap`) without the server. The CLI
-// surfaces this as `fox webserver` and `fox control` (with `fox remote` as a
-// combined convenience).
+// surfaces this as `fox webserver` and `fox control`.
 //
 // It is always built but started explicitly, and every data endpoint requires a
 // per-session bearer token, because the server grants unauthenticated root with

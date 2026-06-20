@@ -497,14 +497,33 @@ void handle_key(int fd, const Request& req) {
 }
 
 void handle_screen_png(int fd) {
-	// Ask the GUI thread for frames and wait briefly for one to be produced
-	// (the GUI loop force-renders when frames are wanted but idle).
+	// Ask the GUI thread for a fresh frame. WebUSB polls this endpoint over
+	// short-lived sockets, so returning the cached snapshot immediately can make
+	// the browser cycle new blob URLs while displaying stale pixels.
 	std::string png;
-	for (int i = 0; i < 40 && !Fox_Screen::GetLatest(png); i++) {
+	uint64_t start_gen = 0;
+	bool had_frame = Fox_Screen::GetLatest(png, &start_gen);
+	for (int i = 0; i < 40; i++) {
 		Fox_Screen::RequestFrames();
+		std::string next;
+		uint64_t gen = 0;
+		if (Fox_Screen::GetLatest(next, &gen)) {
+			if (!had_frame || gen != start_gen) {
+				png.swap(next);
+				break;
+			}
+			if (png.empty())
+				png.swap(next);
+		}
 		struct timespec ts = { 0, 25 * 1000 * 1000 };
 		nanosleep(&ts, nullptr);
 	}
+	// Catch a frame produced during the final sleep before falling back to the
+	// previous snapshot.
+	std::string latest;
+	uint64_t latest_gen = 0;
+	if (Fox_Screen::GetLatest(latest, &latest_gen) && (!had_frame || latest_gen != start_gen))
+		png.swap(latest);
 	if (png.empty()) {
 		send_response(fd, "503 Service Unavailable", "text/plain", "capture failed\n");
 		return;

@@ -26,6 +26,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <string>
 #include <fcntl.h>
 #include <sys/reboot.h>
 #include <sys/stat.h>
@@ -36,6 +37,7 @@
 #include <sys/mount.h>
 #include <time.h>
 #include <unistd.h>
+#include <vector>
 
 extern "C"
 {
@@ -676,6 +678,82 @@ void fox_command_done()
 	}
 }
 
+static std::string fox_base64_encode(const std::string& in)
+{
+	static const char table[] =
+		"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+	std::string out;
+	out.reserve(((in.size() + 2) / 3) * 4 + in.size() / 57 + 1);
+
+	for (size_t i = 0; i < in.size(); i += 3) {
+		unsigned int b0 = (unsigned char)in[i];
+		unsigned int b1 = i + 1 < in.size() ? (unsigned char)in[i + 1] : 0;
+		unsigned int b2 = i + 2 < in.size() ? (unsigned char)in[i + 2] : 0;
+		out += table[b0 >> 2];
+		out += table[((b0 & 0x03) << 4) | (b1 >> 4)];
+		out += i + 1 < in.size() ? table[((b1 & 0x0f) << 2) | (b2 >> 6)] : '=';
+		out += i + 2 < in.size() ? table[b2 & 0x3f] : '=';
+	}
+	out += '\n';
+	return out;
+}
+
+static bool fox_is_silent_screencap(const std::vector<std::string>& argv)
+{
+	if (argv.empty() || argv[0] != "screencap")
+		return false;
+	for (size_t i = 1; i < argv.size(); i++)
+		if (argv[i] == "--base64")
+			return true;
+	return false;
+}
+
+static bool fox_is_silent_input(const std::vector<std::string>& argv)
+{
+	return !argv.empty() && argv[0] == "input";
+}
+
+static void fox_finish_fifo_response(int code)
+{
+	fprintf(orsout, "%s%d\n", FOX_EXIT_SENTINEL, code);
+	gui_set_FILE(NULL);
+	fclose(orsout);
+	orsout = NULL;
+	if (fox_read_fd >= 0)
+		close(fox_read_fd);
+	setup_fox_command();
+}
+
+static bool fox_try_silent_command(const std::vector<std::string>& argv)
+{
+	if (fox_is_silent_screencap(argv)) {
+		std::string png;
+		PageManager::Render();
+		bool ok = Fox_Screen::CaptureFrameNow(png);
+		flip();
+		if (ok) {
+			std::string b64 = fox_base64_encode(png);
+			fwrite(b64.data(), 1, b64.size(), orsout);
+			fox_finish_fifo_response(0);
+		} else {
+			fputs("fox: screencap failed\n", orsout);
+			fox_finish_fifo_response(1);
+		}
+		return true;
+	}
+
+	if (fox_is_silent_input(argv)) {
+		Fox_Fifo::Set_Args(argv);
+		gui_set_FILE(orsout);
+		int code = Fox_Fifo::Run_Command();
+		gui_set_FILE(NULL);
+		fox_finish_fifo_response(code);
+		return true;
+	}
+
+	return false;
+}
+
 static void fox_command_read()
 {
 	char buffer[4096];
@@ -728,6 +806,9 @@ static void fox_command_read()
 		setup_fox_command();
 		return;
 	}
+
+	if (fox_try_silent_command(argv))
+		return;
 
 	Fox_Fifo::Set_Args(argv);
 

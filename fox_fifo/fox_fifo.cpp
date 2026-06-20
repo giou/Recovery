@@ -1090,23 +1090,6 @@ int Fox_Fifo::Cmd_Control(const std::vector<std::string>& a) {
 	return 2;
 }
 
-// fox remote {start|stop|status}: convenience that drives the web server and the
-// remote-control plane together (the original bundled behaviour). Use
-// `fox webserver` and `fox control` for independent control.
-int Fox_Fifo::Cmd_Remote(const std::vector<std::string>& a) {
-	std::string sub = a.empty() ? "status" : a[0];
-
-	if (sub == "start") {
-		Fox_Httpd::SetControlEnabled(true);
-		return Cmd_Webserver(a);
-	}
-	if (sub == "stop" || sub == "status")
-		return Cmd_Webserver(a);
-
-	gui_print("fox: unknown remote subcommand '%s' (start|stop|status)\n", sub.c_str());
-	return 2;
-}
-
 int Fox_Fifo::Cmd_Storages(const std::vector<std::string>& /*a*/) {
 	PartitionManager.Mount_All_Storage();
 	std::vector<PartitionList> storage_list;
@@ -1171,8 +1154,6 @@ int Fox_Fifo::Run_Command() {
 		return Cmd_Addons(rest);
 	if (verb == "storages")
 		return Cmd_Storages(rest);
-	if (verb == "remote")
-		return Cmd_Remote(rest);
 	if (verb == "webserver")
 		return Cmd_Webserver(rest);
 	if (verb == "control")

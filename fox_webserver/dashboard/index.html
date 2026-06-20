@@ -48,6 +48,7 @@
       <div class="row tabs" id="provtabs">
         <button class="prov accent" data-prov="rest">REST API</button>
         <button class="prov" data-prov="usb">USB (WebUSB)</button>
+        <button class="prov" data-prov="usbtunnel">USB Tunnel</button>
       </div>
       <div id="rest-fields" style="margin-top:.6rem">
         <input type="text" id="host" placeholder="device IP (e.g. 192.168.1.50)" autocomplete="off" autocapitalize="off" spellcheck="false">
@@ -99,7 +100,7 @@
 <script>
 // OrangeFox Remote dashboard.
 //
-// Two interchangeable connection providers expose the SAME interface so the rest
+// Three interchangeable connection providers expose the SAME interface so the rest
 // of the UI does not care which transport is active:
 //
 //   provider.connect()                  -> establish/validate the connection
@@ -110,14 +111,18 @@
 //   * RestProvider  -- talks plain fetch() to the same origin (the in-recovery
 //                      HTTP server over WLAN). Screen via the live MJPEG stream.
 //   * UsbProvider   -- talks ADB-over-WebUSB (ya-webadb) to a device on a USB
-//                      cable, runs `fox remote start`, then tunnels HTTP over an
-//                      ADB tcp: socket to the same server. Screen via PNG polling.
+//                      cable and drives `fox screencap` / `fox input` through
+//                      the FIFO shell interface. No WLAN or HTTP server needed.
+//   * UsbTunnelProvider -- talks ADB-over-WebUSB, starts the on-device
+//                      webserver/control plane, and tunnels HTTP over ADB tcp:.
 //                      The WLAN-only feature set thus also works over USB on
 //                      sources without WiFi. ya-webadb is lazy-imported on first
 //                      USB connect, so the REST path stays fully offline-capable.
 const $ = s => document.querySelector(s);
 const dec = new TextDecoder();
 const enc = new TextEncoder();
+const dbg = (...args) => console.log('[OrangeFox WebUSB]', ...args);
+const warn = (...args) => console.warn('[OrangeFox WebUSB]', ...args);
 
 function makeResp(status, bodyBytes) {
   return {
@@ -166,13 +171,14 @@ const RestProvider = {
   stopScreen(img) { img.removeAttribute('src'); },
 };
 
-// ---- WebUSB (ADB) provider ------------------------------------------------
-const UsbProvider = {
-  id: 'usb',
-  adb: null, port: 8080, token: '', fps: 1.5, screenTimer: null,
+// ---- WebUSB (ADB) providers ----------------------------------------------
+const UsbBase = {
+  adb: null, fps: 1.5, screenTimer: null,
+  shellQueue: Promise.resolve(), inputActive: false, deferScreenUntil: 0,
   async connect() {
     // Lazy-load ya-webadb so the REST dashboard works with no internet access.
-    // CONNECT marker: if a pinned version's API differs, adjust here + _shellText.
+    // CONNECT marker: if a pinned version's API differs, adjust here + _shellText/_shellBytes.
+    dbg('loading ya-webadb modules');
     const [adbMod, usbMod, credMod] = await Promise.all([
       import('https://esm.sh/@yume-chan/adb@1.1.0'),
       import('https://esm.sh/@yume-chan/adb-daemon-webusb@1.1.0'),
@@ -184,45 +190,245 @@ const UsbProvider = {
 
     const manager = AdbDaemonWebUsbDeviceManager.BROWSER;
     if (!manager) throw new Error('WebUSB unavailable (use Chrome/Edge over https/localhost)');
+    dbg('requesting USB device');
     const device = await manager.requestDevice();   // browser USB picker
     if (!device) throw new Error('no device selected');
+    dbg('selected USB device', device.serial || '(no serial)');
     const connection = await device.connect();
+    dbg('USB transport connected, authenticating ADB');
     const credentialStore = new AdbWebCredentialStore('OrangeFox Remote');
     const transport = await AdbDaemonTransport.authenticate({ serial: device.serial, connection, credentialStore });
     this.adb = new Adb(transport);
-
-    // Bootstrap: start the on-device server + control plane, parse its port +
-    // session token. `fox remote start` enables both (web server + control); it
-    // is sent through the foxcli raw passthrough (`fox fifo send <argv>`), which
-    // mirrors the engine's foxout, including the port= / token= lines.
-    const out = await this._shellText('fox fifo send remote start');
-    const portM = out.match(/port=(\d+)/);
-    const tokM = out.match(/token=([0-9a-f]+)/i);
-    if (portM) this.port = parseInt(portM[1], 10);
-    if (tokM) this.token = tokM[1];
-    if (!this.token) throw new Error('could not parse token: ' + out.slice(0, 120));
+    this.shellQueue = Promise.resolve();
+    this.inputActive = false;
+    this.deferScreenUntil = 0;
+    dbg('ADB authenticated');
   },
   async disconnect() {
     this.stopScreen();
     try { if (this.adb) await this.adb.close(); } catch (e) {}
-    this.adb = null; this.token = '';
+    this.adb = null; this.shellQueue = Promise.resolve();
+    this.inputActive = false; this.deferScreenUntil = 0;
   },
   // SHELL marker: subprocess entry point differs across ya-webadb versions.
   async _shellText(command) {
+    const bytes = await this._shellBytes(command, true);
+    return dec.decode(bytes);
+  },
+  async _shellBytes(command, preferTextApi = false) {
+    const run = () => this._shellBytesRaw(command, preferTextApi);
+    const next = this.shellQueue.then(run, run);
+    this.shellQueue = next.catch(() => {});
+    return await next;
+  },
+  async _shellBytesRaw(command, preferTextApi = false) {
+    dbg('shell start', command);
     const sp = this.adb.subprocess;
-    if (sp.noneProtocol && sp.noneProtocol.spawnWaitText)
-      return await sp.noneProtocol.spawnWaitText(command);
+    if (preferTextApi && sp.noneProtocol && sp.noneProtocol.spawnWaitText) {
+      const text = await sp.noneProtocol.spawnWaitText(command);
+      dbg('shell done', command, text.length, 'chars');
+      return enc.encode(text);
+    }
     if (sp.spawnAndWaitLegacy) {
       const o = await sp.spawnAndWaitLegacy(command);
-      return typeof o === 'string' ? o : dec.decode(o);
+      const bytes = typeof o === 'string' ? enc.encode(o) : this._toU8(o);
+      dbg('shell done', command, bytes.length, 'bytes');
+      return bytes;
     }
-    const proc = await (sp.shell ? sp.shell(command) : sp.spawn(command));
+    const spawn = sp.noneProtocol && sp.noneProtocol.spawn ? sp.noneProtocol.spawn.bind(sp.noneProtocol) :
+                  sp.shell ? sp.shell.bind(sp) : sp.spawn.bind(sp);
+    const proc = await spawn(command);
     const reader = proc.stdout.getReader();
-    let t = '';
-    for (;;) { const { done, value } = await reader.read(); if (done) break; t += dec.decode(value); }
-    return t;
+    const chunks = []; let total = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const u8 = this._toU8(value);
+      chunks.push(u8); total += u8.length;
+    }
+    const buf = new Uint8Array(total);
+    let off = 0; for (const c of chunks) { buf.set(c, off); off += c.length; }
+    dbg('shell done', command, buf.length, 'bytes');
+    return buf;
   },
-  // HTTP over a fresh ADB tcp: socket per request (server replies Connection: close).
+  _toU8(v) {
+    if (v instanceof Uint8Array) return v;
+    if (v && v.value instanceof Uint8Array) return v.value;  // Consumable
+    return new Uint8Array(v);
+  },
+  _quoteArg(s) {
+    return "'" + String(s).replace(/'/g, "'\\''") + "'";
+  },
+  async _writeChunk(writer, u8) {
+    try { await writer.write(u8); }
+    catch (e) {
+      const mod = await import('https://esm.sh/@yume-chan/stream-extra@1.1.0');
+      await writer.write(new mod.Consumable(u8));
+    }
+  },
+  startScreen(img) {
+    this.stopScreen();
+    dbg('screen pump start');
+    const pump = async () => {
+      if (provider !== this || !this.adb) return;
+      try {
+        if (this.inputActive || Date.now() < this.deferScreenUntil) {
+          this.screenTimer = setTimeout(pump, 80);
+          return;
+        }
+        const r = await this.api('GET', '/screen.png');
+        if (r.status === 200 && r.bodyBytes.length) {
+          const url = URL.createObjectURL(new Blob([r.bodyBytes], { type: 'image/png' }));
+          const old = img.src;
+          img.src = url;
+          if (old.startsWith('blob:')) URL.revokeObjectURL(old);
+          if (connected) setStatus('connected');
+        }
+      } catch (e) {
+        warn('screen pump failed', e);
+        if (connected) setStatus('USB screen error; see console');
+      }
+      const fps = Math.max(0.2, Math.min(10, this.fps));
+      this.screenTimer = setTimeout(pump, 1000 / fps);
+    };
+    pump();
+  },
+  stopScreen() {
+    if (this.screenTimer) {
+      dbg('screen pump stop');
+      clearTimeout(this.screenTimer);
+      this.screenTimer = null;
+    }
+  },
+};
+
+const UsbProvider = Object.assign(Object.create(UsbBase), {
+  id: 'usb',
+  jobs: {}, nextJob: 1, lastScreen: null,
+  async connect() {
+    await UsbBase.connect.call(this);
+    this.lastScreen = null;
+  },
+  async disconnect() {
+    await UsbBase.disconnect.call(this);
+    this.lastScreen = null;
+  },
+  async api(method, path, opts = {}) {
+    if (!this.adb) throw new Error('not connected');
+
+    if (method === 'GET' && path === '/api/status') {
+      const png = this.lastScreen || await this._screenBytes();
+      const dim = this._pngDims(png);
+      return makeResp(200, enc.encode(JSON.stringify({
+        width: dim.width, height: dim.height, input_ready: true, control: true
+      })));
+    }
+
+    if (method === 'GET' && path === '/screen.png') {
+      return makeResp(200, await this._screenBytes());
+    }
+
+    if (method === 'POST' && path === '/api/input/touch') {
+      const j = JSON.parse(opts.body || '{}');
+      const action = j.action || 'tap';
+      if (action === 'up') await this._inputShell('fox fifo send input up');
+      else await this._inputShell('fox fifo send input ' + action + ' ' + (j.x | 0) + ' ' + (j.y | 0));
+      return makeResp(200, enc.encode('{"ok":true}'));
+    }
+
+    if (method === 'POST' && path === '/api/input/key') {
+      const j = JSON.parse(opts.body || '{}');
+      const key = this._quoteArg(j.key || j.code || '');
+      await this._inputShell('fox fifo send input key ' + key);
+      return makeResp(200, enc.encode('{"ok":true}'));
+    }
+
+    if (method === 'POST' && path === '/api/cmd') {
+      const j = JSON.parse(opts.body || '{}');
+      const argv = Array.isArray(j.argv) ? j.argv : [];
+      const id = this.nextJob++;
+      const out = argv.length ? await this._shellText('fox fifo send ' + argv.map(a => this._quoteArg(a)).join(' ')) : '';
+      this.jobs[id] = { data: out, sent: false, exit_code: 0 };
+      return makeResp(200, enc.encode(JSON.stringify({ id })));
+    }
+
+    if (method === 'GET' && path.startsWith('/api/jobs/')) {
+      const m = path.match(/^\/api\/jobs\/(\d+)\/output(?:\?offset=(\d+))?/);
+      if (!m || !this.jobs[m[1]]) return makeResp(404, enc.encode('{"error":"not found"}'));
+      const job = this.jobs[m[1]];
+      const offset = parseInt(m[2] || '0', 10);
+      const data = offset > 0 ? '' : job.data;
+      const nextOffset = offset + data.length;
+      return makeResp(200, enc.encode(JSON.stringify({
+        offset: nextOffset, state: 'done', exit_code: job.exit_code, data
+      })));
+    }
+
+    return makeResp(404, enc.encode('{"error":"not found"}'));
+  },
+  async _inputShell(command) {
+    this.inputActive = true;
+    this.deferScreenUntil = Date.now() + 350;
+    try {
+      dbg('input command', command);
+      return await this._shellText(command);
+    } finally {
+      this.inputActive = false;
+      this.deferScreenUntil = Date.now() + 180;
+    }
+  },
+  async _screenBytes() {
+    dbg('screencap request');
+    const b64 = await this._shellText('fox fifo send screencap --base64');
+    const png = this._base64ToBytes(b64);
+    if (png.length < 24 || png[0] !== 0x89 || png[1] !== 0x50 || png[2] !== 0x4e || png[3] !== 0x47) {
+      warn('screencap invalid', png.length, 'base64 preview:', b64.slice(0, 160));
+      throw new Error('screencap failed');
+    }
+    const dim = this._pngDims(png);
+    dbg('screencap ok', png.length, 'bytes', dim.width + 'x' + dim.height);
+    this._updateDims(dim);
+    this.lastScreen = png;
+    return png;
+  },
+  _updateDims(dim) {
+    window._fbw = dim.width; window._fbh = dim.height;
+    $('#dim').textContent = dim.width + '×' + dim.height + ' · USB';
+  },
+  _base64ToBytes(text) {
+    const clean = text.replace(/[^A-Za-z0-9+/=]/g, '');
+    const bin = atob(clean);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  },
+  _pngDims(png) {
+    return {
+      width: ((png[16] << 24) | (png[17] << 16) | (png[18] << 8) | png[19]) >>> 0,
+      height: ((png[20] << 24) | (png[21] << 16) | (png[22] << 8) | png[23]) >>> 0,
+    };
+  },
+});
+
+const UsbTunnelProvider = Object.assign(Object.create(UsbBase), {
+  id: 'usbtunnel',
+  port: 8080, token: '',
+  async connect() {
+    await UsbBase.connect.call(this);
+    const webOut = await this._shellText('fox fifo send webserver start');
+    const ctlOut = await this._shellText('fox fifo send control start');
+    const portM = webOut.match(/port=(\d+)/);
+    const tokM = webOut.match(/token=([0-9a-f]+)/i);
+    if (portM) this.port = parseInt(portM[1], 10);
+    if (tokM) this.token = tokM[1];
+    if (!this.token) throw new Error('could not parse token: ' + webOut.slice(0, 120));
+    if (!/Remote control enabled|control=1/i.test(ctlOut))
+      warn('fox control start output:', ctlOut);
+  },
+  async disconnect() {
+    await UsbBase.disconnect.call(this);
+    this.token = '';
+  },
   async api(method, path, opts = {}) {
     if (!this.adb) throw new Error('not connected');
     const socket = await this.adb.createSocket('tcp:' + this.port);
@@ -243,50 +449,25 @@ const UsbProvider = {
 
     const reader = socket.readable.getReader();
     const chunks = []; let total = 0;
-    for (;;) { const { done, value } = await reader.read(); if (done) break; const u8 = this._toU8(value); chunks.push(u8); total += u8.length; }
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const u8 = this._toU8(value);
+      chunks.push(u8); total += u8.length;
+    }
     const buf = new Uint8Array(total);
     let off = 0; for (const c of chunks) { buf.set(c, off); off += c.length; }
     return this._parseHttp(buf);
   },
-  async _writeChunk(writer, u8) {
-    try { await writer.write(u8); }
-    catch (e) {
-      const mod = await import('https://esm.sh/@yume-chan/stream-extra@1.1.0');
-      await writer.write(new mod.Consumable(u8));
-    }
-  },
-  _toU8(v) {
-    if (v instanceof Uint8Array) return v;
-    if (v && v.value instanceof Uint8Array) return v.value;  // Consumable
-    return new Uint8Array(v);
-  },
   _parseHttp(buf) {
     let i = 0;
-    for (; i < buf.length - 3; i++) if (buf[i] === 13 && buf[i + 1] === 10 && buf[i + 2] === 13 && buf[i + 3] === 10) break;
+    for (; i < buf.length - 3; i++)
+      if (buf[i] === 13 && buf[i + 1] === 10 && buf[i + 2] === 13 && buf[i + 3] === 10) break;
     const statusLine = dec.decode(buf.subarray(0, i)).split('\r\n')[0] || '';
     const status = parseInt(statusLine.split(' ')[1] || '0', 10);
     return makeResp(status, buf.subarray(i + 4));
   },
-  startScreen(img) {
-    this.stopScreen();
-    const pump = async () => {
-      if (provider !== this || !this.adb) return;
-      try {
-        const r = await this.api('GET', '/screen.png');
-        if (r.status === 200 && r.bodyBytes.length) {
-          const url = URL.createObjectURL(new Blob([r.bodyBytes], { type: 'image/png' }));
-          const old = img.src;
-          img.src = url;
-          if (old.startsWith('blob:')) URL.revokeObjectURL(old);
-        }
-      } catch (e) { /* transient */ }
-      const fps = Math.max(0.2, Math.min(10, this.fps));
-      this.screenTimer = setTimeout(pump, 1000 / fps);
-    };
-    pump();
-  },
-  stopScreen() { if (this.screenTimer) { clearTimeout(this.screenTimer); this.screenTimer = null; } },
-};
+});
 
 // ---- shared app logic (provider-agnostic) ---------------------------------
 let provider = RestProvider;
@@ -294,16 +475,22 @@ let connected = false;
 const screenEl = () => $('#screen');
 
 function setStatus(s) { $('#status').textContent = s; }
+function providerForId(id) {
+  if (id === 'usb') return UsbProvider;
+  if (id === 'usbtunnel') return UsbTunnelProvider;
+  return RestProvider;
+}
+function isUsbProvider(p = provider) { return p === UsbProvider || p === UsbTunnelProvider; }
 
 function selectProvider(id) {
   if (provider.id === id) return;
   connected = false;
   provider.stopScreen(screenEl());
   if (provider.disconnect) provider.disconnect();
-  provider = id === 'usb' ? UsbProvider : RestProvider;
+  provider = providerForId(id);
   document.querySelectorAll('.prov').forEach(b => b.classList.toggle('accent', b.dataset.prov === id));
   $('#rest-fields').style.display = id === 'rest' ? '' : 'none';
-  $('#usb-fields').style.display = id === 'usb' ? '' : 'none';
+  $('#usb-fields').style.display = id === 'rest' ? 'none' : '';
   $('#usb-connect').disabled = false;
   $('#usb-disconnect').disabled = true;
   setStatus('');
@@ -315,11 +502,17 @@ async function connect() {
     setStatus('connecting…');
     await provider.connect();
     connected = true;
-    if (provider === UsbProvider) { $('#usb-connect').disabled = true; $('#usb-disconnect').disabled = false; }
+    if (isUsbProvider()) { $('#usb-connect').disabled = true; $('#usb-disconnect').disabled = false; }
     setStatus('connected');
-    await refreshStatus();
-    if (window._control !== false) provider.startScreen(screenEl());
+    if (provider === UsbProvider) {
+      window._control = true;
+      provider.startScreen(screenEl());
+    } else {
+      await refreshStatus();
+      if (window._control !== false) provider.startScreen(screenEl());
+    }
   } catch (e) {
+    warn('connect failed', e);
     connected = false;
     setStatus(e.message || 'error');
   }
@@ -337,6 +530,11 @@ $('#usb-disconnect').addEventListener('click', async () => {
 });
 
 async function refreshStatus() {
+  if (provider === UsbProvider) {
+    connected = !!provider.adb;
+    if (connected) setStatus('connected');
+    return;
+  }
   try {
     const r = await provider.api('GET', '/api/status');
     if (!r.ok) { setStatus(r.status === 401 ? 'bad token' : 'err ' + r.status); connected = false; return; }
@@ -348,7 +546,10 @@ async function refreshStatus() {
       (j.input_ready ? ' · input ✓' : ' · input ✗') +
       (window._control ? '' : ' · control off');
     window._fbw = j.width; window._fbh = j.height;
-  } catch (e) { connected = false; setStatus('offline'); }
+  } catch (e) {
+    console.warn('[OrangeFox REST]', 'status failed', e);
+    connected = false; setStatus('offline');
+  }
 }
 
 function reloadStream() { provider.startScreen(screenEl()); }
@@ -367,11 +568,61 @@ async function touch(x, y, action) {
 }
 (function () {
   const img = $('#screen');
-  let down = false;
-  img.addEventListener('pointerdown', e => { if (!$('#livetouch').checked || !connected) return; e.preventDefault(); down = true; const p = mapCoords(e); touch(p.x, p.y, 'down'); });
-  img.addEventListener('pointermove', e => { if (!down) return; e.preventDefault(); const p = mapCoords(e); touch(p.x, p.y, 'move'); });
-  img.addEventListener('pointerup', e => { if (!down) return; e.preventDefault(); down = false; touch(0, 0, 'up'); });
-  img.addEventListener('pointercancel', e => { if (down) { down = false; touch(0, 0, 'up'); } });
+  let down = false, usbDrag = false, start = null, lastMove = 0;
+  const moveThreshold = 8, moveInterval = 70;
+
+  img.addEventListener('pointerdown', e => {
+    if (!$('#livetouch').checked || !connected) return;
+    e.preventDefault();
+    down = true; usbDrag = false; start = mapCoords(e); lastMove = 0;
+    try { img.setPointerCapture(e.pointerId); } catch (_) {}
+    if (provider !== UsbProvider)
+      touch(start.x, start.y, 'down');
+  });
+
+  img.addEventListener('pointermove', e => {
+    if (!down) return;
+    e.preventDefault();
+    const p = mapCoords(e);
+    if (provider !== UsbProvider) {
+      touch(p.x, p.y, 'move');
+      return;
+    }
+    const dx = p.x - start.x, dy = p.y - start.y;
+    if (!usbDrag && Math.hypot(dx, dy) >= moveThreshold) {
+      usbDrag = true;
+      touch(start.x, start.y, 'down');
+    }
+    const now = Date.now();
+    if (usbDrag && now - lastMove >= moveInterval) {
+      lastMove = now;
+      touch(p.x, p.y, 'move');
+    }
+  });
+
+  img.addEventListener('pointerup', e => {
+    if (!down) return;
+    e.preventDefault();
+    const p = mapCoords(e);
+    down = false;
+    try { img.releasePointerCapture(e.pointerId); } catch (_) {}
+    if (provider === UsbProvider) {
+      if (usbDrag) touch(p.x, p.y, 'move').finally(() => touch(0, 0, 'up'));
+      else touch(start.x, start.y, 'tap');
+    } else {
+      touch(0, 0, 'up');
+    }
+    usbDrag = false; start = null;
+  });
+
+  img.addEventListener('pointercancel', e => {
+    if (!down) return;
+    down = false;
+    try { img.releasePointerCapture(e.pointerId); } catch (_) {}
+    if (provider !== UsbProvider || usbDrag)
+      touch(0, 0, 'up');
+    usbDrag = false; start = null;
+  });
 })();
 
 async function key(name) {
@@ -415,7 +666,7 @@ $('#host').value = localStorage.getItem('foxhost') || location.hostname || '';
 $('#token').value = RestProvider.token;
 refreshStatus().then(() => { if (connected && window._control !== false) provider.startScreen(screenEl()); });
 setInterval(() => {
-  if (provider === RestProvider || (provider === UsbProvider && connected)) refreshStatus();
+  if (provider === RestProvider) refreshStatus();
 }, 5000);
 </script>
 </body>

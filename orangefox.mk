@@ -930,7 +930,8 @@ endif
 #
 # The remote-control engine itself -- the HTTP API server, screen capture and
 # input injection -- is always built (see Android.mk). It is started explicitly
-# via "fox remote start" and protected by a per-session token. By default the
+# via "fox webserver start" and "fox control start", and protected by a
+# per-session token. By default the
 # server is API-only; this block additionally packs a prebuilt web bundle onto
 # the ramdisk so the server can serve a dashboard at "/". When no bundle is
 # present the server stays API-only.

@@ -63,9 +63,6 @@ private:
 	static int Cmd_Partition(const std::vector<std::string>& a);
 	static int Cmd_Addons(const std::vector<std::string>& a);
 	static int Cmd_Storages(const std::vector<std::string>& a);
-	// fox remote {start|stop|status}: combined convenience that drives the web
-	// server and the remote-control plane together (back-compatible).
-	static int Cmd_Remote(const std::vector<std::string>& a);
 	// fox webserver {start|stop|status}: the HTTP server (dashboard + REST/job
 	// control plane) on its own.
 	static int Cmd_Webserver(const std::vector<std::string>& a);
