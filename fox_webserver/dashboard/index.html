@@ -17,7 +17,7 @@
   .card { background:var(--panel); border:1px solid #3a3340; border-radius:8px; padding:.8rem; }
   .card h3 { margin:.1rem 0 .6rem; font-size:.85rem; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
   input, button, select { font:inherit; }
-  input[type=text], input[type=password] { width:100%; padding:.5rem; border-radius:6px; border:1px solid #3a3340; background:#15121a; color:var(--fg); }
+  input[type=text], input[type=password], input[type=number] { width:100%; padding:.5rem; border-radius:6px; border:1px solid #3a3340; background:#15121a; color:var(--fg); }
   button { padding:.5rem .8rem; border-radius:6px; border:1px solid #3a3340; background:#2c2531; color:var(--fg); cursor:pointer; }
   button.accent { background:var(--accent); color:#161318; border-color:var(--accent); font-weight:600; }
   button:active { transform:translateY(1px); }
@@ -46,8 +46,10 @@
     <div class="card">
       <h3>Connection</h3>
       <div class="row tabs" id="provtabs">
-        <button class="prov accent" data-prov="rest">REST API</button>
+        <button class="prov accent" data-prov="rest">REST PNG</button>
+        <button class="prov" data-prov="restmjpeg">REST MJPEG</button>
         <button class="prov" data-prov="usb">USB (WebUSB)</button>
+        <button class="prov" data-prov="usbstream">USB Stream</button>
         <button class="prov" data-prov="usbtunnel">USB Tunnel</button>
       </div>
       <div id="rest-fields" style="margin-top:.6rem">
@@ -61,6 +63,10 @@
         <div class="row">
           <button class="accent" id="usb-connect">Connect USB</button>
           <button id="usb-disconnect" disabled>Disconnect</button>
+        </div>
+        <div class="row" style="margin-top:.5rem">
+          <input type="number" id="usb-fps" min="1" max="30" value="10" title="Stream FPS">
+          <button id="usb-stop-stream" disabled>Stop Stream</button>
         </div>
         <div class="muted" style="margin-top:.4rem">Chrome/Edge over https or localhost. Run <code>adb kill-server</code> first; accept the key on the device.</div>
       </div>
@@ -109,10 +115,16 @@
 //   provider.startScreen(img) / stopScreen(img)
 //
 //   * RestProvider  -- talks plain fetch() to the same origin (the in-recovery
-//                      HTTP server over WLAN). Screen via the live MJPEG stream.
+//                      HTTP server over WLAN). Screen via /screen.png polling.
+//   * RestMjpegProvider -- same REST API, but screen via /stream.mjpeg for
+//                      comparing browser multipart rendering behavior.
 //   * UsbProvider   -- talks ADB-over-WebUSB (ya-webadb) to a device on a USB
 //                      cable and drives `fox screencap` / `fox input` through
 //                      the FIFO shell interface. No WLAN or HTTP server needed.
+//   * UsbStreamProvider -- same transport as UsbProvider, but starts
+//                      `fox screenstream` and reads newline-delimited base64 PNG
+//                      frames from /system/bin/foxscreenout. Normal fox FIFO
+//                      commands remain available for stop/touch/key.
 //   * UsbTunnelProvider -- talks ADB-over-WebUSB, starts the on-device
 //                      webserver/control plane, and tunnels HTTP over ADB tcp:.
 //                      The WLAN-only feature set thus also works over USB on
@@ -136,6 +148,7 @@ function makeResp(status, bodyBytes) {
 const RestProvider = {
   id: 'rest',
   token: localStorage.getItem('foxtoken') || '',
+  screenTimer: null, screenAbort: null, fps: 8, lastStatus: null,
   // Base URL for the device. Defaults to the IP the page was loaded from; when
   // the field names the same host we keep URLs relative (same-origin, no CORS).
   // A different IP produces an absolute base so the dashboard can be hosted
@@ -154,22 +167,79 @@ const RestProvider = {
     const r = await this.api('GET', '/api/status');
     if (r.status === 401) throw new Error('bad token');
     if (!r.ok) throw new Error('err ' + r.status);
+    this.lastStatus = r.json();
   },
-  async disconnect() {},
+  async disconnect() { this.stopScreen(screenEl()); },
   async api(method, path, opts = {}) {
     const sep = path.includes('?') ? '&' : '?';
     const url = this.base() + path + sep + 'token=' + encodeURIComponent(this.token);
     const headers = { 'X-Auth-Token': this.token };
     if (opts.body != null) headers['Content-Type'] = opts.contentType || 'application/json';
-    const r = await fetch(url, { method, headers, body: opts.body != null ? opts.body : null });
+    const r = await fetch(url, {
+      method, headers,
+      body: opts.body != null ? opts.body : null,
+      cache: 'no-store',
+      signal: opts.signal,
+    });
     const buf = new Uint8Array(await r.arrayBuffer());
     return makeResp(r.status, buf);
   },
   startScreen(img) {
+    this.stopScreen(img);
+    dbg('REST screen pump start');
+    const pump = async () => {
+      if (provider !== this || !connected) return;
+      this.screenAbort = new AbortController();
+      try {
+        const r = await this.api('GET', '/screen.png?t=' + Date.now(), { signal: this.screenAbort.signal });
+        if (r.status === 200 && r.bodyBytes.length) {
+          const url = URL.createObjectURL(new Blob([r.bodyBytes], { type: 'image/png' }));
+          const old = img.src;
+          img.src = url;
+          if (old.startsWith('blob:')) URL.revokeObjectURL(old);
+          if (connected && provider === this) setStatus('connected');
+        } else if (r.status === 403) {
+          setStatus('control off');
+          return;
+        }
+      } catch (e) {
+        if (e.name !== 'AbortError') {
+          warn('REST screen pump failed', e);
+          if (connected && provider === this) setStatus('REST screen error; see console');
+        }
+      } finally {
+        this.screenAbort = null;
+      }
+      const fps = Math.max(1, Math.min(12, this.fps));
+      this.screenTimer = setTimeout(pump, 1000 / fps);
+    };
+    pump();
+  },
+  stopScreen(img) {
+    if (this.screenTimer) {
+      dbg('REST screen pump stop');
+      clearTimeout(this.screenTimer);
+      this.screenTimer = null;
+    }
+    if (this.screenAbort) {
+      try { this.screenAbort.abort(); } catch (e) {}
+      this.screenAbort = null;
+    }
+    if (img) img.removeAttribute('src');
+  },
+};
+
+const RestMjpegProvider = Object.assign(Object.create(RestProvider), {
+  id: 'restmjpeg',
+  startScreen(img) {
+    RestProvider.stopScreen.call(this, img);
+    dbg('REST MJPEG stream start');
     img.src = this.base() + '/stream.mjpeg?token=' + encodeURIComponent(this.token) + '&t=' + Date.now();
   },
-  stopScreen(img) { img.removeAttribute('src'); },
-};
+  stopScreen(img) {
+    RestProvider.stopScreen.call(this, img);
+  },
+});
 
 // ---- WebUSB (ADB) providers ----------------------------------------------
 const UsbBase = {
@@ -223,21 +293,15 @@ const UsbBase = {
   },
   async _shellBytesRaw(command, preferTextApi = false) {
     dbg('shell start', command);
-    const sp = this.adb.subprocess;
-    if (preferTextApi && sp.noneProtocol && sp.noneProtocol.spawnWaitText) {
-      const text = await sp.noneProtocol.spawnWaitText(command);
-      dbg('shell done', command, text.length, 'chars');
-      return enc.encode(text);
+    const proc = await this._spawn(command, preferTextApi, true);
+    if (typeof proc === 'string') {
+      dbg('shell done', command, proc.length, 'chars');
+      return enc.encode(proc);
     }
-    if (sp.spawnAndWaitLegacy) {
-      const o = await sp.spawnAndWaitLegacy(command);
-      const bytes = typeof o === 'string' ? enc.encode(o) : this._toU8(o);
-      dbg('shell done', command, bytes.length, 'bytes');
-      return bytes;
+    if (proc instanceof Uint8Array) {
+      dbg('shell done', command, proc.length, 'bytes');
+      return proc;
     }
-    const spawn = sp.noneProtocol && sp.noneProtocol.spawn ? sp.noneProtocol.spawn.bind(sp.noneProtocol) :
-                  sp.shell ? sp.shell.bind(sp) : sp.spawn.bind(sp);
-    const proc = await spawn(command);
     const reader = proc.stdout.getReader();
     const chunks = []; let total = 0;
     for (;;) {
@@ -250,6 +314,21 @@ const UsbBase = {
     let off = 0; for (const c of chunks) { buf.set(c, off); off += c.length; }
     dbg('shell done', command, buf.length, 'bytes');
     return buf;
+  },
+  async _spawn(command, preferTextApi = false, allowBufferedWait = true) {
+    const sp = this.adb.subprocess;
+    if (preferTextApi && sp.noneProtocol && sp.noneProtocol.spawnWaitText) {
+      return await sp.noneProtocol.spawnWaitText(command);
+    }
+    if (allowBufferedWait && sp.spawnAndWaitLegacy) {
+      const o = await sp.spawnAndWaitLegacy(command);
+      return typeof o === 'string' ? enc.encode(o) : this._toU8(o);
+    }
+    const spawn = sp.noneProtocol && sp.noneProtocol.spawn ? sp.noneProtocol.spawn.bind(sp.noneProtocol) :
+                  sp.shell ? sp.shell.bind(sp) :
+                  sp.spawn ? sp.spawn.bind(sp) : null;
+    if (!spawn) throw new Error('live ADB subprocess streaming is unavailable');
+    return await spawn(command);
   },
   _toU8(v) {
     if (v instanceof Uint8Array) return v;
@@ -410,6 +489,94 @@ const UsbProvider = Object.assign(Object.create(UsbBase), {
   },
 });
 
+const UsbStreamProvider = Object.assign(Object.create(UsbProvider), {
+  id: 'usbstream',
+  streamReader: null, streamProc: null, streamStopRequested: false,
+  async connect() {
+    await UsbProvider.connect.call(this);
+    this.streamReader = null;
+    this.streamProc = null;
+    this.streamStopRequested = false;
+  },
+  async disconnect() {
+    await this.stopScreen();
+    try { if (this.adb) await this.adb.close(); } catch (e) {}
+    this.adb = null; this.shellQueue = Promise.resolve();
+    this.inputActive = false; this.deferScreenUntil = 0;
+    this.lastScreen = null;
+  },
+  async startScreen(img) {
+    await this.stopScreen(img, true);
+    this.streamStopRequested = false;
+    $('#usb-stop-stream').disabled = false;
+    this._screenStreamLoop(img).catch(e => {
+      warn('screen stream failed', e);
+      if (!this.streamStopRequested && connected && provider === this)
+        setStatus('USB stream error; see console');
+      $('#usb-stop-stream').disabled = true;
+    });
+  },
+  async stopScreen(img, restarting = false) {
+    this.streamStopRequested = true;
+    $('#usb-stop-stream').disabled = true;
+    if (this.streamReader) {
+      try { await this.streamReader.cancel(); } catch (e) {}
+      this.streamReader = null;
+    }
+    try { if (this.streamProc && this.streamProc.kill) await this.streamProc.kill(); } catch (e) {}
+    this.streamProc = null;
+    if (this.adb && !restarting) {
+      try { await this._shellText('fox fifo send screenstream stop'); } catch (e) { warn('screenstream stop failed', e); }
+    }
+    if (img && !restarting) img.removeAttribute('src');
+  },
+  async _screenStreamLoop(img) {
+    const fps = Math.max(1, Math.min(30, parseInt($('#usb-fps').value || '10', 10) || 10));
+    dbg('screenstream start', fps, 'fps');
+    const startOut = await this._shellText('fox fifo send screenstream start --fps ' + fps);
+    const pathM = startOut.match(/path=([^\s]+)/);
+    const streamPath = pathM ? pathM[1] : '/system/bin/foxscreenout';
+    dbg('screenstream output', startOut.trim());
+    const proc = await this._spawn('cat ' + this._quoteArg(streamPath), false, false);
+    if (typeof proc === 'string' || proc instanceof Uint8Array)
+      throw new Error('stream subprocess API returned buffered output');
+    this.streamProc = proc;
+    const reader = proc.stdout.getReader();
+    this.streamReader = reader;
+
+    const streamDec = new TextDecoder();
+    let pending = '';
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done || this.streamStopRequested || provider !== this) break;
+      pending += streamDec.decode(this._toU8(value), { stream: true });
+      const lines = pending.split('\n');
+      pending = lines.pop() || '';
+      for (const line of lines) {
+        const clean = line.trim();
+        if (!clean) continue;
+        const png = this._base64ToBytes(clean);
+        if (png.length < 24 || png[0] !== 0x89 || png[1] !== 0x50 || png[2] !== 0x4e || png[3] !== 0x47) {
+          warn('stream frame invalid', png.length, 'preview:', clean.slice(0, 80));
+          continue;
+        }
+        this._showFrame(img, png, 'USB stream');
+      }
+    }
+  },
+  _showFrame(img, png, label) {
+    const dim = this._pngDims(png);
+    this._updateDims(dim);
+    $('#dim').textContent = dim.width + '×' + dim.height + ' · ' + label;
+    this.lastScreen = png;
+    const url = URL.createObjectURL(new Blob([png], { type: 'image/png' }));
+    const old = img.src;
+    img.src = url;
+    if (old.startsWith('blob:')) URL.revokeObjectURL(old);
+    if (connected && provider === this) setStatus('connected');
+  },
+});
+
 const UsbTunnelProvider = Object.assign(Object.create(UsbBase), {
   id: 'usbtunnel',
   port: 8080, token: '',
@@ -475,12 +642,25 @@ let connected = false;
 const screenEl = () => $('#screen');
 
 function setStatus(s) { $('#status').textContent = s; }
+function applyStatus(j) {
+  connected = true;
+  setStatus('connected');
+  window._control = j.control !== false;  // server omits => assume on
+  $('#dim').textContent = j.width + '×' + j.height +
+    (j.input_ready ? ' · input ✓' : ' · input ✗') +
+    (window._control ? '' : ' · control off');
+  window._fbw = j.width; window._fbh = j.height;
+}
 function providerForId(id) {
+  if (id === 'restmjpeg') return RestMjpegProvider;
   if (id === 'usb') return UsbProvider;
+  if (id === 'usbstream') return UsbStreamProvider;
   if (id === 'usbtunnel') return UsbTunnelProvider;
   return RestProvider;
 }
-function isUsbProvider(p = provider) { return p === UsbProvider || p === UsbTunnelProvider; }
+function isRestProvider(p = provider) { return p === RestProvider || p === RestMjpegProvider; }
+function isDirectUsbProvider(p = provider) { return p === UsbProvider || p === UsbStreamProvider; }
+function isUsbProvider(p = provider) { return isDirectUsbProvider(p) || p === UsbTunnelProvider; }
 
 function selectProvider(id) {
   if (provider.id === id) return;
@@ -489,10 +669,11 @@ function selectProvider(id) {
   if (provider.disconnect) provider.disconnect();
   provider = providerForId(id);
   document.querySelectorAll('.prov').forEach(b => b.classList.toggle('accent', b.dataset.prov === id));
-  $('#rest-fields').style.display = id === 'rest' ? '' : 'none';
-  $('#usb-fields').style.display = id === 'rest' ? 'none' : '';
+  $('#rest-fields').style.display = isRestProvider() ? '' : 'none';
+  $('#usb-fields').style.display = isRestProvider() ? 'none' : '';
   $('#usb-connect').disabled = false;
   $('#usb-disconnect').disabled = true;
+  $('#usb-stop-stream').disabled = true;
   setStatus('');
 }
 document.querySelectorAll('.prov').forEach(b => b.addEventListener('click', () => selectProvider(b.dataset.prov)));
@@ -504,9 +685,12 @@ async function connect() {
     connected = true;
     if (isUsbProvider()) { $('#usb-connect').disabled = true; $('#usb-disconnect').disabled = false; }
     setStatus('connected');
-    if (provider === UsbProvider) {
+    if (isDirectUsbProvider()) {
       window._control = true;
       provider.startScreen(screenEl());
+    } else if (isRestProvider()) {
+      if (provider.lastStatus) applyStatus(provider.lastStatus);
+      if (window._control !== false) provider.startScreen(screenEl());
     } else {
       await refreshStatus();
       if (window._control !== false) provider.startScreen(screenEl());
@@ -525,12 +709,19 @@ $('#usb-disconnect').addEventListener('click', async () => {
   provider.stopScreen(screenEl());
   $('#usb-connect').disabled = false;
   $('#usb-disconnect').disabled = true;
+  $('#usb-stop-stream').disabled = true;
   setStatus('disconnected');
   $('#out').textContent = '(not connected)';
 });
+$('#usb-stop-stream').addEventListener('click', async () => {
+  if (provider === UsbStreamProvider) {
+    await provider.stopScreen(screenEl());
+    setStatus('stream stopped');
+  }
+});
 
 async function refreshStatus() {
-  if (provider === UsbProvider) {
+  if (isDirectUsbProvider()) {
     connected = !!provider.adb;
     if (connected) setStatus('connected');
     return;
@@ -538,14 +729,7 @@ async function refreshStatus() {
   try {
     const r = await provider.api('GET', '/api/status');
     if (!r.ok) { setStatus(r.status === 401 ? 'bad token' : 'err ' + r.status); connected = false; return; }
-    const j = r.json();
-    connected = true;
-    setStatus('connected');
-    window._control = j.control !== false;  // server omits => assume on
-    $('#dim').textContent = j.width + '×' + j.height +
-      (j.input_ready ? ' · input ✓' : ' · input ✗') +
-      (window._control ? '' : ' · control off');
-    window._fbw = j.width; window._fbh = j.height;
+    applyStatus(r.json());
   } catch (e) {
     console.warn('[OrangeFox REST]', 'status failed', e);
     connected = false; setStatus('offline');
@@ -576,7 +760,7 @@ async function touch(x, y, action) {
     e.preventDefault();
     down = true; usbDrag = false; start = mapCoords(e); lastMove = 0;
     try { img.setPointerCapture(e.pointerId); } catch (_) {}
-    if (provider !== UsbProvider)
+    if (!isDirectUsbProvider())
       touch(start.x, start.y, 'down');
   });
 
@@ -584,7 +768,7 @@ async function touch(x, y, action) {
     if (!down) return;
     e.preventDefault();
     const p = mapCoords(e);
-    if (provider !== UsbProvider) {
+    if (!isDirectUsbProvider()) {
       touch(p.x, p.y, 'move');
       return;
     }
@@ -606,7 +790,7 @@ async function touch(x, y, action) {
     const p = mapCoords(e);
     down = false;
     try { img.releasePointerCapture(e.pointerId); } catch (_) {}
-    if (provider === UsbProvider) {
+    if (isDirectUsbProvider()) {
       if (usbDrag) touch(p.x, p.y, 'move').finally(() => touch(0, 0, 'up'));
       else touch(start.x, start.y, 'tap');
     } else {
@@ -619,7 +803,7 @@ async function touch(x, y, action) {
     if (!down) return;
     down = false;
     try { img.releasePointerCapture(e.pointerId); } catch (_) {}
-    if (provider !== UsbProvider || usbDrag)
+    if (!isDirectUsbProvider() || usbDrag)
       touch(0, 0, 'up');
     usbDrag = false; start = null;
   });
@@ -666,7 +850,7 @@ $('#host').value = localStorage.getItem('foxhost') || location.hostname || '';
 $('#token').value = RestProvider.token;
 refreshStatus().then(() => { if (connected && window._control !== false) provider.startScreen(screenEl()); });
 setInterval(() => {
-  if (provider === RestProvider) refreshStatus();
+  if (isRestProvider()) refreshStatus();
 }, 5000);
 </script>
 </body>

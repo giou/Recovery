@@ -265,7 +265,9 @@ void send_response(int fd, const char* status, const char* ctype, const std::str
 		"Content-Type: %s\r\n"
 		"Content-Length: %zu\r\n"
 		"Connection: close\r\n"
-		"Cache-Control: no-store\r\n"
+		"Cache-Control: no-store, no-cache, must-revalidate, max-age=0\r\n"
+		"Pragma: no-cache\r\n"
+		"Expires: 0\r\n"
 		"Access-Control-Allow-Origin: *\r\n"
 		"\r\n",
 		status, ctype, body.size());
@@ -503,7 +505,7 @@ void handle_screen_png(int fd) {
 	std::string png;
 	uint64_t start_gen = 0;
 	bool had_frame = Fox_Screen::GetLatest(png, &start_gen);
-	for (int i = 0; i < 40; i++) {
+	for (int i = 0; i < 8; i++) {
 		Fox_Screen::RequestFrames();
 		std::string next;
 		uint64_t gen = 0;
@@ -515,7 +517,7 @@ void handle_screen_png(int fd) {
 			if (png.empty())
 				png.swap(next);
 		}
-		struct timespec ts = { 0, 25 * 1000 * 1000 };
+		struct timespec ts = { 0, 20 * 1000 * 1000 };
 		nanosleep(&ts, nullptr);
 	}
 	// Catch a frame produced during the final sleep before falling back to the
@@ -544,21 +546,30 @@ void handle_stream(int fd) {
 	std::string head =
 		"HTTP/1.1 200 OK\r\n"
 		"Content-Type: multipart/x-mixed-replace; boundary=foxframe\r\n"
-		"Cache-Control: no-store\r\n"
+		"Cache-Control: no-store, no-cache, must-revalidate, max-age=0\r\n"
+		"Pragma: no-cache\r\n"
+		"Expires: 0\r\n"
 		"Connection: close\r\n"
 		"\r\n"
 		"--foxframe\r\n";
 	if (!send_all(fd, head))
 		return;
 
-	std::string last;
+	std::string start_png;
+	uint64_t start_gen = 0;
+	bool have_start = Fox_Screen::GetLatest(start_png, &start_gen);
+	uint64_t last_sent_gen = 0;
+	bool sent_any = false;
 	while (g_running) {
 		// Keep the GUI-thread capture alive; it produces a new snapshot only
 		// when the screen actually changes, so identical frames are skipped.
 		Fox_Screen::RequestFrames();
 		std::string png;
-		if (Fox_Screen::GetLatest(png) && png != last) {
-			last = png;
+		uint64_t gen = 0;
+		if (Fox_Screen::GetLatest(png, &gen) &&
+		    gen != last_sent_gen && (!have_start || sent_any || gen != start_gen)) {
+			last_sent_gen = gen;
+			sent_any = true;
 			char part[128];
 			int n = snprintf(part, sizeof(part),
 				"Content-Type: image/png\r\nContent-Length: %zu\r\n\r\n",

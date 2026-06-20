@@ -35,6 +35,7 @@
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <sys/mount.h>
+#include <signal.h>
 #include <time.h>
 #include <unistd.h>
 #include <vector>
@@ -81,6 +82,16 @@ int fox_cancel_read_fd = -1; // out-of-band cancel FIFO, watched even while a co
 static FILE* orsout = NULL;  // shared output FILE + single-command guard for both ORS and fox
 static float scale_theme_w = 1;
 static float scale_theme_h = 1;
+
+static pthread_mutex_t fox_stream_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t fox_stream_cond = PTHREAD_COND_INITIALIZER;
+static pthread_t fox_stream_thread;
+static bool fox_stream_thread_running = false;
+static bool fox_stream_active = false;
+static bool fox_stream_have_frame = false;
+static std::string fox_stream_frame;
+static int fox_stream_fps = 10;
+static long long fox_stream_last_capture_ms = 0;
 
 // Needed by pages.cpp too
 int gGuiRunning = 0;
@@ -698,6 +709,172 @@ static std::string fox_base64_encode(const std::string& in)
 	return out;
 }
 
+static bool fox_stream_is_active()
+{
+	pthread_mutex_lock(&fox_stream_lock);
+	bool active = fox_stream_active;
+	pthread_mutex_unlock(&fox_stream_lock);
+	return active;
+}
+
+static bool fox_stream_capture_due()
+{
+	pthread_mutex_lock(&fox_stream_lock);
+	bool active = fox_stream_active;
+	int fps = fox_stream_fps;
+	pthread_mutex_unlock(&fox_stream_lock);
+	if (!active)
+		return false;
+	if (fps < 1)
+		fps = 1;
+	long long now = nowMs();
+	return now - fox_stream_last_capture_ms >= 1000 / fps;
+}
+
+static void fox_stream_submit_frame(const std::string& png)
+{
+	pthread_mutex_lock(&fox_stream_lock);
+	if (fox_stream_active) {
+		fox_stream_frame = png;
+		fox_stream_have_frame = true;
+		fox_stream_last_capture_ms = nowMs();
+		pthread_cond_signal(&fox_stream_cond);
+	}
+	pthread_mutex_unlock(&fox_stream_lock);
+}
+
+static bool fox_stream_write_all(int fd, const std::string& data)
+{
+	size_t off = 0;
+	while (off < data.size()) {
+		pthread_mutex_lock(&fox_stream_lock);
+		bool active = fox_stream_active;
+		pthread_mutex_unlock(&fox_stream_lock);
+		if (!active)
+			return false;
+		ssize_t n = write(fd, data.data() + off, data.size() - off);
+		if (n > 0) {
+			off += (size_t)n;
+			continue;
+		}
+		if (n < 0 && errno == EINTR)
+			continue;
+		if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+			usleep(10 * 1000);
+			continue;
+		}
+		return false;
+	}
+	return true;
+}
+
+static void* fox_stream_writer_thread(void*)
+{
+	signal(SIGPIPE, SIG_IGN);
+	int fd = -1;
+	for (;;) {
+		pthread_mutex_lock(&fox_stream_lock);
+		while (fox_stream_active && !fox_stream_have_frame)
+			pthread_cond_wait(&fox_stream_cond, &fox_stream_lock);
+		if (!fox_stream_active) {
+			fox_stream_thread_running = false;
+			pthread_mutex_unlock(&fox_stream_lock);
+			if (fd >= 0) {
+				close(fd);
+				fd = -1;
+			}
+			return nullptr;
+		}
+		std::string png = fox_stream_frame;
+		fox_stream_have_frame = false;
+		pthread_mutex_unlock(&fox_stream_lock);
+
+		if (fd < 0) {
+			fd = open(FOX_SCREEN_STREAM_FILE, O_WRONLY | O_NONBLOCK);
+			if (fd < 0) {
+				usleep(100 * 1000);
+				continue;
+			}
+#ifdef F_SETPIPE_SZ
+			fcntl(fd, F_SETPIPE_SZ, 1024 * 1024);
+#endif
+		}
+
+		std::string b64 = fox_base64_encode(png);
+		if (!fox_stream_write_all(fd, b64)) {
+			close(fd);
+			fd = -1;
+		}
+	}
+}
+
+static void fox_stream_stop()
+{
+	pthread_mutex_lock(&fox_stream_lock);
+	fox_stream_active = false;
+	fox_stream_have_frame = false;
+	fox_stream_frame.clear();
+	pthread_cond_signal(&fox_stream_cond);
+	pthread_mutex_unlock(&fox_stream_lock);
+
+	// If a client is blocked opening/reading the stream FIFO, briefly pair it
+	// with a writer so it sees EOF and the dashboard's cat process can exit.
+	int fd = open(FOX_SCREEN_STREAM_FILE, O_WRONLY | O_NONBLOCK);
+	if (fd >= 0)
+		close(fd);
+}
+
+static int fox_stream_start(int fps)
+{
+	if (fps < 1)
+		fps = 1;
+	if (fps > 30)
+		fps = 30;
+
+	pthread_mutex_lock(&fox_stream_lock);
+	if (fox_stream_active) {
+		fox_stream_fps = fps;
+		pthread_mutex_unlock(&fox_stream_lock);
+		return 0;
+	}
+	pthread_mutex_unlock(&fox_stream_lock);
+
+	unlink(FOX_SCREEN_STREAM_FILE);
+	if (mkfifo(FOX_SCREEN_STREAM_FILE, 06666) != 0) {
+		LOGINFO("Unable to mkfifo %s\n", FOX_SCREEN_STREAM_FILE);
+		return 1;
+	}
+
+	pthread_mutex_lock(&fox_stream_lock);
+	fox_stream_fps = fps;
+	fox_stream_active = true;
+	fox_stream_have_frame = false;
+	fox_stream_frame.clear();
+	fox_stream_last_capture_ms = 0;
+	bool need_thread = !fox_stream_thread_running;
+	if (need_thread)
+		fox_stream_thread_running = true;
+	pthread_cond_signal(&fox_stream_cond);
+	pthread_mutex_unlock(&fox_stream_lock);
+
+	if (need_thread && pthread_create(&fox_stream_thread, nullptr, fox_stream_writer_thread, nullptr) != 0) {
+		pthread_mutex_lock(&fox_stream_lock);
+		fox_stream_active = false;
+		fox_stream_thread_running = false;
+		pthread_mutex_unlock(&fox_stream_lock);
+		unlink(FOX_SCREEN_STREAM_FILE);
+		return 1;
+	}
+	if (need_thread)
+		pthread_detach(fox_stream_thread);
+	return 0;
+}
+
+static bool fox_is_screenstream(const std::vector<std::string>& argv)
+{
+	return !argv.empty() && argv[0] == "screenstream";
+}
+
 static bool fox_is_silent_screencap(const std::vector<std::string>& argv)
 {
 	if (argv.empty() || argv[0] != "screencap")
@@ -726,6 +903,50 @@ static void fox_finish_fifo_response(int code)
 
 static bool fox_try_silent_command(const std::vector<std::string>& argv)
 {
+	if (fox_is_screenstream(argv)) {
+		std::string sub = argv.size() > 1 ? argv[1] : "status";
+		if (sub == "start") {
+			int fps = 10;
+			for (size_t i = 2; i + 1 < argv.size(); i++) {
+				if (argv[i] == "--fps")
+					fps = atoi(argv[i + 1].c_str());
+			}
+			int code = fox_stream_start(fps);
+			if (code == 0) {
+				fprintf(orsout, "FOX_SCREENSTREAM_BEGIN\n");
+				fprintf(orsout, "path=%s\n", FOX_SCREEN_STREAM_FILE);
+				fprintf(orsout, "fps=%d\n", fps < 1 ? 1 : (fps > 30 ? 30 : fps));
+				fprintf(orsout, "format=base64-png-lines\n");
+				fprintf(orsout, "FOX_SCREENSTREAM_END\n");
+			} else {
+				fprintf(orsout, "fox: unable to start screen stream\n");
+			}
+			fox_finish_fifo_response(code);
+			return true;
+		}
+		if (sub == "stop") {
+			fox_stream_stop();
+			fprintf(orsout, "Screen stream stopped\n");
+			fox_finish_fifo_response(0);
+			return true;
+		}
+		if (sub == "status") {
+			pthread_mutex_lock(&fox_stream_lock);
+			int fps = fox_stream_fps;
+			pthread_mutex_unlock(&fox_stream_lock);
+			fprintf(orsout, "FOX_SCREENSTREAM_BEGIN\n");
+			fprintf(orsout, "running=%d\n", fox_stream_is_active() ? 1 : 0);
+			fprintf(orsout, "path=%s\n", FOX_SCREEN_STREAM_FILE);
+			fprintf(orsout, "fps=%d\n", fps);
+			fprintf(orsout, "FOX_SCREENSTREAM_END\n");
+			fox_finish_fifo_response(0);
+			return true;
+		}
+		fprintf(orsout, "fox: unknown screenstream subcommand '%s' (start|stop|status)\n", sub.c_str());
+		fox_finish_fifo_response(2);
+		return true;
+	}
+
 	if (fox_is_silent_screencap(argv)) {
 		std::string png;
 		PageManager::Render();
@@ -903,6 +1124,10 @@ static void fox_cancel_read()
 	// in-progress guard). Cancelling a backup is safe to invoke from this (GUI)
 	// thread while the backup runs on the action thread -- it mirrors the GUI's
 	// cancel button, which runs Cancel_Backup() off the main backup thread.
+	if (fox_stream_is_active()) {
+		LOGINFO("fox: screen stream cancel request received\n");
+		fox_stream_stop();
+	}
 	if (orsout) {
 		LOGINFO("fox: cancel request received\n");
 		PartitionManager.Cancel_Backup();
@@ -1020,6 +1245,9 @@ static int runPages(const char *page_name, const int stop_on_page_done)
 		}
 		// Drain a queued remote job when the engine is idle.
 		fox_job_poll();
+		bool stream_capture = fox_stream_capture_due();
+		if (stream_capture)
+			gForceRender.set_value(1);
 		// When a remote viewer is watching but the UI is idle, force a full
 		// render so a fresh frame is produced (and captured below).
 		if (Fox_Screen::ShouldForceRender())
@@ -1043,8 +1271,15 @@ static int runPages(const char *page_name, const int stop_on_page_done)
 
 			// Capture the just-rendered complete frame before flip() repoints
 			// gr_mem_surface to the back buffer (GUI thread, no race).
-			if (ret > 1)
-				Fox_Screen::CaptureFrameIfWanted();
+			if (ret > 1) {
+				if (stream_capture) {
+					std::string png;
+					if (Fox_Screen::CaptureFrameNow(png))
+						fox_stream_submit_frame(png);
+				} else {
+					Fox_Screen::CaptureFrameIfWanted();
+				}
+			}
 
 			if (ret > 0)
 				flip();
@@ -1072,7 +1307,13 @@ static int runPages(const char *page_name, const int stop_on_page_done)
 		{
 			gForceRender.set_value(0);
 			PageManager::Render();
-			Fox_Screen::CaptureFrameIfWanted();
+			if (stream_capture) {
+				std::string png;
+				if (Fox_Screen::CaptureFrameNow(png))
+					fox_stream_submit_frame(png);
+			} else {
+				Fox_Screen::CaptureFrameIfWanted();
+			}
 			flip();
 			input_timeout_ms = 0;
 		}

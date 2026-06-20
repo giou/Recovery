@@ -30,6 +30,15 @@
 // The GUI listener (gui/gui.cpp) parses the argv, stores it with Set_Args(),
 // then dispatches the "foxcmd" GUI action which calls Run_Command() on the
 // action thread (so gui_print output is mirrored back to the caller).
+//
+// A few high-frequency remote-control commands are intentionally handled in
+// gui/gui.cpp before the foxcmd action path:
+//   fox screencap --base64
+//   fox input ...
+//   fox screenstream {start [--fps N]|stop|status}
+// This keeps WebUSB screen/input traffic off singleaction_page and lets the
+// continuous screen stream use FOX_SCREEN_STREAM_FILE while foxin/foxout remain
+// available for stop/touch/key commands.
 class Fox_Fifo
 {
 public:

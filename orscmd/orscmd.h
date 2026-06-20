@@ -33,4 +33,8 @@
 // so a client can request cancellation mid-operation by writing any byte to it.
 #define FOX_CANCEL_FILE "/system/bin/foxcancel"
 
+// Continuous screen-frame stream. Started/stopped over foxin, but frame data is
+// written here so normal foxin/foxout commands (notably input) remain usable.
+#define FOX_SCREEN_STREAM_FILE "/system/bin/foxscreenout"
+
 #endif //__ORSCMD_H
