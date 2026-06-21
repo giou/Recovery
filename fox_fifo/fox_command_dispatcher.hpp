@@ -15,6 +15,10 @@
 #include <string>
 #include <vector>
 
+#include <json/json.h>
+
+#include "fox_protocol.hpp"
+
 class Fox_Command_Dispatcher
 {
 public:
@@ -25,11 +29,17 @@ public:
 	};
 
 	static bool IsActive();
-	static Result DispatchFifo(FILE* out, const std::vector<std::string>& argv);
-	static bool DispatchJob(FILE* out, const std::vector<std::string>& argv);
+
+	// Emit a structured `data` event (named 'name', payload 'payload') for the
+	// active command — the uniform way query/list handlers return results.
+	// When no RPC transport is active (e.g. a GUI-invoked command) the JSON is
+	// printed to the console instead.
+	static void EmitData(const std::string& name, const Json::Value& payload);
+	static Result DispatchFifo(FILE* out, const Fox_Rpc_Request& request);
+	static bool DispatchJob(FILE* out, const Fox_Rpc_Request& request);
 	static bool CapturePendingFrameIfNeeded();
 	static bool CancelRequested(bool legacy_command_active);
-	static void CommandDone();
+	static void CommandDone(int code = 0);
 	static void ResetPendingIfIdle();
 };
 

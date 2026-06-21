@@ -25,52 +25,43 @@ const char* state_name(Fox_Jobs::State state)
 
 } // namespace
 
-void Fox_Http::HandleStatus(int fd)
+void Fox_Http::HandleStatus(Fox_Io::Conn& conn)
 {
 	Fox_Json_Object json;
 	json.AddInt("width", Fox_Screen_Service::Width())
 	    .AddInt("height", Fox_Screen_Service::Height())
 	    .AddBool("input_ready", Fox_Remote_Input::IsReady())
 	    .AddBool("control", Fox_Httpd::ControlEnabled());
-	SendJson(fd, json.String());
+	SendJson(conn, json.String());
 }
 
-void Fox_Http::HandleCmd(int fd, const Request& req)
+void Fox_Http::HandleCmd(Fox_Io::Conn& conn, const Request& req)
 {
-	std::vector<std::string> argv = JsonArgv(req.body);
-	if (argv.empty()) {
-		std::string cmd = JsonString(req.body, "cmd");
-		if (cmd.empty())
-			cmd = Param(req.body, "cmd");
-		std::string tok;
-		for (char c : cmd) {
-			if (c == ' ') {
-				if (!tok.empty()) { argv.push_back(tok); tok.clear(); }
-			} else {
-				tok += c;
-			}
-		}
-		if (!tok.empty())
-			argv.push_back(tok);
-	}
-	if (argv.empty()) {
+	Fox_Rpc_Request request = Fox_Protocol::ParseRequestJson(req.body);
+	if (!request.ok()) {
 		Fox_Json_Object json;
-		json.AddString("error", "empty command");
-		SendResponse(fd, "400 Bad Request", "application/json", json.String());
+		json.AddString("error", request.error);
+		SendResponse(conn, "400 Bad Request", "application/json", json.String());
 		return;
 	}
-	int id = Fox_Jobs::Submit(argv);
+	int id = Fox_Jobs::Submit(request);
+	if (id == 0) {
+		Fox_Json_Object json;
+		json.AddString("error", "unable to queue request");
+		SendResponse(conn, "400 Bad Request", "application/json", json.String());
+		return;
+	}
 	Fox_Json_Object json;
 	json.AddInt("id", id);
-	SendJson(fd, json.String());
+	SendJson(conn, json.String());
 }
 
-void Fox_Http::HandleJobList(int fd)
+void Fox_Http::HandleJobList(Fox_Io::Conn& conn)
 {
-	SendJson(fd, Fox_Jobs::ListJson());
+	SendJson(conn, Fox_Jobs::ListJson());
 }
 
-void Fox_Http::HandleJobRoute(int fd, const Request& req, int id, bool output)
+void Fox_Http::HandleJobRoute(Fox_Io::Conn& conn, const Request& req, int id, bool output)
 {
 	if (output) {
 		std::string offs = Param(req.query, "offset");
@@ -79,7 +70,7 @@ void Fox_Http::HandleJobRoute(int fd, const Request& req, int id, bool output)
 		std::string data;
 		Fox_Jobs::Snapshot snap;
 		if (!Fox_Jobs::ReadOutputAndSnapshot(id, offset, data, snap)) {
-			Send404(fd);
+			Send404(conn);
 			return;
 		}
 
@@ -88,13 +79,13 @@ void Fox_Http::HandleJobRoute(int fd, const Request& req, int id, bool output)
 		    .AddString("state", state_name(snap.state))
 		    .AddInt("exit_code", snap.exit_code)
 		    .AddString("data", data);
-		SendJson(fd, json.String());
+		SendJson(conn, json.String());
 		return;
 	}
 
 	Fox_Jobs::Snapshot snap;
 	if (!Fox_Jobs::Get(id, snap)) {
-		Send404(fd);
+		Send404(conn);
 		return;
 	}
 	Fox_Json_Object json;
@@ -102,15 +93,15 @@ void Fox_Http::HandleJobRoute(int fd, const Request& req, int id, bool output)
 	    .AddString("state", state_name(snap.state))
 	    .AddInt("exit_code", snap.exit_code)
 	    .AddSize("output_size", snap.output_size);
-	SendJson(fd, json.String());
+	SendJson(conn, json.String());
 }
 
-void Fox_Http::HandleTouch(int fd, const Request& req)
+void Fox_Http::HandleTouch(Fox_Io::Conn& conn, const Request& req)
 {
 	if (!JsonObjectBody(req.body)) {
 		Fox_Json_Object json;
 		json.AddString("error", "invalid json");
-		SendResponse(fd, "400 Bad Request", "application/json", json.String());
+		SendResponse(conn, "400 Bad Request", "application/json", json.String());
 		return;
 	}
 
@@ -123,7 +114,7 @@ void Fox_Http::HandleTouch(int fd, const Request& req)
 	if (!Fox_Remote_Input::Init()) {
 		Fox_Json_Object json;
 		json.AddString("error", "input unavailable");
-		SendResponse(fd, "503 Service Unavailable", "application/json", json.String());
+		SendResponse(conn, "503 Service Unavailable", "application/json", json.String());
 		return;
 	}
 	if (action == "down")      Fox_Remote_Input::TouchDown((int)x, (int)y);
@@ -132,15 +123,15 @@ void Fox_Http::HandleTouch(int fd, const Request& req)
 	else                       Fox_Remote_Input::Tap((int)x, (int)y);
 	Fox_Json_Object json;
 	json.AddBool("ok", true);
-	SendJson(fd, json.String());
+	SendJson(conn, json.String());
 }
 
-void Fox_Http::HandleKey(int fd, const Request& req)
+void Fox_Http::HandleKey(Fox_Io::Conn& conn, const Request& req)
 {
 	if (!JsonObjectBody(req.body)) {
 		Fox_Json_Object json;
 		json.AddString("error", "invalid json");
-		SendResponse(fd, "400 Bad Request", "application/json", json.String());
+		SendResponse(conn, "400 Bad Request", "application/json", json.String());
 		return;
 	}
 
@@ -154,13 +145,13 @@ void Fox_Http::HandleKey(int fd, const Request& req)
 	if (code < 0) {
 		Fox_Json_Object json;
 		json.AddString("error", "unknown key");
-		SendResponse(fd, "400 Bad Request", "application/json", json.String());
+		SendResponse(conn, "400 Bad Request", "application/json", json.String());
 		return;
 	}
 	if (!Fox_Remote_Input::Init()) {
 		Fox_Json_Object json;
 		json.AddString("error", "input unavailable");
-		SendResponse(fd, "503 Service Unavailable", "application/json", json.String());
+		SendResponse(conn, "503 Service Unavailable", "application/json", json.String());
 		return;
 	}
 	std::string action = JsonString(req.body, "action");
@@ -169,5 +160,5 @@ void Fox_Http::HandleKey(int fd, const Request& req)
 	else                       Fox_Remote_Input::KeyTap(code);
 	Fox_Json_Object json;
 	json.AddBool("ok", true);
-	SendJson(fd, json.String());
+	SendJson(conn, json.String());
 }

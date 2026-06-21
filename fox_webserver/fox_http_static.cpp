@@ -52,7 +52,7 @@ bool read_file(const std::string& path, std::string& out)
 
 } // namespace
 
-bool Fox_Http::ServeStatic(int fd, const std::string& url_path)
+bool Fox_Http::ServeStatic(Fox_Io::Conn& conn, const std::string& url_path)
 {
 	struct stat st;
 	if (stat(FOX_DASHBOARD_DIR, &st) != 0 || !S_ISDIR(st.st_mode))
@@ -67,6 +67,6 @@ bool Fox_Http::ServeStatic(int fd, const std::string& url_path)
 	if (!read_file(full, body))
 		return false;
 
-	SendResponse(fd, "200 OK", guess_mime(full), body);
+	SendResponse(conn, "200 OK", guess_mime(full), body);
 	return true;
 }

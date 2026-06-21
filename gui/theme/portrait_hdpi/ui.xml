@@ -42,6 +42,7 @@
 		<xml name="/twres/pages/wlan.xml"/>
 
 		<xml name="/twres/pages/fox.xml"/>
+		<xml name="/twres/pages/column_demo.xml"/>
 		<xml name="/sbin/maintainer.xml" default="/twres/pages/dummy.xml"/>
 
 		<xmlfile name="pages/recovery.xml"/>

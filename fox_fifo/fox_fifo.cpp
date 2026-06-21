@@ -41,48 +41,124 @@
 
 #ifdef OF_ENABLE_WLAN
 #include "wlan.hpp"
+#include "fox_updater.hpp"
+#include "../fox_adbd.hpp"
 #endif
 
 #ifdef OF_ENABLE_WLAN
 #include "../fox_webserver/fox_httpd.hpp"
+#include "../fox_webserver/fox_httpsd.hpp"
+#include "../fox_webserver/fox_tls_cert.hpp"
 #include "../fox_webserver/fox_ttyd.hpp"
+#include "../fox_secrets/fox_secrets.hpp"
 #endif
 #include "fox_remote_input.hpp"
+#include "fox_command_dispatcher.hpp"
 #include "minuitwrp/minui.h"
 
-std::vector<std::string> Fox_Fifo::args;
+std::string Fox_Fifo::op;
+Json::Value Fox_Fifo::cmd_args;
 
-void Fox_Fifo::Set_Args(const std::vector<std::string>& a) {
-	args = a;
+void Fox_Fifo::Set_Request(const std::string& request_op, const Json::Value& args) {
+	op = request_op;
+	cmd_args = args;
 }
 
-// Returns true if 'flag' (e.g. "--compress") appears anywhere in a, removing it.
-static bool take_flag(std::vector<std::string>& a, const std::string& flag) {
-	for (size_t i = 0; i < a.size(); i++) {
-		if (a[i] == flag) {
-			a.erase(a.begin() + i);
-			return true;
-		}
-	}
-	return false;
-}
+// ---- Typed argument accessors --------------------------------------------
+// Handlers read their parameters straight off the request's JSON args object.
+// These helpers coerce loosely (a number or bool requested as a string is
+// stringified, etc.) so a slightly off-typed client request still works.
 
-// Returns the value of an option (e.g. "--name foo") and removes both tokens.
-// Returns empty string if not present.
-static std::string take_option(std::vector<std::string>& a, const std::string& opt) {
-	for (size_t i = 0; i < a.size(); i++) {
-		if (a[i] == opt) {
-			std::string val;
-			if (i + 1 < a.size()) {
-				val = a[i + 1];
-				a.erase(a.begin() + i, a.begin() + i + 2);
-			} else {
-				a.erase(a.begin() + i);
-			}
-			return val;
-		}
-	}
+// String value for 'key' ("" if absent). Numbers/bools are stringified.
+static std::string arg_str(const Json::Value& a, const char* key) {
+	if (!a.isObject() || !a.isMember(key))
+		return "";
+	const Json::Value& v = a[key];
+	if (v.isString())
+		return v.asString();
+	if (v.isIntegral())
+		return std::to_string(v.asInt64());
+	if (v.isBool())
+		return v.asBool() ? "1" : "0";
 	return "";
+}
+
+// Convenience for the conventional "action" field (the subcommand verb).
+static std::string arg_action(const Json::Value& a) {
+	return arg_str(a, "action");
+}
+
+static bool arg_has(const Json::Value& a, const char* key) {
+	return a.isObject() && a.isMember(key);
+}
+
+// Bool value for 'key', defaulting to 'dflt' when absent or not coercible.
+static bool arg_bool(const Json::Value& a, const char* key, bool dflt = false) {
+	if (!arg_has(a, key))
+		return dflt;
+	const Json::Value& v = a[key];
+	if (v.isBool())
+		return v.asBool();
+	if (v.isIntegral())
+		return v.asInt64() != 0;
+	if (v.isString()) {
+		std::string s = v.asString();
+		return s == "1" || s == "true" || s == "yes" || s == "on";
+	}
+	return dflt;
+}
+
+// Integer value for 'key', defaulting to 'dflt' when absent.
+static long arg_int(const Json::Value& a, const char* key, long dflt) {
+	if (!arg_has(a, key))
+		return dflt;
+	const Json::Value& v = a[key];
+	if (v.isIntegral())
+		return (long)v.asInt64();
+	if (v.isString())
+		return strtol(v.asString().c_str(), nullptr, 10);
+	return dflt;
+}
+
+// String array for 'key'. A lone string is accepted as a one-element list;
+// numeric elements are stringified. Empty when absent.
+static std::vector<std::string> arg_array(const Json::Value& a, const char* key) {
+	std::vector<std::string> out;
+	if (!arg_has(a, key))
+		return out;
+	const Json::Value& v = a[key];
+	if (v.isArray()) {
+		for (const Json::Value& e : v) {
+			if (e.isString())
+				out.push_back(e.asString());
+			else if (e.isIntegral())
+				out.push_back(std::to_string(e.asInt64()));
+		}
+	} else if (v.isString()) {
+		out.push_back(v.asString());
+	}
+	return out;
+}
+
+// Generate a strong random alphanumeric password. Used by `web password
+// --generate`. Sourced from /dev/urandom; the slight modulo bias across a
+// 62-char alphabet is irrelevant for a 20-char secret.
+static std::string generate_password(size_t len = 20) {
+	static const char* cs =
+		"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+	const size_t n = 62;
+	std::string out;
+	out.reserve(len);
+	FILE* f = fopen("/dev/urandom", "rb");
+	for (size_t i = 0; i < len; i++) {
+		unsigned char b = 0;
+		if (!f || fread(&b, 1, 1, f) != 1)
+			b = static_cast<unsigned char>(time(nullptr) + i * 61);
+		out.push_back(cs[b % n]);
+	}
+	if (f)
+		fclose(f);
+	return out;
 }
 
 static std::string normalize_partition_spec(const std::string& raw) {
@@ -177,9 +253,9 @@ void Fox_Fifo::Emit_Partition_List(const std::string& list_type, bool enrich) {
 	std::vector<PartitionList> parts;
 	PartitionManager.Get_Partition_List(list_type, &parts);
 
-	gui_print("FOX_LIST_BEGIN\n");
+	Json::Value items(Json::arrayValue);
 	for (const auto& part : parts) {
-		int mounted = PartitionManager.Is_Mounted_By_Path(part.Mount_Point) ? 1 : 0;
+		bool mounted = PartitionManager.Is_Mounted_By_Path(part.Mount_Point);
 		std::string extra;
 		if (enrich) {
 			TWPartition* p = PartitionManager.Find_Partition_By_Path(part.Mount_Point);
@@ -191,14 +267,20 @@ void Fox_Fifo::Emit_Partition_List(const std::string& list_type, bool enrich) {
 					extra += ",resize";
 			}
 		}
-		// Tab-delimited record: mount_point \t display_name \t mounted \t extra
-		gui_print("%s\t%s\t%d\t%s\n", part.Mount_Point.c_str(),
-		          part.Display_Name.c_str(), mounted, extra.c_str());
+		Json::Value item(Json::objectValue);
+		item["mount_point"] = part.Mount_Point;
+		item["display_name"] = part.Display_Name;
+		item["mounted"] = mounted;
+		item["extra"] = extra;
+		items.append(item);
 	}
-	gui_print("FOX_LIST_END\n");
+	Json::Value payload(Json::objectValue);
+	payload["items"] = items;
+	Fox_Command_Dispatcher::EmitData("list", payload);
 }
 
-int Fox_Fifo::Cmd_Mount(const std::vector<std::string>& a, bool unmount) {
+int Fox_Fifo::Cmd_Mount(const Json::Value& args, bool unmount) {
+	std::vector<std::string> a = arg_array(args, "paths");
 	if (a.empty()) {
 		// No partitions: show what is mountable and its current mount state.
 		Emit_Partition_List("mount", false);
@@ -220,17 +302,17 @@ int Fox_Fifo::Cmd_Mount(const std::vector<std::string>& a, bool unmount) {
 	return rc;
 }
 
-int Fox_Fifo::Cmd_Flash(const std::vector<std::string>& argv) {
-	std::vector<std::string> a = argv;
-	// Signature verification, reflash-after-flash and unmount toggles. Each only
-	// overrides the persistent (UI-configured) value when its flag is supplied,
-	// so omitting a flag keeps the same default the GUI would use.
-	bool no_verify = take_flag(a, "--no-verify");
-	bool verify = take_flag(a, "--verify");
-	bool reflash = take_flag(a, "--reflash-orangefox") || take_flag(a, "--reflash");
-	bool no_reflash = take_flag(a, "--no-reflash");
-	bool unmount_system = take_flag(a, "--unmount-system");
-	bool unmount_vendor = take_flag(a, "--unmount-vendor");
+int Fox_Fifo::Cmd_Flash(const Json::Value& args) {
+	std::vector<std::string> a = arg_array(args, "zips");
+	// Signature verification, reflash-after-flash and unmount toggles. The
+	// verify/reflash fields only override the persistent (UI-configured) value
+	// when present, so omitting one keeps the same default the GUI would use.
+	bool verify = arg_has(args, "verify") && arg_bool(args, "verify");
+	bool no_verify = arg_has(args, "verify") && !arg_bool(args, "verify");
+	bool reflash = arg_has(args, "reflash") && arg_bool(args, "reflash");
+	bool no_reflash = arg_has(args, "reflash") && !arg_bool(args, "reflash");
+	bool unmount_system = arg_bool(args, "unmount_system");
+	bool unmount_vendor = arg_bool(args, "unmount_vendor");
 
 	if (a.empty()) {
 		gui_print("fox: flash requires a zip path\n");
@@ -252,8 +334,6 @@ int Fox_Fifo::Cmd_Flash(const std::vector<std::string>& argv) {
 
 	int rc = 0;
 	for (const auto& zip : a) {
-		// Call the tested installer directly so zip paths containing spaces
-		// remain space-safe over the new argv protocol.
 		int wipe_cache = 0;
 		if (TWinstall_zip(zip.c_str(), &wipe_cache) != 0)
 			rc = 1;
@@ -270,14 +350,14 @@ int Fox_Fifo::Cmd_Flash(const std::vector<std::string>& argv) {
 	return rc;
 }
 
-int Fox_Fifo::Cmd_Backup(const std::vector<std::string>& argv) {
-	std::vector<std::string> a = argv;
-	std::string name = take_option(a, "--name");
-	std::string path = take_option(a, "--path");
-	std::string storage = take_option(a, "--storage");
-	bool compress = take_flag(a, "--compress") || take_flag(a, "--compression");
-	bool no_digest = take_flag(a, "--no-digest") ||
-	                 take_flag(a, "--disable-digest-generation");
+int Fox_Fifo::Cmd_Backup(const Json::Value& args) {
+	std::vector<std::string> a = arg_array(args, "parts");
+	std::string name = arg_str(args, "name");
+	std::string path = arg_str(args, "path");
+	std::string storage = arg_str(args, "storage");
+	bool compress = arg_bool(args, "compress");
+	// digest generation is on by default; an explicit digest:false disables it.
+	bool no_digest = arg_has(args, "digest") && !arg_bool(args, "digest", true);
 
 	if (a.empty()) {
 		// No partitions: show what can be backed up.
@@ -296,7 +376,7 @@ int Fox_Fifo::Cmd_Backup(const std::vector<std::string>& argv) {
 	PartitionManager.Mount_All_Storage();
 
 	// Default the destination to internal storage when the caller did not pick a
-	// --storage or --path, so "fox backup data" lands on Internal Storage rather
+	// --storage or --path, so a "backup data" request lands on Internal Storage rather
 	// than wherever tw_storage_path happens to point.
 	bool storage_defaulted = false;
 	if (storage.empty() && path.empty()) {
@@ -341,8 +421,7 @@ int Fox_Fifo::Cmd_Backup(const std::vector<std::string>& argv) {
 	else
 		// Generate a real date/build-based name now. Setting the literal
 		// "(Auto Generate)" only works in the GUI, where Run_Backup matches it
-		// against the localized gui_lookup("auto_generate") string; from the CLI
-		// that comparison fails and the literal becomes the folder name.
+		// against the localized gui_lookup("auto_generate") string.
 		TWFunc::Auto_Generate_Backup_Name();
 	DataManager::SetValue("tw_backup_list", backup_list);
 
@@ -360,14 +439,14 @@ int Fox_Fifo::Cmd_Backup(const std::vector<std::string>& argv) {
 	return 0;
 }
 
-int Fox_Fifo::Cmd_Restore(const std::vector<std::string>& argv) {
-	std::vector<std::string> a = argv;
-	std::string name = take_option(a, "--name");
-	std::string path = take_option(a, "--path");
+int Fox_Fifo::Cmd_Restore(const Json::Value& args) {
+	std::vector<std::string> a = arg_array(args, "parts");
+	std::string name = arg_str(args, "name");
+	std::string path = arg_str(args, "path");
 	if (name.empty())
 		name = path;
-	bool skip_digest = take_flag(a, "--no-digest-check") ||
-	                   take_flag(a, "--disable-digest-check");
+	// digest check is on by default; an explicit digest_check:false skips it.
+	bool skip_digest = arg_has(args, "digest_check") && !arg_bool(args, "digest_check", true);
 
 	if (name.empty()) {
 		gui_print("fox: restore requires --name <backup name> or --path <absolute path>\n");
@@ -449,16 +528,13 @@ int Fox_Fifo::Cmd_Restore(const std::vector<std::string>& argv) {
 	return 0;
 }
 
-int Fox_Fifo::Cmd_Decrypt(const std::vector<std::string>& argv) {
-	std::vector<std::string> a = argv;
-	std::string user = take_option(a, "--user");
-	if (a.empty()) {
+int Fox_Fifo::Cmd_Decrypt(const Json::Value& args) {
+	std::string password = arg_str(args, "password");
+	std::string user = arg_str(args, "user");
+	if (password.empty()) {
 		gui_print("fox: decrypt requires a password\n");
 		return 2;
 	}
-	// The new protocol delivers the password intact, so spaces are supported
-	// here (unlike the legacy space-split ORS path).
-	std::string password = a[0];
 	int user_id = user.empty() ? 0 : atoi(user.c_str());
 
 	gui_print("Attempting to decrypt data partition...\n");
@@ -470,7 +546,7 @@ int Fox_Fifo::Cmd_Decrypt(const std::vector<std::string>& argv) {
 	return 0;
 }
 
-int Fox_Fifo::Cmd_Sideload(const std::vector<std::string>& /*a*/) {
+int Fox_Fifo::Cmd_Sideload(const Json::Value& /*args*/) {
 	// Reuse the tested ORS sideload handler.
 	return OpenRecoveryScript::Run_ORS_Line("sideload");
 }
@@ -482,15 +558,7 @@ static std::string fallback_property(const std::string& first, const std::string
 	return value;
 }
 
-static void print_status_kv(const std::string& key, const std::string& value) {
-	gui_print("%s=%s\n", key.c_str(), value.c_str());
-}
-
-static void print_status_kv(const std::string& key, int value) {
-	gui_print("%s=%d\n", key.c_str(), value);
-}
-
-int Fox_Fifo::Cmd_Status(const std::vector<std::string>& /*a*/) {
+int Fox_Fifo::Cmd_Status(const Json::Value& /*args*/) {
 	int is_encrypted = 0;
 	int is_decrypted = 0;
 	int fox_encrypted = 0;
@@ -523,53 +591,58 @@ int Fox_Fifo::Cmd_Status(const std::vector<std::string>& /*a*/) {
 	std::string rom_sdk = fallback_property("orangefox.rom.sdk", "ro.build.version.sdk");
 	std::string android_release = TWFunc::System_Property_Get("ro.build.version.release");
 
-	gui_print("FOX_STATUS_BEGIN\n");
-	print_status_kv("release", FOX_BUILD);
-	print_status_kv("recovery_version", TW_VERSION_STR);
-	print_status_kv("variant", FOX_VARIANT);
-	print_status_kv("build_type", FOX_BUILD_TYPE);
-	print_status_kv("branch", OF_CURRENT_BRANCH);
-	print_status_kv("codebase_sdk", TWFunc::Fox_Property_Get("ro.build.version.sdk"));
-	print_status_kv("codebase", FOX_CURRENT_DEV_STR);
-	print_status_kv("build_date", DataManager::GetStrValue("FOX_BUILD_DATE_REAL"));
-	print_status_kv("device_model", device_model);
-	print_status_kv("device_code", device_code);
-	print_status_kv("storage_encrypted", storage_encrypted);
-	print_status_kv("storage_decrypted", is_decrypted);
-	print_status_kv("dynamic_partitions", TWFunc::Fox_Property_Get("orangefox.super.partition") == "true" ? 1 : 0);
-	print_status_kv("boot_slot", TWFunc::Fox_Property_Get("ro.boot.slot_suffix"));
-	print_status_kv("virtual_ab", TWFunc::Fox_Property_Get("ro.virtual_ab.enabled") == "true" ? 1 : 0);
-	print_status_kv("kernel", TWFunc::Fox_Property_Get("ro.orangefox.kernel"));
-	print_status_kv("rom_name", rom_name);
-	print_status_kv("rom_incremental", rom_incremental);
-	print_status_kv("rom_sdk", rom_sdk);
-	print_status_kv("android_release", android_release);
-	print_status_kv("rom_miui", TWFunc::Fox_Property_Get("orangefox.miui.rom") == "1" ? 1 : 0);
-	print_status_kv("fingerprint", fingerprint);
-	gui_print("FOX_STATUS_END\n");
+	Json::Value s(Json::objectValue);
+	s["release"] = FOX_BUILD;
+	s["recovery_version"] = TW_VERSION_STR;
+	s["variant"] = FOX_VARIANT;
+	s["build_type"] = FOX_BUILD_TYPE;
+	s["branch"] = OF_CURRENT_BRANCH;
+	s["codebase_sdk"] = TWFunc::Fox_Property_Get("ro.build.version.sdk");
+	s["codebase"] = FOX_CURRENT_DEV_STR;
+	s["build_date"] = DataManager::GetStrValue("FOX_BUILD_DATE_REAL");
+	s["device_model"] = device_model;
+	s["device_code"] = device_code;
+	s["storage_encrypted"] = storage_encrypted != 0;
+	s["storage_decrypted"] = is_decrypted != 0;
+	s["dynamic_partitions"] = TWFunc::Fox_Property_Get("orangefox.super.partition") == "true";
+	s["boot_slot"] = TWFunc::Fox_Property_Get("ro.boot.slot_suffix");
+	s["virtual_ab"] = TWFunc::Fox_Property_Get("ro.virtual_ab.enabled") == "true";
+	s["kernel"] = TWFunc::Fox_Property_Get("ro.orangefox.kernel");
+	s["rom_name"] = rom_name;
+	s["rom_incremental"] = rom_incremental;
+	s["rom_sdk"] = rom_sdk;
+	s["android_release"] = android_release;
+	s["rom_miui"] = TWFunc::Fox_Property_Get("orangefox.miui.rom") == "1";
+	s["fingerprint"] = fingerprint;
+	Fox_Command_Dispatcher::EmitData("status", s);
 	return 0;
 }
 
-int Fox_Fifo::Cmd_Reboot(const std::vector<std::string>& a) {
-	std::string target = a.empty() ? "system" : a[0];
+int Fox_Fifo::Cmd_Reboot(const Json::Value& args) {
+	std::string target = arg_str(args, "target");
+	if (target.empty())
+		target = "system";
 	return OpenRecoveryScript::Run_ORS_Line("reboot " + target);
 }
 
-int Fox_Fifo::Cmd_Wlan(const std::vector<std::string>& a) {
+int Fox_Fifo::Cmd_Wlan(const Json::Value& args) {
 #ifndef OF_ENABLE_WLAN
-	(void)a;
+	(void)args;
 	gui_print("fox: WLAN support is not enabled in this build\n");
 	return 1;
 #else
-	if (!Wlan::IsEnabled() && (a.empty() || a[0] != "enable")) {
-		gui_print("fox: WLAN is not enabled (try 'fox wlan enable')\n");
+	std::string sub = arg_action(args);
+	std::string ssid = arg_str(args, "ssid");
+	// `ap` manages its own radio bring-up (and `ap ssid|password` only touch the
+	// secret store), so it is exempt from the "enable WLAN first" guard.
+	if (!Wlan::IsEnabled() && sub != "enable" && sub != "ap") {
+		gui_print("fox: WLAN is not enabled (enable it first)\n");
 		return 1;
 	}
-	if (a.empty()) {
-		gui_print("fox: wlan requires a subcommand (enable|disable|list|connect|saved|connect-saved|forget|info|test)\n");
+	if (sub.empty()) {
+		gui_print("fox: wlan requires a subcommand (enable|disable|list|connect|saved|connect-saved|forget|info|test|ap)\n");
 		return 2;
 	}
-	const std::string& sub = a[0];
 	if (sub == "enable")
 		return Wlan::Enable() ? 0 : 1;
 	if (sub == "disable")
@@ -582,17 +655,14 @@ int Fox_Fifo::Cmd_Wlan(const std::vector<std::string>& a) {
 		return 0;
 	}
 	if (sub == "connect") {
-		if (a.size() < 2) {
+		if (ssid.empty()) {
 			gui_print("fox: wlan connect requires an SSID\n");
 			return 2;
 		}
 		// Populate scan metadata so Connect() can resolve the encryption type.
 		Wlan::Scan();
-		DataManager::SetValue("wlanselectedid", a[1]);
-		std::string pass;
-		std::vector<std::string> rest(a.begin() + 1, a.end());
-		pass = take_option(rest, "--password");
-		DataManager::SetValue("wlan_password", pass);
+		DataManager::SetValue("wlanselectedid", ssid);
+		DataManager::SetValue("wlan_password", arg_str(args, "password"));
 		return Wlan::Connect() ? 0 : 1;
 	}
 	if (sub == "saved") {
@@ -602,20 +672,40 @@ int Fox_Fifo::Cmd_Wlan(const std::vector<std::string>& a) {
 		gui_print("%s\n", list.c_str());
 		return 0;
 	}
+	if (sub == "password_list") {
+		// Saved networks with their decrypted passwords.
+		std::vector<std::string> ssids;
+		Fox_Secrets::ListWlanNetworks(ssids);
+		Json::Value items(Json::arrayValue);
+		for (const std::string& ssid : ssids) {
+			std::string password, encryption;
+			if (!Fox_Secrets::GetWlanNetwork(ssid, password, encryption))
+				continue;
+			Json::Value item(Json::objectValue);
+			item["ssid"] = ssid;
+			item["encryption"] = encryption;
+			item["password"] = password;
+			items.append(item);
+		}
+		Json::Value payload(Json::objectValue);
+		payload["items"] = items;
+		Fox_Command_Dispatcher::EmitData("wlan_passwords", payload);
+		return 0;
+	}
 	if (sub == "connect-saved") {
-		if (a.size() < 2) {
+		if (ssid.empty()) {
 			gui_print("fox: wlan connect-saved requires an SSID\n");
 			return 2;
 		}
-		DataManager::SetValue("wlanselectedid", a[1]);
+		DataManager::SetValue("wlanselectedid", ssid);
 		return Wlan::ConnectSaved() ? 0 : 1;
 	}
 	if (sub == "forget") {
-		if (a.size() < 2) {
+		if (ssid.empty()) {
 			gui_print("fox: wlan forget requires an SSID\n");
 			return 2;
 		}
-		DataManager::SetValue("wlanselectedid", a[1]);
+		DataManager::SetValue("wlanselectedid", ssid);
 		return Wlan::ForgetSaved() ? 0 : 1;
 	}
 	if (sub == "info") {
@@ -635,57 +725,212 @@ int Fox_Fifo::Cmd_Wlan(const std::vector<std::string>& a) {
 		}
 		return 0;
 	}
+	if (sub == "ap") {
+#ifndef OF_WLAN_AP
+		gui_print("fox: WLAN hotspot (AP) support is not enabled in this build (set OF_WLAN_AP=1)\n");
+		return 1;
+#else
+		std::string verb = arg_str(args, "subaction");
+		const Json::Value& values = args["values"];
+		auto value0 = [&]() -> std::string {
+			if (values.isArray() && values.size() > 0 && values[0].isString())
+				return values[0].asString();
+			return "";
+		};
+
+		if (verb.empty() || verb == "status") {
+			std::string ap_ssid, ap_pass;
+			Wlan::ApGetConfig(ap_ssid, ap_pass);
+
+			std::vector<Wlan::ApClient> clients;
+			Wlan::ApListClients(clients);
+
+			bool enabled = Wlan::ApIsEnabled();
+			std::string ip = DataManager::GetStrValue("tw_wlan_ap_ip");
+
+			// Human-readable lines (captured + pretty-printed by the CLI).
+			gui_print("Hotspot: %s\n", enabled ? "enabled" : "disabled");
+			gui_print("SSID: %s\n", ap_ssid.c_str());
+			gui_print("Security: %s\n", ap_pass.empty() ? "open" : "WPA2-PSK");
+			if (enabled) {
+				gui_print("IP: %s\n", ip.c_str());
+				gui_print("Clients: %d\n", (int)clients.size());
+			}
+
+			// Structured payload for WebUSB/JSON callers.
+			Json::Value payload(Json::objectValue);
+			payload["enabled"] = enabled;
+			payload["ssid"] = ap_ssid;
+			payload["secured"] = !ap_pass.empty();
+			payload["ip"] = ip;
+			payload["clients"] = (Json::UInt)clients.size();
+			Fox_Command_Dispatcher::EmitData("wlan_ap_status", payload);
+			return 0;
+		}
+		if (verb == "enable")
+			return Wlan::ApEnable() ? 0 : 1;
+		if (verb == "disable")
+			return Wlan::ApDisable() ? 0 : 1;
+		if (verb == "ssid") {
+			if (value0().empty()) {
+				gui_print("fox: wlan ap ssid requires a value\n");
+				return 2;
+			}
+			return Wlan::ApSetSsid(value0()) ? 0 : 1;
+		}
+		if (verb == "password") {
+			// "clear" (or no value) configures an open hotspot.
+			std::string pw = value0();
+			if (pw == "clear")
+				pw.clear();
+			return Wlan::ApSetPassword(pw) ? 0 : 1;
+		}
+		if (verb == "list") {
+			std::vector<Wlan::ApClient> clients;
+			Wlan::ApListClients(clients);
+
+			if (clients.empty()) {
+				gui_print("No devices connected to the hotspot\n");
+			} else {
+				for (const Wlan::ApClient& c : clients)
+					gui_print("%s\t%s\t%s\n", c.ip.c_str(), c.mac.c_str(),
+					          c.hostname.empty() ? "-" : c.hostname.c_str());
+			}
+
+			Json::Value items(Json::arrayValue);
+			for (const Wlan::ApClient& c : clients) {
+				Json::Value item(Json::objectValue);
+				item["ip"] = c.ip;
+				item["mac"] = c.mac;
+				item["hostname"] = c.hostname;
+				items.append(item);
+			}
+			Json::Value payload(Json::objectValue);
+			payload["items"] = items;
+			Fox_Command_Dispatcher::EmitData("wlan_ap_clients", payload);
+			return 0;
+		}
+
+		gui_print("fox: unknown wlan ap verb '%s' (enable|disable|status|ssid|password|list)\n", verb.c_str());
+		return 2;
+#endif // OF_WLAN_AP
+	}
 	gui_print("fox: unknown wlan subcommand '%s'\n", sub.c_str());
 	return 2;
 #endif // OF_ENABLE_WLAN
 }
 
-int Fox_Fifo::Cmd_Internal(const std::vector<std::string>& a) {
-	if (a.empty()) {
+int Fox_Fifo::Cmd_Adbd(const Json::Value& args) {
+#ifndef OF_ENABLE_WLAN
+	(void)args;
+	gui_print("fox: network ADB is not enabled in this build (OF_ENABLE_WLAN=0)\n");
+	return 1;
+#else
+	bool no_auth = arg_bool(args, "no_auth");
+	std::string action = arg_action(args);
+	if (action.empty())
+		action = "status";
+	int port = (int)arg_int(args, "port", 5555);
+	int timeout = (int)arg_int(args, "timeout", 60);
+
+	if (action == "status") {
+		Fox_Adbd::PrintStatus();
+		return 0;
+	}
+	if (action == "start" || action == "enable") {
+		if (no_auth)
+			return Fox_Adbd::StartNoAuth(port) ? 0 : 1;
+		return Fox_Adbd::StartSecure(port) ? 0 : 1;
+	}
+	if (action == "pair")
+		return Fox_Adbd::StartPairing(timeout) ? 0 : 1;
+	if (action == "stop-pair")
+		return Fox_Adbd::StopPairing() ? 0 : 1;
+	if (action == "stop" || action == "disable")
+		return Fox_Adbd::StopAll() ? 0 : 1;
+	if (action == "list") {
+		Fox_Adbd::PrintDevices();
+		return 0;
+	}
+	if (action == "forget") {
+		// The device id rides in `subaction` (the generic action mapping); also
+		// accept an explicit `device` field.
+		std::string id = arg_str(args, "device");
+		if (id.empty())
+			id = arg_str(args, "subaction");
+		return Fox_Adbd::ForgetDevice(id) ? 0 : 1;
+	}
+
+	gui_print("fox: unknown adbd subcommand '%s' "
+	          "(start|pair|stop-pair|stop|status|list|forget)\n", action.c_str());
+	return 2;
+#endif
+}
+
+int Fox_Fifo::Cmd_Internal(const Json::Value& args) {
+	std::string sub = arg_action(args);
+	std::string name = arg_str(args, "name");
+	if (sub.empty()) {
 		gui_print("fox: internal requires a subcommand (get|set|go)\n");
 		return 2;
 	}
-	const std::string& sub = a[0];
 	if (sub == "get") {
-		if (a.size() < 2) {
+		if (name.empty()) {
 			gui_print("fox: internal get requires a variable name\n");
 			return 2;
 		}
 		std::string value;
-		DataManager::GetValue(a[1], value);
+		DataManager::GetValue(name, value);
 		gui_print("%s\n", value.c_str());
 		return 0;
 	}
 	if (sub == "set") {
-		if (a.size() < 2) {
+		if (name.empty()) {
 			gui_print("fox: internal set requires a variable name\n");
 			return 2;
 		}
-		std::string value = (a.size() > 2) ? a[2] : "";
-		DataManager::SetValue(a[1], value);
+		DataManager::SetValue(name, arg_str(args, "value"));
 		return 0;
 	}
 	if (sub == "go") {
-		if (a.size() < 2) {
+		std::string page = arg_str(args, "page");
+		if (page.empty()) {
 			gui_print("fox: internal go requires a page name\n");
 			return 2;
 		}
-		gui_changePage(a[1]);
+		gui_changePage(page);
 		return 0;
 	}
 	gui_print("fox: unknown internal subcommand '%s'\n", sub.c_str());
 	return 2;
 }
 
-int Fox_Fifo::Cmd_Ors(const std::vector<std::string>& a) {
-	if (a.empty()) {
+int Fox_Fifo::Cmd_Ors(const Json::Value& args) {
+	std::string path = arg_str(args, "path");
+	if (path.empty()) {
 		gui_print("fox: ors requires a script file path\n");
 		return 2;
 	}
-	return OpenRecoveryScript::Run_ORS_File(a[0]);
+	return OpenRecoveryScript::Run_ORS_File(path);
 }
 
-int Fox_Fifo::Cmd_Wipe(const std::vector<std::string>& a) {
+int Fox_Fifo::Cmd_OrsCmd(const Json::Value& args) {
+	std::vector<std::string> raw = arg_array(args, "raw");
+	std::string joined;
+	for (size_t i = 0; i < raw.size(); i++) {
+		if (i)
+			joined += " ";
+		joined += raw[i];
+	}
+	if (joined.empty()) {
+		gui_print("fox: ors-cmd requires a command line\n");
+		return 2;
+	}
+	return OpenRecoveryScript::Run_ORS_Line(joined);
+}
+
+int Fox_Fifo::Cmd_Wipe(const Json::Value& args) {
+	std::vector<std::string> a = arg_array(args, "parts");
 	if (a.empty()) {
 		// No targets: show what can be wiped.
 		Emit_Partition_List("wipe", false);
@@ -716,12 +961,11 @@ int Fox_Fifo::Cmd_Wipe(const std::vector<std::string>& a) {
 	return rc;
 }
 
-int Fox_Fifo::Cmd_Format_Data(const std::vector<std::string>& argv) {
-	std::vector<std::string> a = argv;
-	bool confirmed = take_flag(a, "--yes") || take_flag(a, "--confirm");
+int Fox_Fifo::Cmd_Format_Data(const Json::Value& args) {
+	bool confirmed = arg_bool(args, "confirm");
 	if (!confirmed) {
 		gui_print("fox: format_data erases ALL data and removes encryption.\n");
-		gui_print("fox: re-run with --yes to confirm: fox format_data --yes\n");
+		gui_print("fox: refusing without an explicit confirm flag\n");
 		return 2;
 	}
 	gui_print("Formatting data...\n");
@@ -733,7 +977,7 @@ int Fox_Fifo::Cmd_Format_Data(const std::vector<std::string>& argv) {
 	return 0;
 }
 
-int Fox_Fifo::Cmd_Reflash(const std::vector<std::string>& /*a*/) {
+int Fox_Fifo::Cmd_Reflash(const Json::Value& /*args*/) {
 	gui_print("Reflashing OrangeFox...\n");
 	twrpRepacker repacker;
 	if (!repacker.Flash_Current_Twrp()) {
@@ -744,11 +988,14 @@ int Fox_Fifo::Cmd_Reflash(const std::vector<std::string>& /*a*/) {
 	return 0;
 }
 
-int Fox_Fifo::Cmd_Mtp(const std::vector<std::string>& a) {
-	std::string sub = a.empty() ? "status" : a[0];
+int Fox_Fifo::Cmd_Mtp(const Json::Value& args) {
+	std::string sub = arg_action(args);
+	if (sub.empty())
+		sub = "status";
 	if (sub == "status") {
-		int enabled = DataManager::GetIntValue("tw_mtp_enabled");
-		gui_print("mtp_enabled=%d\n", enabled ? 1 : 0);
+		Json::Value s(Json::objectValue);
+		s["enabled"] = DataManager::GetIntValue("tw_mtp_enabled") != 0;
+		Fox_Command_Dispatcher::EmitData("mtp", s);
 		return 0;
 	}
 	if (sub == "enable") {
@@ -771,7 +1018,7 @@ int Fox_Fifo::Cmd_Mtp(const std::vector<std::string>& a) {
 	return 2;
 }
 
-int Fox_Fifo::Cmd_Log(const std::vector<std::string>& /*a*/) {
+int Fox_Fifo::Cmd_Log(const Json::Value& /*args*/) {
 	// Mirror the OrangeFox log export: copy the recovery log into the Fox logs
 	// folder and compress it (pigz produces <name>.zip), as in Run_Before_Reboot.
 	TWFunc::Create_Dir_Recursive(Fox_Logs_Dir, 0777);
@@ -796,21 +1043,22 @@ int Fox_Fifo::Cmd_Log(const std::vector<std::string>& /*a*/) {
 	return 0;
 }
 
-int Fox_Fifo::Cmd_Partition(const std::vector<std::string>& a) {
-	if (a.empty()) {
+int Fox_Fifo::Cmd_Partition(const Json::Value& args) {
+	std::string path_in = arg_str(args, "path");
+	std::string op = arg_action(args);
+	if (path_in.empty()) {
 		// No path: list partitions with file system and capability flags.
 		Emit_Partition_List("part_option", true);
 		return 0;
 	}
-	if (a.size() < 2) {
+	if (op.empty()) {
 		gui_print("fox: partition requires <path> <repair|resize|change-fs <fs>|wipe>\n");
 		return 2;
 	}
 
-	std::string path = normalize_partition_spec(a[0]);
-	const std::string& op = a[1];
+	std::string path = normalize_partition_spec(path_in);
 	if (!PartitionManager.Find_Partition_By_Path(path)) {
-		gui_print("fox: unknown partition '%s'\n", a[0].c_str());
+		gui_print("fox: unknown partition '%s'\n", path_in.c_str());
 		return 1;
 	}
 
@@ -827,13 +1075,14 @@ int Fox_Fifo::Cmd_Partition(const std::vector<std::string>& a) {
 		return 0;
 	}
 	if (op == "change-fs") {
-		if (a.size() < 3) {
+		std::string fs = arg_str(args, "fs");
+		if (fs.empty()) {
 			gui_print("fox: partition change-fs requires a file system (e.g. ext4)\n");
 			return 2;
 		}
-		if (!PartitionManager.Wipe_By_Path(path, a[2]))
+		if (!PartitionManager.Wipe_By_Path(path, fs))
 			return 1;
-		gui_print("Changed %s to %s\n", path.c_str(), a[2].c_str());
+		gui_print("Changed %s to %s\n", path.c_str(), fs.c_str());
 		return 0;
 	}
 	if (op == "wipe") {
@@ -865,27 +1114,36 @@ static void collect_zip_files(const std::string& dir, std::vector<std::string>& 
 	closedir(d);
 }
 
-int Fox_Fifo::Cmd_Addons(const std::vector<std::string>& a) {
+int Fox_Fifo::Cmd_Addons(const Json::Value& args) {
 	std::vector<std::string> dirs = { Fox_Home_Files, FFiles_dir };
+	std::string sub = arg_action(args);
+	std::vector<std::string> names = arg_array(args, "names");
 
-	if (a.empty() || a[0] == "list") {
+	if (sub.empty() || sub == "list") {
 		std::vector<std::string> zips;
 		for (const auto& dir : dirs)
 			collect_zip_files(dir, zips);
 		std::sort(zips.begin(), zips.end());
 		zips.erase(std::unique(zips.begin(), zips.end()), zips.end());
-		gui_print("FOX_LIST_BEGIN\n");
+		Json::Value items(Json::arrayValue);
 		for (const auto& z : zips) {
 			std::string name = z.substr(z.find_last_of('/') + 1);
+			Json::Value item(Json::objectValue);
 			// mount_point column carries the path; display the file name.
-			gui_print("%s\t%s\t0\t\n", z.c_str(), name.c_str());
+			item["mount_point"] = z;
+			item["display_name"] = name;
+			item["mounted"] = false;
+			item["extra"] = "";
+			items.append(item);
 		}
-		gui_print("FOX_LIST_END\n");
+		Json::Value payload(Json::objectValue);
+		payload["items"] = items;
+		Fox_Command_Dispatcher::EmitData("list", payload);
 		return 0;
 	}
 
-	if (a[0] == "install") {
-		if (a.size() < 2) {
+	if (sub == "install") {
+		if (names.empty()) {
 			gui_print("fox: addons install requires a zip name or path\n");
 			return 2;
 		}
@@ -895,8 +1153,8 @@ int Fox_Fifo::Cmd_Addons(const std::vector<std::string>& a) {
 			collect_zip_files(dir, zips);
 		std::sort(zips.begin(), zips.end());
 		zips.erase(std::unique(zips.begin(), zips.end()), zips.end());
-		for (size_t i = 1; i < a.size(); i++) {
-			std::string target = a[i];
+		for (const std::string& requested : names) {
+			std::string target = requested;
 			if (target.find('/') == std::string::npos) {
 				// Resolve a bare name against the known addon folders.
 				bool found = false;
@@ -912,7 +1170,7 @@ int Fox_Fifo::Cmd_Addons(const std::vector<std::string>& a) {
 					}
 				}
 				if (!found) {
-					gui_print("fox: addon '%s' not found\n", a[i].c_str());
+					gui_print("fox: addon '%s' not found\n", requested.c_str());
 					rc = 1;
 					continue;
 				}
@@ -924,14 +1182,16 @@ int Fox_Fifo::Cmd_Addons(const std::vector<std::string>& a) {
 		return rc;
 	}
 
-	gui_print("fox: unknown addons subcommand '%s' (list|install)\n", a[0].c_str());
+	gui_print("fox: unknown addons subcommand '%s' (list|install)\n", sub.c_str());
 	return 2;
 }
 
-int Fox_Fifo::Cmd_Screencap(const std::vector<std::string>& a) {
+int Fox_Fifo::Cmd_Screencap(const Json::Value& args) {
 	// Capture the live framebuffer to a PNG file (tmpfs by default) so a client
 	// can read it back over an ADB sync/pull -- no network stack involved.
-	std::string path = a.empty() ? "/tmp/.fox_screen.png" : a[0];
+	std::string path = arg_str(args, "path");
+	if (path.empty())
+		path = "/tmp/.fox_screen.png";
 	if (gr_save_screenshot(path.c_str()) != 0) {
 		gui_print("fox: screencap failed\n");
 		return 1;
@@ -940,34 +1200,86 @@ int Fox_Fifo::Cmd_Screencap(const std::vector<std::string>& a) {
 	return 0;
 }
 
-int Fox_Fifo::Cmd_Input(const std::vector<std::string>& a) {
+int Fox_Fifo::Cmd_Input(const Json::Value& args) {
+	// Normally intercepted by the dispatcher's control fast path; handled here
+	// too for completeness. Fox_Remote_Input reads the typed args directly.
 	std::string output;
-	int code = Fox_Remote_Input::RunCommand(a, &output);
+	int code = Fox_Remote_Input::RunCommand(args, &output);
 	if (!output.empty())
 		gui_print("%s", output.c_str());
 	return code;
 }
 
-// fox webserver {start [--port N]|stop|status|terminal ...}: control the HTTP
-// server (dashboard + REST/job control plane) on its own. The remote-control
-// plane (screen + input) is governed separately by `fox control`.
-int Fox_Fifo::Cmd_Webserver(const std::vector<std::string>& a) {
+#ifdef OF_ENABLE_WLAN
+namespace {
+// Print the auth line without ever echoing a user-configured password.
+void print_auth_line() {
+	if (Fox_Httpd::AuthIsPassword())
+		gui_print("auth=remote-password\n");
+	else
+		gui_print("token=%s\n", Fox_Httpd::Token().c_str());
+}
+
+// Add the auth descriptor to a status payload without leaking a configured
+// password: either auth="remote-password" or the random per-boot token.
+void auth_into(Json::Value& obj) {
+	if (Fox_Httpd::AuthIsPassword())
+		obj["auth"] = "remote-password";
+	else
+		obj["token"] = Fox_Httpd::Token();
+}
+
+// "http://<addr>:<port>/" — the dashboard-facing URL for a status payload.
+std::string http_url(int port) {
+	return "http://" + Fox_Httpd::LocalAddress() + ":" + std::to_string(port) + "/";
+}
+} // namespace
+#endif
+
+// webserver: the HTTP server umbrella.
+//   webserver {start [--port N]|stop|status|terminal ...}  — plaintext server
+//   webserver http {enable|disable|status} [--port N]      — plaintext listener
+//   webserver https {enable|disable|status|cert ...} [--port N]  — TLS listener
+//   webserver redirect {enable|disable|status}             — plaintext->HTTPS
+//   webserver cert {regen|status}                          — TLS cert (alias)
+//   webserver cors {set <origin>|reset|status}             — CORS allow-list
+// The remote-control plane (screen + input) is governed separately by `control`.
+int Fox_Fifo::Cmd_Webserver(const Json::Value& args) {
 #ifndef OF_ENABLE_WLAN
-	(void)a;
+	(void)args;
 	gui_print("fox: webserver is not available in this build (OF_ENABLE_WLAN=0)\n");
-	gui_print("fox: direct WebUSB remains available via screencap/input/screenstream FIFO commands\n");
+	gui_print("fox: direct WebUSB remains available via screencap/input/screenstream requests\n");
 	return 1;
 #else
-	std::string sub = a.empty() ? "status" : a[0];
+	std::string sub = arg_action(args);
+	if (sub.empty())
+		sub = "status";
+	std::string subaction = arg_str(args, "subaction");
+	std::vector<std::string> values = arg_array(args, "values");
+	std::string port_s = arg_str(args, "port");
 
-	if (sub == "start") {
-		std::vector<std::string> rest(a.begin() + (a.empty() ? 0 : 1), a.end());
-		std::string port_s = take_option(rest, "--port");
+	// Nested transport/policy groups: the group is `action`, its verb is
+	// `subaction`, and any further tokens ride in `values`.
+	if (sub == "http")
+		return Cmd_Http(subaction, port_s);
+	if (sub == "https")
+		return Cmd_Https(subaction, values, port_s);
+	if (sub == "redirect" || sub == "http_redirect")
+		return Cmd_HttpRedirect(subaction);
+	if (sub == "cors")
+		return Cmd_Cors(subaction, values);
+	// `webserver cert {regen|status}` — convenience alias for the TLS cert
+	// actions (forwarded to the shared cert handler), so the certificate can be
+	// (re)generated without first going through `webserver https`.
+	if (sub == "cert")
+		return Cmd_Https("cert", { subaction }, port_s);
+
+	if (sub == "start" || sub == "enable") {
 		int port = port_s.empty() ? 80 : atoi(port_s.c_str());
 		if (Fox_Httpd::IsRunning()) {
 			gui_print("Web server already running on %s:%d\n",
 			          Fox_Httpd::LocalAddress().c_str(), Fox_Httpd::Port());
-			gui_print("token=%s\n", Fox_Httpd::Token().c_str());
+			print_auth_line();
 			return 0;
 		}
 		if (!Fox_Httpd::Start(port)) {
@@ -977,37 +1289,37 @@ int Fox_Fifo::Cmd_Webserver(const std::vector<std::string>& a) {
 		gui_print("Web server started\n");
 		gui_print("url=http://%s:%d/\n", Fox_Httpd::LocalAddress().c_str(), Fox_Httpd::Port());
 		gui_print("port=%d\n", Fox_Httpd::Port());
-		gui_print("token=%s\n", Fox_Httpd::Token().c_str());
+		print_auth_line();
 		gui_print("control=%d\n", Fox_Httpd::ControlEnabled() ? 1 : 0);
 		return 0;
 	}
-	if (sub == "stop") {
+	if (sub == "stop" || sub == "disable") {
 		Fox_Ttyd::Stop();
 		Fox_Httpd::Stop();
 		gui_print("Web server stopped\n");
 		return 0;
 	}
 	if (sub == "status") {
-		gui_print("FOX_STATUS_BEGIN\n");
-		gui_print("running=%d\n", Fox_Httpd::IsRunning() ? 1 : 0);
-		gui_print("control=%d\n", Fox_Httpd::ControlEnabled() ? 1 : 0);
+		Json::Value s(Json::objectValue);
+		s["running"] = Fox_Httpd::IsRunning();
+		s["control"] = Fox_Httpd::ControlEnabled();
 		if (Fox_Httpd::IsRunning()) {
-			gui_print("address=%s\n", Fox_Httpd::LocalAddress().c_str());
-			gui_print("port=%d\n", Fox_Httpd::Port());
-			gui_print("url=http://%s:%d/\n", Fox_Httpd::LocalAddress().c_str(), Fox_Httpd::Port());
-			gui_print("token=%s\n", Fox_Httpd::Token().c_str());
+			s["address"] = Fox_Httpd::LocalAddress();
+			s["port"] = Fox_Httpd::Port();
+			s["url"] = http_url(Fox_Httpd::Port());
+			auth_into(s);
 		}
-		gui_print("FOX_STATUS_END\n");
+		Fox_Command_Dispatcher::EmitData("webserver", s);
 		return 0;
 	}
 	if (sub == "terminal" || sub == "ttyd") {
-		std::string action = a.size() > 1 ? a[1] : "status";
+		std::string action = subaction.empty() ? "status" : subaction;
 		if (action == "start") {
-			std::vector<std::string> rest(a.begin() + 2, a.end());
-			std::string port_s = take_option(rest, "--port");
 			int port = port_s.empty() ? 7681 : atoi(port_s.c_str());
 			if (!Fox_Ttyd::Start(port)) {
 				gui_print("fox: failed to start ttyd\n");
+				if (!Fox_Ttyd::LastError().empty())
+					gui_print("%s\n", Fox_Ttyd::LastError().c_str());
 				return 1;
 			}
 			gui_print("ttyd started\n");
@@ -1022,34 +1334,37 @@ int Fox_Fifo::Cmd_Webserver(const std::vector<std::string>& a) {
 			return 0;
 		}
 		if (action == "status") {
-			gui_print("FOX_TTYD_BEGIN\n");
-			gui_print("running=%d\n", Fox_Ttyd::IsRunning() ? 1 : 0);
-			gui_print("port=%d\n", Fox_Ttyd::Port());
-			gui_print("url=http://%s:%d/\n", Fox_Httpd::LocalAddress().c_str(), Fox_Ttyd::Port());
-			gui_print("shell=%s\n", Fox_Ttyd::Shell().c_str());
-			gui_print("FOX_TTYD_END\n");
+			Json::Value s(Json::objectValue);
+			s["running"] = Fox_Ttyd::IsRunning();
+			s["port"] = Fox_Ttyd::Port();
+			s["url"] = http_url(Fox_Ttyd::Port());
+			s["shell"] = Fox_Ttyd::Shell();
+			Fox_Command_Dispatcher::EmitData("ttyd", s);
 			return 0;
 		}
 		gui_print("fox: unknown webserver terminal subcommand '%s' (start|stop|status)\n", action.c_str());
 		return 2;
 	}
-	gui_print("fox: unknown webserver subcommand '%s' (start|stop|status|terminal)\n", sub.c_str());
+	gui_print("fox: unknown webserver subcommand '%s' "
+	          "(start|stop|status|terminal|http|https|redirect|cert|cors)\n", sub.c_str());
 	return 2;
 #endif
 }
 
-// fox control {start|stop|status}: toggle the remote-control plane (screen
+// control {start|stop|status}: toggle the remote-control plane (screen
 // mirroring + input injection) exposed over the HTTP server, independently of
-// whether the server is running. Does not gate the `fox input`/`fox screencap`
-// CLI commands (those need adb shell access already).
-int Fox_Fifo::Cmd_Control(const std::vector<std::string>& a) {
+// whether the server is running. Direct `input`/`screencap` RPC commands do
+// not depend on this toggle.
+int Fox_Fifo::Cmd_Control(const Json::Value& args) {
 #ifndef OF_ENABLE_WLAN
-	(void)a;
+	(void)args;
 	gui_print("fox: HTTP control plane is not available in this build (OF_ENABLE_WLAN=0)\n");
-	gui_print("fox: direct WebUSB remains available via input/screencap/screenstream FIFO commands\n");
+	gui_print("fox: direct WebUSB remains available via input/screencap/screenstream requests\n");
 	return 1;
 #else
-	std::string sub = a.empty() ? "status" : a[0];
+	std::string sub = arg_action(args);
+	if (sub.empty())
+		sub = "status";
 
 	if (sub == "start" || sub == "enable" || sub == "on") {
 		Fox_Httpd::SetControlEnabled(true);
@@ -1062,10 +1377,10 @@ int Fox_Fifo::Cmd_Control(const std::vector<std::string>& a) {
 		return 0;
 	}
 	if (sub == "status") {
-		gui_print("FOX_STATUS_BEGIN\n");
-		gui_print("control=%d\n", Fox_Httpd::ControlEnabled() ? 1 : 0);
-		gui_print("input_ready=%d\n", Fox_Remote_Input::IsReady() ? 1 : 0);
-		gui_print("FOX_STATUS_END\n");
+		Json::Value s(Json::objectValue);
+		s["control"] = Fox_Httpd::ControlEnabled();
+		s["input_ready"] = Fox_Remote_Input::IsReady();
+		Fox_Command_Dispatcher::EmitData("control", s);
 		return 0;
 	}
 	gui_print("fox: unknown control subcommand '%s' (start|stop|status)\n", sub.c_str());
@@ -1073,90 +1388,539 @@ int Fox_Fifo::Cmd_Control(const std::vector<std::string>& a) {
 #endif
 }
 
-int Fox_Fifo::Cmd_Storages(const std::vector<std::string>& /*a*/) {
+// web {enable|disable|status|password ...}: umbrella control for the
+// networked access surface. The same password authenticates the ttyd terminal
+// (HTTP basic-auth) and the REST/remote HTTP API (token).
+int Fox_Fifo::Cmd_Web(const Json::Value& args) {
+#ifndef OF_ENABLE_WLAN
+	(void)args;
+	gui_print("fox: web access is not available in this build (OF_ENABLE_WLAN=0)\n");
+	return 1;
+#else
+	std::string sub = arg_action(args);
+	if (sub.empty())
+		sub = "status";
+
+	if (sub == "status") {
+		Json::Value s(Json::objectValue);
+		s["password_set"] = Fox_Secrets::HasRemotePassword();
+		s["webserver"] = Fox_Httpd::IsRunning();
+		s["ttyd"] = Fox_Ttyd::IsRunning();
+		if (Fox_Httpd::IsRunning()) {
+			s["address"] = Fox_Httpd::LocalAddress();
+			s["port"] = Fox_Httpd::Port();
+		}
+		Fox_Command_Dispatcher::EmitData("web", s);
+		return 0;
+	}
+
+	if (sub == "enable" || sub == "start" || sub == "on") {
+		// Secure by default: never expose the network surface without a password.
+		if (!Fox_Secrets::HasRemotePassword()) {
+			gui_print("fox: refusing to enable web access without a password\n");
+			gui_print("fox: set one first: web password <password>\n");
+			return 1;
+		}
+
+		std::string port_s = arg_str(args, "port");
+		int port = port_s.empty() ? 80 : atoi(port_s.c_str());
+
+		int rc = 0;
+		if (!Fox_Httpd::IsRunning() && !Fox_Httpd::Start(port)) {
+			gui_print("fox: failed to start web server\n");
+			rc = 1;
+		} else {
+			gui_print("Web server: http://%s:%d/\n",
+			          Fox_Httpd::LocalAddress().c_str(), Fox_Httpd::Port());
+		}
+		if (!Fox_Ttyd::IsRunning() && !Fox_Ttyd::Start()) {
+			gui_print("fox: failed to start ttyd\n");
+			if (!Fox_Ttyd::LastError().empty())
+				gui_print("%s\n", Fox_Ttyd::LastError().c_str());
+			rc = 1;
+		} else {
+			gui_print("Terminal: http://%s:%d/\n",
+			          Fox_Httpd::LocalAddress().c_str(), Fox_Ttyd::Port());
+		}
+		if (!Fox_Adbd::StartSecure(5555)) {
+			gui_print("fox: failed to start network adbd\n");
+			rc = 1;
+		} else {
+			gui_print("Network adbd started on %s:5555\n", Fox_Adbd::WlanIp().c_str());
+		}
+		return rc;
+	}
+
+	if (sub == "disable" || sub == "stop" || sub == "off") {
+		Fox_Ttyd::Stop();
+		Fox_Httpd::Stop();
+		Fox_Adbd::StopAll();
+		gui_print("Web access disabled\n");
+		return 0;
+	}
+
+	if (sub == "password") {
+		bool generate = arg_bool(args, "generate");
+		std::string value = arg_str(args, "subaction");
+		std::vector<std::string> extra = arg_array(args, "values");
+
+		// `web password` with no value and no --generate: show the currently
+		// configured password (the caller explicitly asked to see it).
+		if (!generate && value.empty() && extra.empty()) {
+			std::string current;
+			Json::Value s(Json::objectValue);
+			if (Fox_Secrets::GetRemotePassword(current) && !current.empty()) {
+				s["password_set"] = true;
+				s["password"] = current;
+			} else {
+				s["password_set"] = false;
+			}
+			Fox_Command_Dispatcher::EmitData("password", s);
+			return 0;
+		}
+
+		bool ok;
+		if (value == "clear") {
+			ok = Fox_Secrets::ClearRemotePassword();
+			if (!ok) {
+				gui_print("fox: failed to clear web password\n");
+				return 1;
+			}
+			gui_print("Web password cleared\n");
+		} else {
+			std::string password;
+			if (generate) {
+				password = generate_password();
+			} else {
+				// Join the password value and any trailing tokens (a password
+				// may contain spaces and arrive split across value + values[]).
+				password = value;
+				for (const auto& tok : extra) {
+					if (!password.empty())
+						password += " ";
+					password += tok;
+				}
+			}
+			ok = Fox_Secrets::SetRemotePassword(password);
+			if (!ok) {
+				gui_print("fox: failed to save web password\n");
+				return 1;
+			}
+			if (generate) {
+				// We minted the secret on the caller's behalf, so return it once.
+				gui_print("Web password generated\n");
+				gui_print("password=%s\n", password.c_str());
+			} else {
+				// Never echo a user-supplied password back.
+				gui_print("Web password set\n");
+			}
+		}
+
+		// Re-apply to any live services so the new credential is used at once.
+		if (Fox_Httpd::IsRunning()) {
+			int port = Fox_Httpd::Port();
+			Fox_Httpd::Stop();
+			Fox_Httpd::Start(port);
+		}
+		if (Fox_Ttyd::IsRunning()) {
+			int port = Fox_Ttyd::Port();
+			Fox_Ttyd::Stop();
+			// After a clear, ttyd will refuse to restart (no password) by design.
+			Fox_Ttyd::Start(port);
+		}
+		return 0;
+	}
+
+	gui_print("fox: unknown web subcommand '%s' (enable|disable|status|password)\n", sub.c_str());
+	return 2;
+#endif
+}
+
+// webserver http {enable|disable|status} [--port N]: the plaintext HTTP
+// listener on its own, independent of the HTTPS listener and the `web` umbrella.
+// When redirect mode is enabled, this listener serves only 301s to HTTPS.
+int Fox_Fifo::Cmd_Http(const std::string& verb, const std::string& port_s) {
+#ifndef OF_ENABLE_WLAN
+	(void)verb;
+	(void)port_s;
+	gui_print("fox: http server is not available in this build (OF_ENABLE_WLAN=0)\n");
+	return 1;
+#else
+	std::string sub = verb.empty() ? "status" : verb;
+
+	if (sub == "enable" || sub == "start" || sub == "on") {
+		int port = port_s.empty() ? 80 : atoi(port_s.c_str());
+		if (Fox_Httpd::IsRunning()) {
+			gui_print("HTTP server already running on %s:%d\n",
+			          Fox_Httpd::LocalAddress().c_str(), Fox_Httpd::Port());
+			gui_print("redirect=%d\n", Fox_Httpd::RedirectEnabled() ? 1 : 0);
+			return 0;
+		}
+		if (!Fox_Httpd::Start(port)) {
+			gui_print("fox: failed to start HTTP server\n");
+			return 1;
+		}
+		gui_print("HTTP server started\n");
+		gui_print("url=http://%s:%d/\n", Fox_Httpd::LocalAddress().c_str(), Fox_Httpd::Port());
+		gui_print("port=%d\n", Fox_Httpd::Port());
+		print_auth_line();
+		gui_print("redirect=%d\n", Fox_Httpd::RedirectEnabled() ? 1 : 0);
+		return 0;
+	}
+	if (sub == "disable" || sub == "stop" || sub == "off") {
+		Fox_Httpd::Stop();
+		gui_print("HTTP server stopped\n");
+		return 0;
+	}
+	if (sub == "status") {
+		Json::Value s(Json::objectValue);
+		s["running"] = Fox_Httpd::IsRunning();
+		s["redirect"] = Fox_Httpd::RedirectEnabled();
+		if (Fox_Httpd::IsRunning()) {
+			s["address"] = Fox_Httpd::LocalAddress();
+			s["port"] = Fox_Httpd::Port();
+			s["url"] = http_url(Fox_Httpd::Port());
+			auth_into(s);
+		}
+		Fox_Command_Dispatcher::EmitData("http", s);
+		return 0;
+	}
+	gui_print("fox: unknown http subcommand '%s' (enable|disable|status)\n", sub.c_str());
+	return 2;
+#endif
+}
+
+// webserver https {enable|disable|status|cert} [--port N]: the TLS listener
+// with a persistent self-signed cert. `cert regen` forces a fresh keypair+cert.
+int Fox_Fifo::Cmd_Https(const std::string& verb, const std::vector<std::string>& values,
+                        const std::string& port_s) {
+#ifndef OF_ENABLE_WLAN
+	(void)verb;
+	(void)values;
+	(void)port_s;
+	gui_print("fox: https server is not available in this build (OF_ENABLE_WLAN=0)\n");
+	return 1;
+#else
+	std::string sub = verb.empty() ? "status" : verb;
+
+	if (sub == "enable" || sub == "start" || sub == "on") {
+		int port = port_s.empty() ? Fox_Httpsd::DefaultPort() : atoi(port_s.c_str());
+
+		// Ensure the cert exists first; a failure here means TLS can't come up.
+		std::string cp, kp, err;
+		if (!Fox_Tls_Cert::EnsureCert(cp, kp, err)) {
+			gui_print("fox: failed to prepare TLS cert: %s\n", err.c_str());
+			return 1;
+		}
+
+		if (Fox_Httpsd::IsRunning())
+			Fox_Httpsd::Stop();
+		if (!Fox_Httpsd::Start(port)) {
+			gui_print("fox: failed to start HTTPS server\n");
+			return 1;
+		}
+		// Record the live HTTPS port so plaintext redirects target it.
+		Fox_Httpd::SetHttpsPortForRedirect(Fox_Httpsd::Port());
+
+		gui_print("HTTPS server started\n");
+		gui_print("url=https://%s:%d/\n", Fox_Httpd::LocalAddress().c_str(), Fox_Httpsd::Port());
+		gui_print("port=%d\n", Fox_Httpsd::Port());
+		std::string fp = Fox_Tls_Cert::Fingerprint();
+		if (!fp.empty())
+			gui_print("fingerprint=%s\n", fp.c_str());
+		gui_print("cert=%s\n", Fox_Tls_Cert::CertPath());
+		print_auth_line();
+		gui_print("note=self-signed certificate; browsers will warn until it is trusted/pinned\n");
+		return 0;
+	}
+	if (sub == "disable" || sub == "stop" || sub == "off") {
+		Fox_Httpsd::Stop();
+		gui_print("HTTPS server stopped\n");
+		return 0;
+	}
+	if (sub == "status") {
+		Json::Value s(Json::objectValue);
+		s["running"] = Fox_Httpsd::IsRunning();
+		if (Fox_Httpsd::IsRunning()) {
+			s["address"] = Fox_Httpd::LocalAddress();
+			s["port"] = Fox_Httpsd::Port();
+			s["url"] = "https://" + Fox_Httpd::LocalAddress() + ":" +
+			           std::to_string(Fox_Httpsd::Port()) + "/";
+			auth_into(s);
+		}
+		std::string fp = Fox_Tls_Cert::Fingerprint();
+		if (!fp.empty()) {
+			s["fingerprint"] = fp;
+			s["cert"] = Fox_Tls_Cert::CertPath();
+		}
+		Fox_Command_Dispatcher::EmitData("https", s);
+		return 0;
+	}
+	if (sub == "cert") {
+		std::string action = values.empty() ? "status" : values[0];
+		if (action == "regen") {
+			std::string err;
+			if (!Fox_Tls_Cert::RegenCert(err)) {
+				gui_print("fox: cert regen failed: %s\n", err.c_str());
+				return 1;
+			}
+			// Reload into a running listener, if any.
+			if (Fox_Httpsd::IsRunning()) {
+				int p = Fox_Httpsd::Port();
+				Fox_Httpsd::Stop();
+				Fox_Httpsd::Start(p);
+				gui_print("HTTPS server reloaded with new cert\n");
+			}
+			gui_print("fingerprint=%s\n", Fox_Tls_Cert::Fingerprint().c_str());
+			return 0;
+		}
+		if (action == "status") {
+			std::string fp = Fox_Tls_Cert::Fingerprint();
+			if (fp.empty()) {
+				gui_print("cert=none\n");
+			} else {
+				gui_print("cert=%s\n", Fox_Tls_Cert::CertPath());
+				gui_print("fingerprint=%s\n", fp.c_str());
+			}
+			return 0;
+		}
+		gui_print("Usage: webserver https cert {regen|status}\n");
+		return 2;
+	}
+	gui_print("fox: unknown https subcommand '%s' (enable|disable|status|cert ...)\n", sub.c_str());
+	return 2;
+#endif
+}
+
+// webserver redirect {enable|disable|status}: toggle the plaintext listener's
+// redirect-to-https mode. Persists across reboots. A redirect-mode listener
+// answers plaintext requests with a 301 to HTTPS and serves nothing else.
+int Fox_Fifo::Cmd_HttpRedirect(const std::string& verb) {
+#ifndef OF_ENABLE_WLAN
+	(void)verb;
+	gui_print("fox: http server is not available in this build (OF_ENABLE_WLAN=0)\n");
+	return 1;
+#else
+	std::string sub = verb.empty() ? "status" : verb;
+
+	if (sub == "enable" || sub == "on") {
+		Fox_Httpd::SetRedirectEnabled(true);
+		gui_print("HTTP redirect mode enabled (plaintext -> https)\n");
+		if (!Fox_Httpsd::IsRunning())
+			gui_print("note: HTTPS listener is not running; start it with `webserver https enable`\n");
+		if (!Fox_Httpd::IsRunning())
+			gui_print("note: HTTP listener is not running; start it with `webserver http enable`\n");
+		return 0;
+	}
+	if (sub == "disable" || sub == "off") {
+		Fox_Httpd::SetRedirectEnabled(false);
+		gui_print("HTTP redirect mode disabled\n");
+		return 0;
+	}
+	if (sub == "status") {
+		Json::Value s(Json::objectValue);
+		s["redirect"] = Fox_Httpd::RedirectEnabled();
+		s["https_port"] = Fox_Httpd::HttpsPortForRedirect();
+		Fox_Command_Dispatcher::EmitData("redirect", s);
+		return 0;
+	}
+	gui_print("fox: unknown redirect subcommand '%s' (enable|disable|status)\n", sub.c_str());
+	return 2;
+#endif
+}
+
+// webserver cors {set <origin>|reset|status}: inspect or override the HTTP
+// cross-origin allow-list. By default only the device-local origins and the
+// official orangefox.tech / orangefox.download domains are accepted; `set "*"`
+// (or a specific origin) is a developer escape hatch. The override is in-memory
+// only and resets on reboot.
+int Fox_Fifo::Cmd_Cors(const std::string& verb, const std::vector<std::string>& values) {
+#ifndef OF_ENABLE_WLAN
+	(void)verb;
+	(void)values;
+	gui_print("fox: http server is not available in this build (OF_ENABLE_WLAN=0)\n");
+	return 1;
+#else
+	std::string sub = verb.empty() ? "status" : verb;
+
+	if (sub == "set") {
+		if (values.empty()) {
+			gui_print("fox: cors set requires an origin (or \"*\")\n");
+			return 2;
+		}
+		Fox_Httpd::SetCorsOverride(values[0]);
+		gui_print("CORS override set\n");
+		gui_print("cors=%s\n", values[0].c_str());
+		return 0;
+	}
+	if (sub == "reset" || sub == "clear" || sub == "default") {
+		Fox_Httpd::SetCorsOverride("");
+		gui_print("CORS override cleared (default allow-list restored)\n");
+		return 0;
+	}
+	if (sub == "status") {
+		std::string override_origin = Fox_Httpd::CorsOverride();
+		Json::Value s(Json::objectValue);
+		s["mode"] = override_origin.empty() ? "default" : "override";
+		if (override_origin.empty())
+			s["allow"] = "localhost," + Fox_Httpd::LocalAddress() +
+			             ",*.orangefox.tech,*.orangefox.download";
+		else
+			s["override"] = override_origin;
+		Fox_Command_Dispatcher::EmitData("cors", s);
+		return 0;
+	}
+	gui_print("fox: unknown cors subcommand '%s' (set|reset|status)\n", sub.c_str());
+	return 2;
+#endif
+}
+
+int Fox_Fifo::Cmd_Storages(const Json::Value& /*args*/) {
 	PartitionManager.Mount_All_Storage();
 	std::vector<PartitionList> storage_list;
 	PartitionManager.Get_Partition_List("storage", &storage_list);
 	std::string current = DataManager::GetCurrentStoragePath();
 
-	gui_print("FOX_LIST_BEGIN\n");
+	Json::Value items(Json::arrayValue);
 	for (const auto& storage : storage_list) {
-		int selected = storage.Mount_Point == current ? 1 : 0;
-		std::string extra = storage.isFiles ? "files" : "block";
-		gui_print("%s\t%s\t%d\t%s\n", storage.Mount_Point.c_str(),
-		          storage.Display_Name.c_str(), selected, extra.c_str());
+		Json::Value item(Json::objectValue);
+		item["mount_point"] = storage.Mount_Point;
+		item["display_name"] = storage.Display_Name;
+		item["mounted"] = storage.Mount_Point == current;  // "selected" storage
+		item["extra"] = storage.isFiles ? "files" : "block";
+		items.append(item);
 	}
-	gui_print("FOX_LIST_END\n");
+	Json::Value payload(Json::objectValue);
+	payload["items"] = items;
+	Fox_Command_Dispatcher::EmitData("list", payload);
 	return 0;
 }
 
+int Fox_Fifo::Cmd_Ota(const Json::Value& args) {
+#ifndef OF_ENABLE_WLAN
+	(void)args;
+	gui_print("fox: OTA support is not enabled in this build\n");
+	return 1;
+#else
+	std::string fox_id = arg_str(args, "fox_id");
+	std::string type_filter = arg_str(args, "type");
+	std::string action = arg_action(args);
+	if (action.empty())
+		action = "status";
+
+	int opt_ret = FoxUpdater::SetTestOptions(fox_id, type_filter);
+	if (opt_ret != 0)
+		return opt_ret;
+
+	if (action == "status") {
+		FoxUpdater::Refresh();
+		Json::Value s(Json::objectValue);
+		s["status"] = DataManager::GetStrValue("fox_update_status");
+		s["available"] = DataManager::GetStrValue("fox_update_available");
+		s["downloaded"] = DataManager::GetStrValue("fox_update_downloaded");
+		s["need_variant"] = DataManager::GetStrValue("fox_update_need_variant");
+		s["current_build_id"] = DataManager::GetStrValue("fox_update_current_build_id");
+		s["fox_id_override"] = DataManager::GetStrValue("fox_update_current_build_id_override");
+		s["current_type"] = DataManager::GetStrValue("fox_update_current_type");
+		s["current_version"] = DataManager::GetStrValue("fox_update_current_version");
+		s["device_id"] = DataManager::GetStrValue("fox_update_device_id");
+		s["device_name"] = DataManager::GetStrValue("fox_update_device_name");
+		s["device_codename"] = DataManager::GetStrValue("fox_update_device_codename");
+		s["latest_build_id"] = DataManager::GetStrValue("fox_update_latest_build_id");
+		s["latest_type"] = DataManager::GetStrValue("fox_update_latest_type");
+		s["latest_version"] = DataManager::GetStrValue("fox_update_latest_version");
+		s["latest_filename"] = DataManager::GetStrValue("fox_update_latest_filename");
+		s["latest_md5"] = DataManager::GetStrValue("fox_update_latest_md5");
+		s["latest_size"] = DataManager::GetStrValue("fox_update_latest_size");
+		s["latest_variant"] = DataManager::GetStrValue("fox_update_latest_variant");
+		s["zip_path"] = DataManager::GetStrValue("fox_update_zip_path");
+		s["type_filter"] = DataManager::GetStrValue("fox_update_type_filter");
+		Fox_Command_Dispatcher::EmitData("ota", s);
+		return 0;
+	}
+	if (action == "refresh")
+		return FoxUpdater::Refresh();
+	if (action == "init")
+		return FoxUpdater::Init();
+	if (action == "check")
+		return FoxUpdater::Check();
+	if (action == "download")
+		return FoxUpdater::Download();
+	if (action == "install")
+		return FoxUpdater::Install();
+
+	gui_print("fox: unknown ota subcommand '%s' (status|init|check|download|install|refresh)\n", action.c_str());
+	return 2;
+#endif
+}
+
 int Fox_Fifo::Run_Command() {
-	if (args.empty()) {
+	if (op.empty()) {
 		gui_print("fox: no command given\n");
 		return 2;
 	}
 
-	std::string verb = args[0];
-	std::vector<std::string> rest(args.begin() + 1, args.end());
+	// Dispatch straight off the typed request: the op selects the handler, which
+	// reads its parameters from the args object (no argv round-trip).
+	const Json::Value& a = cmd_args;
 
-	if (verb == "mount")
-		return Cmd_Mount(rest, false);
-	if (verb == "unmount" || verb == "umount")
-		return Cmd_Mount(rest, true);
-	if (verb == "flash" || verb == "install")
-		return Cmd_Flash(rest);
-	if (verb == "backup")
-		return Cmd_Backup(rest);
-	if (verb == "restore")
-		return Cmd_Restore(rest);
-	if (verb == "decrypt")
-		return Cmd_Decrypt(rest);
-	if (verb == "sideload")
-		return Cmd_Sideload(rest);
-	if (verb == "status")
-		return Cmd_Status(rest);
-	if (verb == "reboot")
-		return Cmd_Reboot(rest);
-	if (verb == "wlan")
-		return Cmd_Wlan(rest);
-	if (verb == "internal")
-		return Cmd_Internal(rest);
-	if (verb == "wipe")
-		return Cmd_Wipe(rest);
-	if (verb == "format_data")
-		return Cmd_Format_Data(rest);
-	if (verb == "reflash")
-		return Cmd_Reflash(rest);
-	if (verb == "mtp")
-		return Cmd_Mtp(rest);
-	if (verb == "log")
-		return Cmd_Log(rest);
-	if (verb == "partition")
-		return Cmd_Partition(rest);
-	if (verb == "addons")
-		return Cmd_Addons(rest);
-	if (verb == "storages")
-		return Cmd_Storages(rest);
-	if (verb == "webserver")
-		return Cmd_Webserver(rest);
-	if (verb == "control")
-		return Cmd_Control(rest);
-	if (verb == "input")
-		return Cmd_Input(rest);
-	if (verb == "screencap")
-		return Cmd_Screencap(rest);
-	if (verb == "ors")
-		return Cmd_Ors(rest);
-	if (verb == "ors-cmd") {
-		// Run a raw ORS command line (joined back with spaces).
-		std::string joined;
-		for (size_t i = 0; i < rest.size(); i++) {
-			if (i) joined += " ";
-			joined += rest[i];
-		}
-		return OpenRecoveryScript::Run_ORS_Line(joined);
-	}
+	if (op == "mount")
+		return Cmd_Mount(a, false);
+	if (op == "unmount" || op == "umount")
+		return Cmd_Mount(a, true);
+	if (op == "flash" || op == "install")
+		return Cmd_Flash(a);
+	if (op == "backup")
+		return Cmd_Backup(a);
+	if (op == "restore")
+		return Cmd_Restore(a);
+	if (op == "decrypt")
+		return Cmd_Decrypt(a);
+	if (op == "sideload")
+		return Cmd_Sideload(a);
+	if (op == "status")
+		return Cmd_Status(a);
+	if (op == "reboot")
+		return Cmd_Reboot(a);
+	if (op == "wlan" || op == "wifi")  // `wifi` is an alias for `wlan`
+		return Cmd_Wlan(a);
+	if (op == "adbd")
+		return Cmd_Adbd(a);
+	if (op == "internal")
+		return Cmd_Internal(a);
+	if (op == "wipe")
+		return Cmd_Wipe(a);
+	if (op == "format_data")
+		return Cmd_Format_Data(a);
+	if (op == "reflash")
+		return Cmd_Reflash(a);
+	if (op == "mtp")
+		return Cmd_Mtp(a);
+	if (op == "log")
+		return Cmd_Log(a);
+	if (op == "partition")
+		return Cmd_Partition(a);
+	if (op == "addons")
+		return Cmd_Addons(a);
+	if (op == "storages")
+		return Cmd_Storages(a);
+	if (op == "ota")
+		return Cmd_Ota(a);
+	if (op == "webserver")
+		return Cmd_Webserver(a);
+	if (op == "control")
+		return Cmd_Control(a);
+	if (op == "web")
+		return Cmd_Web(a);
+	if (op == "input")
+		return Cmd_Input(a);
+	if (op == "screencap")
+		return Cmd_Screencap(a);
+	if (op == "ors")
+		return Cmd_Ors(a);
+	if (op == "ors-cmd")
+		return Cmd_OrsCmd(a);
 
-	gui_print("fox: unknown command '%s'\n", verb.c_str());
+	gui_print("fox: unknown command '%s'\n", op.c_str());
 	return 2;
 }

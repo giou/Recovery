@@ -30,7 +30,7 @@ struct Job {
 	int id = 0;
 	Fox_Jobs::State state = Fox_Jobs::PENDING;
 	int exit_code = -1;
-	std::vector<std::string> argv;
+	Fox_Rpc_Request request;
 	std::string output;
 	time_t created = 0;
 	time_t finished = 0;
@@ -95,13 +95,13 @@ const char* state_name(Fox_Jobs::State s) {
 
 }  // namespace
 
-int Fox_Jobs::Submit(const std::vector<std::string>& argv) {
-	if (argv.empty())
+int Fox_Jobs::Submit(const Fox_Rpc_Request& request) {
+	if (!request.ok() || request.op.empty())
 		return 0;
 	pthread_mutex_lock(&g_lock);
 	auto job = std::make_shared<Job>();
 	job->id = g_next_id++;
-	job->argv = argv;
+	job->request = request;
 	job->created = time(nullptr);
 	g_jobs.push_back(job);
 	prune_locked();
@@ -118,7 +118,7 @@ bool Fox_Jobs::Get(int id, Snapshot& out) {
 		out.id = job->id;
 		out.state = job->state;
 		out.exit_code = job->exit_code;
-		out.argv = job->argv;
+		out.request = job->request;
 		out.output_size = job->output.size();
 		out.created = job->created;
 		out.finished = job->finished;
@@ -154,7 +154,7 @@ bool Fox_Jobs::ReadOutputAndSnapshot(int id, size_t& offset, std::string& out,
 		snap.id = job->id;
 		snap.state = job->state;
 		snap.exit_code = job->exit_code;
-		snap.argv = job->argv;
+		snap.request = job->request;
 		snap.output_size = job->output.size();
 		snap.created = job->created;
 		snap.finished = job->finished;
@@ -170,11 +170,6 @@ std::string Fox_Jobs::ListJson() {
 	// Newest first.
 	for (auto it = g_jobs.rbegin(); it != g_jobs.rend(); ++it) {
 		Job* j = it->get();
-		std::string joined;
-		for (size_t i = 0; i < j->argv.size(); i++) {
-			if (i) joined += " ";
-			joined += j->argv[i];
-		}
 		Fox_Json_Object job;
 		job.AddInt("id", j->id)
 		   .AddString("state", state_name(j->state))
@@ -182,7 +177,9 @@ std::string Fox_Jobs::ListJson() {
 		   .AddSize("output_size", j->output.size())
 		   .AddInt("created", (long long)j->created)
 		   .AddInt("finished", (long long)j->finished)
-		   .AddString("cmd", joined);
+		   .AddString("op", j->request.op);
+		if (!j->request.id.empty())
+			job.AddString("request_id", j->request.id);
 		out.AddRaw(job.String());
 	}
 	std::string json = out.String();
@@ -205,7 +202,7 @@ bool Fox_Jobs::HasPending() {
 	return pending;
 }
 
-bool Fox_Jobs::BeginNext(FILE** out_file, std::vector<std::string>& out_argv) {
+bool Fox_Jobs::BeginNext(FILE** out_file, Fox_Rpc_Request& out_request) {
 	pthread_mutex_lock(&g_lock);
 	if (g_active_id != 0) {
 		pthread_mutex_unlock(&g_lock);
@@ -224,7 +221,7 @@ bool Fox_Jobs::BeginNext(FILE** out_file, std::vector<std::string>& out_argv) {
 	}
 	job->state = RUNNING;
 	g_active_id = job->id;
-	out_argv = job->argv;
+	out_request = job->request;
 	pthread_mutex_unlock(&g_lock);
 
 	FILE* f = funopen(job.get(), /*readfn=*/nullptr, cookie_write,

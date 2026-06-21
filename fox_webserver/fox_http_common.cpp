@@ -34,13 +34,18 @@ bool ParseJsonBody(const std::string& body, Json::Value& root)
 	return reader->parse(body.data(), body.data() + body.size(), &root, &errors);
 }
 
+// Pre-rendered CORS header lines for the connection currently being served on
+// this thread (one request per connection). Empty when the request origin is
+// not allowed, so no Access-Control-Allow-Origin header is emitted at all.
+thread_local std::string g_cors_block;
+
 } // namespace
 
-bool SendAll(int fd, const char* data, size_t len)
+bool SendAll(Fox_Io::Conn& conn, const char* data, size_t len)
 {
 	size_t off = 0;
 	while (off < len) {
-		ssize_t n = send(fd, data + off, len - off, MSG_NOSIGNAL);
+		ssize_t n = conn.send(data + off, len - off);
 		if (n <= 0)
 			return false;
 		off += (size_t)n;
@@ -48,17 +53,17 @@ bool SendAll(int fd, const char* data, size_t len)
 	return true;
 }
 
-bool SendAll(int fd, const std::string& data)
+bool SendAll(Fox_Io::Conn& conn, const std::string& data)
 {
-	return SendAll(fd, data.data(), data.size());
+	return SendAll(conn, data.data(), data.size());
 }
 
-bool ReadHeaders(int fd, std::string& headers, std::string& leftover)
+bool ReadHeaders(Fox_Io::Conn& conn, std::string& headers, std::string& leftover)
 {
 	std::string buf;
 	char tmp[2048];
 	while (buf.find("\r\n\r\n") == std::string::npos) {
-		ssize_t n = recv(fd, tmp, sizeof(tmp), 0);
+		ssize_t n = conn.recv(tmp, sizeof(tmp));
 		if (n <= 0)
 			return false;
 		buf.append(tmp, n);
@@ -166,72 +171,77 @@ bool JsonInt(const std::string& body, const std::string& key, long& out)
 	return true;
 }
 
-std::vector<std::string> JsonArgv(const std::string& body)
+void SetCorsForRequest(const std::string& allowed_origin)
 {
-	std::vector<std::string> out;
-	Json::Value root;
-	if (!ParseJsonBody(body, root) || !root.isObject() || !root["argv"].isArray())
-		return out;
-
-	const Json::Value& argv = root["argv"];
-	for (Json::ArrayIndex i = 0; i < argv.size(); i++) {
-		if (argv[i].isString())
-			out.push_back(argv[i].asString());
-	}
-	return out;
+	if (allowed_origin.empty())
+		g_cors_block.clear();
+	else
+		g_cors_block = "Access-Control-Allow-Origin: " + allowed_origin +
+		               "\r\nVary: Origin\r\n";
 }
 
-void SendResponse(int fd, const char* status, const char* ctype, const std::string& body)
+const std::string& CorsHeaderBlock()
 {
-	char hdr[512];
-	int n = snprintf(hdr, sizeof(hdr),
-		"HTTP/1.1 %s\r\n"
-		"Content-Type: %s\r\n"
-		"Content-Length: %zu\r\n"
-		"Connection: close\r\n"
-		"Cache-Control: no-store, no-cache, must-revalidate, max-age=0\r\n"
-		"Pragma: no-cache\r\n"
-		"Expires: 0\r\n"
-		"Access-Control-Allow-Origin: *\r\n"
-		"\r\n",
-		status, ctype, body.size());
-	if (n > 0)
-		SendAll(fd, hdr, (size_t)n);
-	SendAll(fd, body);
+	return g_cors_block;
 }
 
-void SendJson(int fd, const std::string& json)
+void SendResponse(Fox_Io::Conn& conn, const char* status, const char* ctype, const std::string& body)
 {
-	SendResponse(fd, "200 OK", "application/json", json);
+	// Built as a std::string (not a fixed snprintf buffer) because the CORS
+	// block carries an attacker-influenced Origin of unbounded length.
+	std::string hdr;
+	hdr.reserve(256 + g_cors_block.size());
+	hdr += "HTTP/1.1 ";
+	hdr += status;
+	hdr += "\r\nContent-Type: ";
+	hdr += ctype;
+	hdr += "\r\nContent-Length: ";
+	hdr += std::to_string(body.size());
+	hdr += "\r\nConnection: close\r\n"
+	       "Cache-Control: no-store, no-cache, must-revalidate, max-age=0\r\n"
+	       "Pragma: no-cache\r\n"
+	       "Expires: 0\r\n";
+	hdr += g_cors_block;
+	hdr += "\r\n";
+	SendAll(conn, hdr);
+	SendAll(conn, body);
 }
 
-void Send404(int fd)
+void SendJson(Fox_Io::Conn& conn, const std::string& json)
 {
-	SendResponse(fd, "404 Not Found", "text/plain", "not found\n");
+	SendResponse(conn, "200 OK", "application/json", json);
 }
 
-void Send401(int fd)
+void Send404(Fox_Io::Conn& conn)
 {
-	SendResponse(fd, "401 Unauthorized", "text/plain", "unauthorized\n");
+	SendResponse(conn, "404 Not Found", "text/plain", "not found\n");
 }
 
-void Send403(int fd)
+void Send401(Fox_Io::Conn& conn)
 {
-	SendResponse(fd, "403 Forbidden", "text/plain", "remote control disabled\n");
+	SendResponse(conn, "401 Unauthorized", "text/plain", "unauthorized\n");
 }
 
-void SendCorsOptions(int fd)
+void Send403(Fox_Io::Conn& conn)
 {
-	const char* resp =
-		"HTTP/1.1 204 No Content\r\n"
-		"Access-Control-Allow-Origin: *\r\n"
-		"Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n"
-		"Access-Control-Allow-Headers: X-Auth-Token, Content-Type\r\n"
-		"Access-Control-Max-Age: 600\r\n"
-		"Content-Length: 0\r\n"
-		"Connection: close\r\n"
-		"\r\n";
-	SendAll(fd, resp, strlen(resp));
+	SendResponse(conn, "403 Forbidden", "text/plain", "remote control disabled\n");
+}
+
+void SendCorsOptions(Fox_Io::Conn& conn)
+{
+	// Echo the request-scoped Access-Control-Allow-Origin (g_cors_block); a
+	// disallowed origin gets a 204 with no CORS header, so the browser blocks
+	// the actual request.
+	std::string resp =
+		"HTTP/1.1 204 No Content\r\n";
+	resp += g_cors_block;
+	resp += "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n"
+	        "Access-Control-Allow-Headers: X-Auth-Token, Authorization, Content-Type\r\n"
+	        "Access-Control-Max-Age: 600\r\n"
+	        "Content-Length: 0\r\n"
+	        "Connection: close\r\n"
+	        "\r\n";
+	SendAll(conn, resp);
 }
 
 } // namespace Fox_Http

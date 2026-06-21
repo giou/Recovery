@@ -105,9 +105,44 @@ void append_line(std::string* out, const std::string& line)
 
 } // namespace
 
-int Fox_Remote_Input::RunCommand(const std::vector<std::string>& args, std::string* output)
+namespace {
+
+// Integer field accessor: number or numeric-string, else 'dflt'.
+int json_int(const Json::Value& args, const char* key, int dflt = 0)
 {
-	if (args.empty()) {
+	if (!args.isObject() || !args.isMember(key))
+		return dflt;
+	const Json::Value& v = args[key];
+	if (v.isIntegral())
+		return (int)v.asInt64();
+	if (v.isString())
+		return atoi(v.asString().c_str());
+	return dflt;
+}
+
+std::string json_str(const Json::Value& args, const char* key)
+{
+	if (!args.isObject() || !args.isMember(key))
+		return "";
+	const Json::Value& v = args[key];
+	return v.isString() ? v.asString() : "";
+}
+
+// True when 'key' is present as a usable integer (number or numeric string).
+bool json_has_int(const Json::Value& args, const char* key)
+{
+	if (!args.isObject() || !args.isMember(key))
+		return false;
+	const Json::Value& v = args[key];
+	return v.isIntegral() || v.isString();
+}
+
+} // namespace
+
+int Fox_Remote_Input::RunCommand(const Json::Value& args, std::string* output)
+{
+	std::string sub = json_str(args, "action");
+	if (sub.empty()) {
 		append_line(output, "fox: input requires a subcommand (tap|swipe|key|down|move|up)");
 		return 2;
 	}
@@ -116,20 +151,21 @@ int Fox_Remote_Input::RunCommand(const std::vector<std::string>& args, std::stri
 		return 1;
 	}
 
-	const std::string& sub = args[0];
-	if (sub == "tap") {
-		if (args.size() < 3) { append_line(output, "fox: input tap requires X Y"); return 2; }
-		Tap(atoi(args[1].c_str()), atoi(args[2].c_str()));
-		return 0;
-	}
-	if (sub == "down") {
-		if (args.size() < 3) { append_line(output, "fox: input down requires X Y"); return 2; }
-		TouchDown(atoi(args[1].c_str()), atoi(args[2].c_str()));
-		return 0;
-	}
-	if (sub == "move") {
-		if (args.size() < 3) { append_line(output, "fox: input move requires X Y"); return 2; }
-		TouchMove(atoi(args[1].c_str()), atoi(args[2].c_str()));
+	int x = json_int(args, "x");
+	int y = json_int(args, "y");
+	// tap/down/move target a point: reject rather than silently injecting at (0,0)
+	// when coordinates are missing.
+	if (sub == "tap" || sub == "down" || sub == "move") {
+		if (!json_has_int(args, "x") || !json_has_int(args, "y")) {
+			append_line(output, "fox: input " + sub + " requires x and y");
+			return 2;
+		}
+		if (sub == "tap")
+			Tap(x, y);
+		else if (sub == "down")
+			TouchDown(x, y);
+		else
+			TouchMove(x, y);
 		return 0;
 	}
 	if (sub == "up") {
@@ -137,17 +173,26 @@ int Fox_Remote_Input::RunCommand(const std::vector<std::string>& args, std::stri
 		return 0;
 	}
 	if (sub == "swipe") {
-		if (args.size() < 5) { append_line(output, "fox: input swipe requires X1 Y1 X2 Y2 [ms]"); return 2; }
-		int ms = args.size() > 5 ? atoi(args[5].c_str()) : 200;
-		Swipe(atoi(args[1].c_str()), atoi(args[2].c_str()),
-		      atoi(args[3].c_str()), atoi(args[4].c_str()), ms);
+		if (!json_has_int(args, "x") || !json_has_int(args, "y") ||
+		    !json_has_int(args, "x2") || !json_has_int(args, "y2")) {
+			append_line(output, "fox: input swipe requires x, y, x2 and y2");
+			return 2;
+		}
+		int ms = json_int(args, "duration", 200);
+		if (ms <= 0)
+			ms = 200;
+		Swipe(x, y, json_int(args, "x2"), json_int(args, "y2"), ms);
 		return 0;
 	}
 	if (sub == "key") {
-		if (args.size() < 2) { append_line(output, "fox: input key requires a name or numeric code"); return 2; }
-		int code = isdigit((unsigned char)args[1][0]) ? atoi(args[1].c_str()) : KeyCodeFromName(args[1]);
+		std::string name = json_str(args, "key");
+		int code = -1;
+		if (!name.empty())
+			code = isdigit((unsigned char)name[0]) ? atoi(name.c_str()) : KeyCodeFromName(name);
+		else if (args.isObject() && args["code"].isIntegral())
+			code = (int)args["code"].asInt64();
 		if (code < 0) {
-			append_line(output, "fox: unknown key '" + args[1] + "'");
+			append_line(output, "fox: unknown key '" + name + "'");
 			return 2;
 		}
 		KeyTap(code);

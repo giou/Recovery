@@ -10,6 +10,7 @@
 
 #include "fox_channel.hpp"
 
+#include <cerrno>
 #include <fcntl.h>
 #include <string>
 #include <sys/stat.h>
@@ -127,22 +128,37 @@ bool Fox_Channel::IsActive()
 
 void Fox_Channel::HandleInput()
 {
-	char buffer[4096];
-	int read_ret = read(g_input_fd, &buffer, sizeof(buffer));
-	if (read_ret < 0)
-		return;
-	if (read_ret == 0) {
-		RearmInput();
+	// Accumulate the whole request rather than capping at a single 4096-byte
+	// read — a JSON request (many zip paths, long passwords) can exceed that.
+	// The fd is non-blocking, so drain until EOF (writer closed) or EAGAIN.
+	static const size_t kMaxRequestBytes = 256 * 1024;
+	std::string buffer;
+	char chunk[4096];
+	bool saw_eof = false;
+	for (;;) {
+		int n = read(g_input_fd, chunk, sizeof(chunk));
+		if (n > 0) {
+			buffer.append(chunk, (size_t)n);
+			if (buffer.size() > kMaxRequestBytes)
+				break;  // runaway/oversized request: stop and let parsing reject it
+			continue;
+		}
+		if (n == 0) {
+			saw_eof = true;
+			break;
+		}
+		if (errno == EINTR)
+			continue;
+		break;  // EAGAIN/EWOULDBLOCK or error: nothing more available right now
+	}
+
+	if (buffer.empty()) {
+		if (saw_eof)
+			RearmInput();
 		return;
 	}
 
-	std::vector<std::string> argv = Fox_Protocol::ParseNulArgv(buffer, read_ret);
-	if (argv.empty()) {
-		RearmInput();
-		return;
-	}
-
-	LOGINFO("fox command '%s' (%zu args) received\n", argv[0].c_str(), argv.size());
+	Fox_Rpc_Request request = Fox_Protocol::ParseRequestJson(buffer);
 
 	FILE* out = fopen(FOX_OUTPUT_FILE, "w");
 	if (!out) {
@@ -153,16 +169,26 @@ void Fox_Channel::HandleInput()
 		unlink(FOX_OUTPUT_FILE);
 		return;
 	}
+	if (!request.ok()) {
+		Fox_Protocol::WriteErrorEvent(out, request.id, request.error, "invalid fox rpc request");
+		Fox_Protocol::WriteResultEvent(out, request.id, 2);
+		fclose(out);
+		RearmInput();
+		return;
+	}
+
+	LOGINFO("fox rpc '%s' received\n", request.op.c_str());
+
 	if (DataManager::GetIntValue("tw_busy") != 0) {
-		fputs("Failed, operation in progress\n", out);
-		Fox_Protocol::WriteExitSentinel(out, 1);
+		Fox_Protocol::WriteErrorEvent(out, request.id, "busy", "operation in progress");
+		Fox_Protocol::WriteResultEvent(out, request.id, 1);
 		LOGINFO("fox command cannot be performed, operation in progress.\n");
 		fclose(out);
 		RearmInput();
 		return;
 	}
 
-	Fox_Command_Dispatcher::Result result = Fox_Command_Dispatcher::DispatchFifo(out, argv);
+	Fox_Command_Dispatcher::Result result = Fox_Command_Dispatcher::DispatchFifo(out, request);
 	if (result == Fox_Command_Dispatcher::FAILED) {
 		fclose(out);
 		RearmInput();

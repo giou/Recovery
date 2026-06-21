@@ -7,6 +7,13 @@
 				<action function="set">aroma_help=0</action>
 			</action>
 
+			<!-- Modernized: both groups live in one scrollable viewport. Each
+			     group header + list auto-stacks below the previous group's real
+			     height (no hand-tuned y per item count), and the whole content
+			     scrolls when it overflows. The listboxes self-size (no inner
+			     scroll). Action bar / navbar / gestures stay fixed (outside). -->
+			<scroll x="0" y="%ab_h%" w="%screen_w%" h="%scroll_nav_h%" spacing="20" paddingtop="10" paddingbottom="40" itemheight="48">
+
 			<text style="caption">
 				<placement x="%gl_text_x%" y="%row0_a_y%"/>
 				<text>{@listbox_group_main}</text>
@@ -120,6 +127,8 @@
 					<action function="page">fox_other_additions</action>
 				</listitem>
 			</listbox>
+
+			</scroll>
 
 			<template name="base_nav"/>
 

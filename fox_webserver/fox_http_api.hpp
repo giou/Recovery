@@ -10,12 +10,12 @@
 
 namespace Fox_Http {
 
-void HandleStatus(int fd);
-void HandleCmd(int fd, const Request& req);
-void HandleJobList(int fd);
-void HandleJobRoute(int fd, const Request& req, int id, bool output);
-void HandleTouch(int fd, const Request& req);
-void HandleKey(int fd, const Request& req);
+void HandleStatus(Fox_Io::Conn& conn);
+void HandleCmd(Fox_Io::Conn& conn, const Request& req);
+void HandleJobList(Fox_Io::Conn& conn);
+void HandleJobRoute(Fox_Io::Conn& conn, const Request& req, int id, bool output);
+void HandleTouch(Fox_Io::Conn& conn, const Request& req);
+void HandleKey(Fox_Io::Conn& conn, const Request& req);
 
 } // namespace Fox_Http
 

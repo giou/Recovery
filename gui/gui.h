@@ -41,6 +41,11 @@ void gui_fox_progress_begin();
 void gui_fox_progress_end();
 void gui_fox_progress_overall(const int percent);
 void gui_fox_progress_item(const int percent);
+void gui_fox_progress_detail(const char* phase, const int percent, const char* label,
+                             unsigned long long current_bytes, unsigned long long total_bytes,
+                             unsigned long long bytes_per_second, unsigned long long eta_seconds,
+                             unsigned long long current_files, unsigned long long total_files,
+                             const char* size_text, const char* file_text);
 
 void set_scale_values(float w, float h);
 int scale_theme_x(int initial_x);

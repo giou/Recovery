@@ -31,74 +31,136 @@ namespace {
 class CommandOutput
 {
 public:
-	CommandOutput() : file_(nullptr) {}
+	CommandOutput() : transport_(nullptr), log_(nullptr), fifo_(false) {}
 	~CommandOutput()
 	{
 		Close();
 	}
 
-	void Reset(FILE* file)
+	bool Reset(FILE* file, const std::string& id, bool fifo)
 	{
 		Close();
-		file_ = file;
+		transport_ = file;
+		id_ = id;
+		fifo_ = fifo;
+		log_ = Fox_Protocol::OpenEventLogFile(transport_, id_);
+		if (!log_) {
+			transport_ = nullptr;
+			id_.clear();
+			fifo_ = false;
+			return false;
+		}
+		return true;
 	}
 
-	FILE* file() const
+	FILE* transport() const
 	{
-		return file_;
+		return transport_;
+	}
+
+	FILE* log() const
+	{
+		return log_;
+	}
+
+	const std::string& id() const
+	{
+		return id_;
 	}
 
 	bool active() const
 	{
-		return file_ != nullptr;
+		return transport_ != nullptr;
 	}
 
-	void FinishFifo(int code)
+	void Finish(int code)
 	{
-		if (!file_)
+		if (!transport_)
 			return;
-		Fox_Protocol::WriteExitSentinel(file_, code);
+		bool was_fifo = fifo_;
+		CloseLog();  // flush trailing log output before the result event
+		Fox_Protocol::WriteResultEvent(transport_, id_, code);
 		Close();
+#ifdef OF_ENABLE_WLAN
+		if (!was_fifo) {
+			Fox_Jobs::NotifyExit(code);
+			Fox_Jobs::FinishActive();
+			return;
+		}
+#endif
 		Fox_Channel::RearmInput();
+	}
+
+	// Close just the log stream. fclose() runs the funopen close callback, which
+	// emits any buffered partial (newline-less) line as a log event. Call this
+	// before writing the result event so trailing output can't arrive after it.
+	void CloseLog()
+	{
+		gui_set_FILE(nullptr);
+		if (log_) {
+			fclose(log_);
+			log_ = nullptr;
+		}
 	}
 
 	void Close()
 	{
-		if (!file_)
-			return;
-		gui_set_FILE(nullptr);
-		fclose(file_);
-		file_ = nullptr;
+		CloseLog();
+		if (transport_) {
+			fclose(transport_);
+			transport_ = nullptr;
+		}
+		id_.clear();
+		fifo_ = false;
 	}
 
 private:
-	FILE* file_;
+	FILE* transport_;
+	FILE* log_;
+	std::string id_;
+	bool fifo_;
 };
 
 CommandOutput g_output;
 bool g_pending_screencap = false;
 
-bool is_silent_screencap(const std::vector<std::string>& argv)
+// The positional control verbs (screenstream/input/base64-screencap) are
+// handled inline from the typed request rather than going through the GUI
+// action path, so screen/input traffic stays off singleaction_page.
+enum class ControlResult { NotControl, Finished, Active };
+
+ControlResult dispatch_control(const Fox_Rpc_Request& request)
 {
-	if (argv.empty() || argv[0] != "screencap")
-		return false;
-	for (size_t i = 1; i < argv.size(); i++)
-		if (argv[i] == "--base64")
-			return true;
-	return false;
+	if (request.op == "screenstream") {
+		int code = Fox_Screen_Stream::HandleCommand(request.args, g_output.log());
+		g_output.Finish(code);
+		return ControlResult::Finished;
+	}
+	if (request.op == "input") {
+		std::string output;
+		int code = Fox_Remote_Input::RunCommand(request.args, &output);
+		if (!output.empty())
+			Fox_Protocol::WriteLogEvent(g_output.transport(), g_output.id(), output.data(), output.size());
+		g_output.Finish(code);
+		return ControlResult::Finished;
+	}
+	if (request.op == "screencap") {
+		// Only the base64 (inline) form is intercepted; a plain screencap that
+		// writes a PNG file goes through the normal engine handler.
+		const Json::Value& b = request.args["base64"];
+		if (b.isBool() && b.asBool()) {
+			g_pending_screencap = true;
+			gui_forceRender();
+			return ControlResult::Active;
+		}
+	}
+	return ControlResult::NotControl;
 }
 
-bool is_silent_input(const std::vector<std::string>& argv)
+void start_action(const Fox_Rpc_Request& request, bool progress)
 {
-	return !argv.empty() && argv[0] == "input";
-}
-
-void start_action(FILE* out, const std::vector<std::string>& argv, bool progress)
-{
-	if (g_output.file() != out)
-		g_output.Reset(out);
-	Fox_Fifo::Set_Args(argv);
-	gui_set_FILE(g_output.file());
+	Fox_Fifo::Set_Request(request.op, request.args);
+	gui_set_FILE(g_output.log());
 	if (progress)
 		gui_fox_progress_begin();
 	DataManager::SetValue("tw_action", "foxcmd");
@@ -119,44 +181,68 @@ bool Fox_Command_Dispatcher::IsActive()
 	return g_output.active();
 }
 
-Fox_Command_Dispatcher::Result Fox_Command_Dispatcher::DispatchFifo(FILE* out, const std::vector<std::string>& argv)
+void Fox_Command_Dispatcher::EmitData(const std::string& name, const Json::Value& payload)
+{
+	if (g_output.active()) {
+		// Preserve ordering with any buffered log output before the data event.
+		if (g_output.log())
+			fflush(g_output.log());
+		Fox_Protocol::WriteDataEvent(g_output.transport(), g_output.id(),
+		                             name, payload);
+	} else {
+		// No RPC transport (e.g. a GUI-invoked command): show the JSON inline.
+		gui_print("%s\n", Fox_Protocol::JsonString(payload).c_str());
+	}
+}
+
+Fox_Command_Dispatcher::Result Fox_Command_Dispatcher::DispatchFifo(FILE* out, const Fox_Rpc_Request& request)
 {
 	if (!out || IsActive())
 		return FAILED;
 
-	g_output.Reset(out);
+	if (!g_output.Reset(out, request.id, true))
+		return FAILED;
 
-	int code = 0;
-	if (Fox_Screen_Stream::HandleCommand(argv, g_output.file(), &code)) {
-		g_output.FinishFifo(code);
+	if (request.op.empty()) {
+		Fox_Protocol::WriteErrorEvent(g_output.transport(), request.id, "unknown_op", "unsupported fox rpc operation");
+		g_output.Finish(2);
 		return FINISHED;
 	}
 
-	if (is_silent_screencap(argv)) {
-		g_pending_screencap = true;
-		gui_forceRender();
-		return ACTIVE;
+	switch (dispatch_control(request)) {
+		case ControlResult::Finished:
+			return FINISHED;
+		case ControlResult::Active:
+			return ACTIVE;
+		case ControlResult::NotControl:
+			break;
 	}
 
-	if (is_silent_input(argv)) {
-		std::vector<std::string> args(argv.begin() + 1, argv.end());
-		std::string output;
-		code = Fox_Remote_Input::RunCommand(args, &output);
-		if (!output.empty())
-			fwrite(output.data(), 1, output.size(), g_output.file());
-		g_output.FinishFifo(code);
-		return FINISHED;
-	}
-
-	start_action(g_output.file(), argv, true);
+	start_action(request, true);
 	return ACTIVE;
 }
 
-bool Fox_Command_Dispatcher::DispatchJob(FILE* out, const std::vector<std::string>& argv)
+bool Fox_Command_Dispatcher::DispatchJob(FILE* out, const Fox_Rpc_Request& request)
 {
 	if (!out || IsActive())
 		return false;
-	start_action(out, argv, false);
+	if (!g_output.Reset(out, request.id, false))
+		return false;
+	if (request.op.empty()) {
+		Fox_Protocol::WriteErrorEvent(g_output.transport(), request.id, "unknown_op", "unsupported fox rpc operation");
+		g_output.Finish(2);
+		return true;
+	}
+
+	switch (dispatch_control(request)) {
+		case ControlResult::Finished:
+		case ControlResult::Active:
+			return true;
+		case ControlResult::NotControl:
+			break;
+	}
+
+	start_action(request, false);
 	return true;
 }
 
@@ -167,14 +253,16 @@ bool Fox_Command_Dispatcher::CapturePendingFrameIfNeeded()
 
 	std::string png;
 	if (Fox_Screen_Service::CaptureRenderedFrameNow(png)) {
-		std::string b64 = Fox_Protocol::Base64Encode(png);
-		fwrite(b64.data(), 1, b64.size(), g_output.file());
+		Json::Value data(Json::objectValue);
+		data["mime"] = "image/png";
+		data["base64"] = Fox_Protocol::Base64Encode(png, false);
+		Fox_Protocol::WriteDataEvent(g_output.transport(), g_output.id(), "screencap", data);
 		g_pending_screencap = false;
-		g_output.FinishFifo(0);
+		g_output.Finish(0);
 	} else {
-		fputs("fox: screencap failed\n", g_output.file());
+		Fox_Protocol::WriteErrorEvent(g_output.transport(), g_output.id(), "screencap_failed", "screencap failed");
 		g_pending_screencap = false;
-		g_output.FinishFifo(1);
+		g_output.Finish(1);
 	}
 	return true;
 }
@@ -192,9 +280,12 @@ bool Fox_Command_Dispatcher::CancelRequested(bool legacy_command_active)
 	return false;
 }
 
-void Fox_Command_Dispatcher::CommandDone()
+void Fox_Command_Dispatcher::CommandDone(int code)
 {
 	gui_fox_progress_end();
+	g_output.CloseLog();  // flush trailing log output before the result event
+	if (g_output.transport())
+		Fox_Protocol::WriteResultEvent(g_output.transport(), g_output.id(), code);
 	g_output.Close();
 #ifdef OF_ENABLE_WLAN
 	Fox_Jobs::FinishActive();

@@ -654,29 +654,12 @@ void GUIListBox::RenderItem(size_t itemindex, int yPos, bool selected)
 		 item.displayName == connected_name);
 
 	/*
-	 * Connected WLAN row:
-	 * - keep original icon unchanged
-	 * - keep normal row/touch highlight background
-	 * - accent normal text color
-	 * - accent selected/hold text color too, so it does not turn white on press
+	 * Connected WLAN row: instead of accent-colouring the SSID, render a grey
+	 * "Connected" second line under it (RenderStdItem draws addtext in the
+	 * secondary text colour). The row keeps its normal icon and colour.
 	 */
-	COLOR originalFontColor = mFontColor;
-	COLOR originalFontHighlightColor = mFontHighlightColor;
-
-	if (connected_wlan_row) {
-		COLOR accentColor = mFontColor;
-		ConvertStrToColor(DataManager::GetStrValue("theme_accent_dark"), &accentColor);
-
-		mFontColor = accentColor;
-		mFontHighlightColor = accentColor;
-	}
-
-	RenderStdItem(yPos, selected, icon, text.c_str(), NULL, groupStatus);
-
-	if (connected_wlan_row) {
-		mFontColor = originalFontColor;
-		mFontHighlightColor = originalFontHighlightColor;
-	}
+	RenderStdItem(yPos, selected, icon, text.c_str(),
+		connected_wlan_row ? "Connected" : NULL, groupStatus);
 
 	/*
 	 * Optional right-side delete icon.

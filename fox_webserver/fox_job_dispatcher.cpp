@@ -28,18 +28,18 @@ void Fox_Job_Dispatcher::Poll()
 		return;
 
 	FILE* jobout = nullptr;
-	std::vector<std::string> argv;
-	if (!Fox_Jobs::BeginNext(&jobout, argv) || !jobout)
+	Fox_Rpc_Request request;
+	if (!Fox_Jobs::BeginNext(&jobout, request) || !jobout)
 		return;
-	if (argv.empty()) {
+	if (!request.ok() || request.op.empty()) {
 		fclose(jobout);
 		Fox_Jobs::NotifyExit(1);
 		Fox_Jobs::FinishActive();
 		return;
 	}
 
-	LOGINFO("fox job '%s' (%zu args) dispatched\n", argv[0].c_str(), argv.size());
-	if (!Fox_Command_Dispatcher::DispatchJob(jobout, argv)) {
+	LOGINFO("fox job '%s' dispatched\n", request.op.c_str());
+	if (!Fox_Command_Dispatcher::DispatchJob(jobout, request)) {
 		fclose(jobout);
 		Fox_Jobs::NotifyExit(1);
 		Fox_Jobs::FinishActive();

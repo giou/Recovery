@@ -57,6 +57,7 @@
 #include "gui.h"
 #ifdef OF_ENABLE_WLAN
 #include "../wlan.hpp"
+#include "../wlan_worker.hpp"
 #include "../nas/NasManager.hpp"
 #include "../fox_updater.hpp"
 #endif
@@ -83,6 +84,7 @@ extern "C" {
 
 #include "rapidxml.hpp"
 #include "objects.hpp"
+#include "pages.hpp"
 #include "tw_atomic.hpp"
 
 GUIAction::mapFunc GUIAction::mf;
@@ -235,6 +237,7 @@ GUIAction::GUIAction(xml_node <> *node):GUIObject(node)
       ADD_ACTION_EX("addsubtract", compute);
       ADD_ACTION(setguitimezone);
       ADD_ACTION(overlay);
+      ADD_ACTION(toast);
       ADD_ACTION(queuezip);
       ADD_ACTION(cancelzip);
       ADD_ACTION(queueclear);
@@ -275,6 +278,22 @@ GUIAction::GUIAction(xml_node <> *node):GUIObject(node)
       ADD_ACTION(setpassword);
       ADD_ACTION(passwordcheck);
 
+      // OrangeFox WLAN: the toggle + status actions dispatch to the WlanWorker
+      // background thread (or are fast file/secret ops) and return immediately,
+      // so they run in the caller thread. Keeping them off the shared
+      // ActionThread is what stops the wlan page's status refresh from being
+      // rejected with "Another threaded action is already running" while the
+      // (formerly blocking) enable was in flight. Scan/connect/test stay
+      // threaded — see their registration in the threaded section below.
+      #ifdef OF_ENABLE_WLAN
+      ADD_ACTION(wlan_enable);
+      ADD_ACTION(wlan_disable);
+      ADD_ACTION(wlan_autostart);
+      ADD_ACTION(wlan_info);
+      ADD_ACTION(wlan_saved_refresh);
+      ADD_ACTION(wlan_forget_saved);
+      #endif
+
       // remember actions that run in the caller thread
       for (mapFunc::const_iterator it = mf.begin(); it != mf.end(); ++it)
 	setActionsRunningInCallerThread.insert(it->first);
@@ -297,19 +316,18 @@ GUIAction::GUIAction(xml_node <> *node):GUIObject(node)
       ADD_ACTION(installsu);
       ADD_ACTION(fixsu);
 
-      // OrangeFox WLAN
+      // OrangeFox WLAN: modal operations stay threaded so their overlay opens,
+      // blocks on the work, then closes within one batch (enable/disable/info
+      // are caller-thread, registered above).
       #ifdef OF_ENABLE_WLAN
-      ADD_ACTION(wlan_enable);
-      ADD_ACTION(wlan_disable);
       ADD_ACTION(wlan_scan);
       ADD_ACTION(wlan_connect);
-      ADD_ACTION(wlan_info);
-      ADD_ACTION(wlan_saved_refresh);
       ADD_ACTION(wlan_connect_saved);
-      ADD_ACTION(wlan_forget_saved);
       ADD_ACTION(wlan_test_connection);
+      #endif
 
-      // OrangeFox NAS
+      // OrangeFox NAS (still threaded: these block on real mount I/O)
+      #ifdef OF_ENABLE_WLAN
       ADD_ACTION(nas_info);
       ADD_ACTION(nas_mount);
       ADD_ACTION(nas_unmount);
@@ -323,6 +341,7 @@ GUIAction::GUIAction(xml_node <> *node):GUIObject(node)
       ADD_ACTION(flashimage);
       ADD_ACTION(twcmd);
       ADD_ACTION(foxcmd);
+      ADD_ACTION(foxweb);
       ADD_ACTION(setbootslot);
       ADD_ACTION(repackimage);
       ADD_ACTION(reflashtwrp);
@@ -332,7 +351,7 @@ GUIAction::GUIAction(xml_node <> *node):GUIObject(node)
       ADD_ACTION(wlfx);
       ADD_ACTION(calldeactivateprocess);
       ADD_ACTION(disable_replace);
-#ifdef FOX_USE_NANO_EDITOR
+#ifdef OF_USE_NANO_EDITOR
       ADD_ACTION(editfile);
 #endif
       ADD_ACTION(mergesnapshots);
@@ -1200,6 +1219,13 @@ int GUIAction::setguitimezone(std::string arg __unused)
 int GUIAction::overlay(std::string arg)
 {
   return gui_changeOverlay(arg);
+}
+
+int GUIAction::toast(std::string arg)
+{
+  // arg is already var/string-expanded by the dispatcher. ~3s at ~30fps.
+  gui_toast(arg, 90);
+  return 0;
 }
 
 int GUIAction::queuezip(std::string arg __unused)
@@ -2500,14 +2526,35 @@ int GUIAction::foxcmd(std::string arg __unused)
   else
     code = Fox_Fifo::Run_Command();
   // Record the exit code for the active remote job, if any (no-op for the FIFO
-  // path). Done before the sentinel/output FILE is flushed and closed.
+  // path). Done before the output FILE is flushed and closed.
 #ifdef OF_ENABLE_WLAN
   Fox_Jobs::NotifyExit(code);
 #endif
-  // Emit the exit-code sentinel on the mirrored output (foxout) before the
-  // listener closes it, so the fox client can report the real exit status.
-  gui_print("%s%d\n", FOX_EXIT_SENTINEL, code);
-  Fox_Command_Dispatcher::CommandDone();
+  Fox_Command_Dispatcher::CommandDone(code);
+  operation_end(0);
+  return 0;
+}
+
+// foxweb enable|disable: GUI backing for the "Remote Web Access" toggle. It
+// delegates to the fox "web" command so the toggle and `fox web` share one
+// code path (same start/stop order, same password-required guard). Status
+// output from Cmd_Web is surfaced on the GUI console via gui_print.
+int GUIAction::foxweb(std::string arg)
+{
+  operation_start("FOX Web Access");
+  if (simulate) {
+    simulate_progress_bar();
+    operation_end(0);
+    return 0;
+  }
+  // Drive the engine through its public entry point so the toggle and the `web`
+  // op share one dispatch path. A missing arg falls through to "status",
+  // matching a `web` request with no action.
+  Json::Value args(Json::objectValue);
+  if (!arg.empty())
+    args["action"] = arg;
+  Fox_Fifo::Set_Request("web", args);
+  Fox_Fifo::Run_Command();
   operation_end(0);
   return 0;
 }
@@ -3080,7 +3127,7 @@ int GUIAction::unmapsuperdevices(std::string arg __unused) {
 	return 0;
 }
 
-#ifdef FOX_USE_NANO_EDITOR
+#ifdef OF_USE_NANO_EDITOR
 int GUIAction::editfile(std::string arg) {
 	if (term != NULL) {
 		for (uint8_t iter = 0; iter < arg.size(); iter++)
@@ -3200,14 +3247,39 @@ int GUIAction::setvaluebyfile(std::string arg) {
 }
 
 #ifdef OF_ENABLE_WLAN
+// Enable/disable/info are the toggle + status path that used to block the GUI
+// for ~10-20s. They are dispatched to the WlanWorker background thread and
+// return immediately, so they run in the caller thread without ever stalling it
+// or colliding with the shared ActionThread. Progress is published through the
+// wlan_state DataManager variable (see wlan_worker.cpp) and the UI reacts to it.
 int GUIAction::wlan_enable(std::string arg) {
-    return Wlan::Enable() ? 0 : -1;
+    WlanWorker::Post(WlanWorker::CMD_ENABLE);
+    return 0;
 }
 
 int GUIAction::wlan_disable(std::string arg) {
-    return Wlan::Disable() ? 0 : -1;
+    WlanWorker::Post(WlanWorker::CMD_DISABLE);
+    return 0;
 }
 
+int GUIAction::wlan_autostart(std::string arg) {
+    // Boot hook: the worker brings WiFi up and re-joins the last network if the
+    // of_wlan_auto_* settings are on (it no-ops otherwise). Fire-and-forget.
+    WlanWorker::Post(WlanWorker::CMD_AUTOSTART);
+    return 0;
+}
+
+int GUIAction::wlan_info(std::string arg) {
+    // Cheap async status refresh; the cached DataManager vars are read by the
+    // reactive UI, so this never blocks the caller thread.
+    WlanWorker::Post(WlanWorker::CMD_INFO);
+    return 0;
+}
+
+// Scan / connect / connect_saved / test stay synchronous and run on the shared
+// ActionThread: their modal overlays open, block on the operation, then close
+// within the same action batch while the render thread animates the spinner.
+// Making them async would flash the overlay shut before the work finished.
 int GUIAction::wlan_scan(std::string arg) {
     return Wlan::Scan() ? 0 : -1;
 }
@@ -3220,20 +3292,19 @@ int GUIAction::wlan_connect_saved(std::string arg) {
     return Wlan::ConnectSaved() ? 0 : -1;
 }
 
-int GUIAction::wlan_info(std::string arg) {
-    return Wlan::Info() ? 0 : -1;
+int GUIAction::wlan_test_connection(std::string arg) {
+    return Wlan::TestConnection() ? 0 : -1;
 }
 
+// RefreshSaved / ForgetSaved are fast secret-store + file operations and stay
+// synchronous so they remain correctly ordered with the UI refresh that
+// immediately follows them in the same action batch.
 int GUIAction::wlan_saved_refresh(std::string arg) {
     return Wlan::RefreshSaved() ? 0 : -1;
 }
 
 int GUIAction::wlan_forget_saved(std::string arg) {
     return Wlan::ForgetSaved() ? 0 : -1;
-}
-
-int GUIAction::wlan_test_connection(std::string arg) {
-    return Wlan::TestConnection() ? 0 : -1;
 }
 
 int GUIAction::nas_mount(std::string arg __unused) {

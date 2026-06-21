@@ -22,67 +22,79 @@
 #include <string>
 #include <vector>
 
-// Fox_Fifo implements the modern "fox" command-line front-end. Unlike the
-// legacy ORS-based "twrp" tool, fox passes a NUL-delimited argv vector over a
-// dedicated FIFO pair (FOX_INPUT_FILE/FOX_OUTPUT_FILE), which keeps spaces in
-// passwords/paths intact and lets the engine report a real exit code.
+#include <json/json.h>
+
+// Fox_Fifo is the command engine behind Fox RPC. It dispatches a parsed,
+// typed request (an op plus a JSON args object) straight to a handler — there
+// is no argv round-trip. Request formatting is the client's job (foxcli); the
+// engine only consumes the structured request.
 //
-// Fox_Channel parses FIFO argv, stores it with Set_Args(), then dispatches the
-// "foxcmd" GUI action which calls Run_Command() on the action thread (so
-// gui_print output is mirrored back to the caller).
-//
-// A few high-frequency remote-control commands are intentionally handled in
-// Fox_Channel/Fox_Screen_Stream before the foxcmd action path:
-//   fox screencap --base64
-//   fox input ...
-//   fox screenstream {start [--fps N]|stop|status}
-// This keeps WebUSB screen/input traffic off singleaction_page and lets the
-// continuous screen stream use FOX_SCREEN_STREAM_FILE while foxin/foxout remain
-// available for stop/touch/key commands.
+// A few high-frequency remote-control verbs (screencap, input, screenstream)
+// are intercepted in Fox_Command_Dispatcher before the foxcmd action path, so
+// screen/input traffic stays off singleaction_page and the RPC channel remains
+// free while a continuous screen stream uses FOX_SCREEN_STREAM_FILE.
 class Fox_Fifo
 {
 public:
-	// Stash the parsed argv before the foxcmd action runs.
-	static void Set_Args(const std::vector<std::string>& args);
+	// Stash the parsed request (op + typed args) before the foxcmd action runs.
+	static void Set_Request(const std::string& op, const Json::Value& args);
 
-	// Execute the stashed command. Returns the process exit code that the
-	// fox client should exit with (0 == success).
+	// Execute the stashed command and return the result code.
 	static int Run_Command();
 
 private:
-	static std::vector<std::string> args;
+	static std::string op;
+	static Json::Value cmd_args;
 
-	// Subcommand handlers. Each returns a shell-style exit code.
-	static int Cmd_Mount(const std::vector<std::string>& a, bool unmount);
-	static int Cmd_Flash(const std::vector<std::string>& a);
-	static int Cmd_Backup(const std::vector<std::string>& a);
-	static int Cmd_Restore(const std::vector<std::string>& a);
-	static int Cmd_Decrypt(const std::vector<std::string>& a);
-	static int Cmd_Sideload(const std::vector<std::string>& a);
-	static int Cmd_Status(const std::vector<std::string>& a);
-	static int Cmd_Reboot(const std::vector<std::string>& a);
-	static int Cmd_Wlan(const std::vector<std::string>& a);
-	static int Cmd_Internal(const std::vector<std::string>& a);
-	static int Cmd_Ors(const std::vector<std::string>& a);
-	static int Cmd_Wipe(const std::vector<std::string>& a);
-	static int Cmd_Format_Data(const std::vector<std::string>& a);
-	static int Cmd_Reflash(const std::vector<std::string>& a);
-	static int Cmd_Mtp(const std::vector<std::string>& a);
-	static int Cmd_Log(const std::vector<std::string>& a);
-	static int Cmd_Partition(const std::vector<std::string>& a);
-	static int Cmd_Addons(const std::vector<std::string>& a);
-	static int Cmd_Storages(const std::vector<std::string>& a);
-	// fox webserver {start|stop|status|terminal ...}: the HTTP server
-	// (dashboard + REST/job control plane) and optional ttyd terminal.
-	static int Cmd_Webserver(const std::vector<std::string>& a);
-	// fox control {start|stop|status}: the remote-control plane (screen + input
-	// over HTTP), toggled independently of the server.
-	static int Cmd_Control(const std::vector<std::string>& a);
-	// fox input {tap|swipe|key|down|move|up}: inject touch/keys via uinput.
-	// Usable over a plain `adb shell` (no network stack).
-	static int Cmd_Input(const std::vector<std::string>& a);
-	// fox screencap [path]: write the framebuffer to a PNG for ADB sync/pull.
-	static int Cmd_Screencap(const std::vector<std::string>& a);
+	// Each handler reads its parameters directly from the typed args object
+	// (see arg_* helpers in fox_fifo.cpp). The JSON field names are the wire
+	// contract shared with foxcli.
+	static int Cmd_Mount(const Json::Value& args, bool unmount);
+	static int Cmd_Flash(const Json::Value& args);
+	static int Cmd_Backup(const Json::Value& args);
+	static int Cmd_Restore(const Json::Value& args);
+	static int Cmd_Decrypt(const Json::Value& args);
+	static int Cmd_Sideload(const Json::Value& args);
+	static int Cmd_Status(const Json::Value& args);
+	static int Cmd_Reboot(const Json::Value& args);
+	static int Cmd_Wlan(const Json::Value& args);
+	static int Cmd_Adbd(const Json::Value& args);
+	static int Cmd_Internal(const Json::Value& args);
+	static int Cmd_Ors(const Json::Value& args);
+	static int Cmd_OrsCmd(const Json::Value& args);
+	static int Cmd_Wipe(const Json::Value& args);
+	static int Cmd_Format_Data(const Json::Value& args);
+	static int Cmd_Reflash(const Json::Value& args);
+	static int Cmd_Mtp(const Json::Value& args);
+	static int Cmd_Log(const Json::Value& args);
+	static int Cmd_Partition(const Json::Value& args);
+	static int Cmd_Addons(const Json::Value& args);
+	static int Cmd_Storages(const Json::Value& args);
+	// ota: built-in updater. action ∈ {status|init|check|download|install|
+	//   refresh}; optional fox_id, type (stable,beta,alpha).
+	static int Cmd_Ota(const Json::Value& args);
+	// webserver: the HTTP server umbrella. action selects the lifecycle verb
+	// (start|stop|status|terminal) or a transport/policy group (http|https|
+	// redirect|cert|cors); subaction + values carry the nested verb/arguments.
+	static int Cmd_Webserver(const Json::Value& args);
+	// control: the HTTP remote-control plane (screen + input), toggled
+	// independently of the server. action ∈ {start|stop|status|enable|disable}.
+	static int Cmd_Control(const Json::Value& args);
+	// web: umbrella for the networked access surface. action ∈ {enable|disable|
+	//   status|password}; `enable` brings up the HTTP server, ttyd and network
+	// adbd at once (refused unless a password is set).
+	static int Cmd_Web(const Json::Value& args);
+	// Transports and policy under the `webserver` group. Called only from
+	// Cmd_Webserver with the already-extracted nested verb + values + port.
+	static int Cmd_Http(const std::string& verb, const std::string& port_s);
+	static int Cmd_Https(const std::string& verb, const std::vector<std::string>& values,
+	                     const std::string& port_s);
+	static int Cmd_HttpRedirect(const std::string& verb);
+	static int Cmd_Cors(const std::string& verb, const std::vector<std::string>& values);
+	// input {tap|swipe|key|down|move|up}: inject touch/keys via uinput.
+	static int Cmd_Input(const Json::Value& args);
+	// screencap [path]: write the framebuffer to a PNG for ADB sync/pull.
+	static int Cmd_Screencap(const Json::Value& args);
 
 	// Build a ;-delimited backup/restore list from explicit partition specs
 	// (mount points like "/system" or partition display names). Validates

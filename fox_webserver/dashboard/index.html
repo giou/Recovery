@@ -162,8 +162,9 @@ const RestProvider = {
   screenTimer: null, screenAbort: null, fps: 8, lastStatus: null,
   // Base URL for the device. Defaults to the IP the page was loaded from; when
   // the field names the same host we keep URLs relative (same-origin, no CORS).
-  // A different IP produces an absolute base so the dashboard can be hosted
-  // anywhere and point at a device on the LAN (the server sends permissive CORS).
+  // A different IP produces an absolute base so the dashboard can be hosted on
+  // an *.orangefox.tech / *.orangefox.download origin and point at a device on
+  // the LAN (those origins are on the server's default CORS allow-list).
   base() {
     const host = $('#host').value.trim();
     if (!host || host === location.hostname) return '';
@@ -349,6 +350,22 @@ const UsbBase = {
   _quoteArg(s) {
     return "'" + String(s).replace(/'/g, "'\\''") + "'";
   },
+  async _rpcShell(req) {
+    const ndjson = await this._shellText('printf %s ' + this._quoteArg(JSON.stringify(req)) + ' | fox rpc');
+    let out = '', code = 1, data = {};
+    for (const line of ndjson.split('\n')) {
+      if (!line.trim()) continue;
+      let ev; try { ev = JSON.parse(line); } catch (_) { out += line + '\n'; continue; }
+      if (ev.event === 'log') out += ev.text || '';
+      else if (ev.event === 'error') out += (ev.message || 'fox rpc error') + '\n';
+      else if (ev.event === 'data') data[ev.name || 'data'] = ev.value;
+      else if (ev.event === 'result') code = ev.code | 0;
+    }
+    return { out, code, data, ndjson };
+  },
+  _rpcFromArgv(argv) {
+    return rpcFromArgv(argv);
+  },
   async _writeChunk(writer, u8) {
     try { await writer.write(u8); }
     catch (e) {
@@ -421,24 +438,23 @@ const UsbProvider = Object.assign(Object.create(UsbBase), {
     if (method === 'POST' && path === '/api/input/touch') {
       const j = JSON.parse(opts.body || '{}');
       const action = j.action || 'tap';
-      if (action === 'up') await this._inputShell('fox fifo send input up');
-      else await this._inputShell('fox fifo send input ' + action + ' ' + (j.x | 0) + ' ' + (j.y | 0));
+      if (action === 'up') await this._inputRpc({ v: 1, op: 'input', args: { action: 'up' } });
+      else await this._inputRpc({ v: 1, op: 'input', args: { action, x: j.x | 0, y: j.y | 0 } });
       return makeResp(200, enc.encode('{"ok":true}'));
     }
 
     if (method === 'POST' && path === '/api/input/key') {
       const j = JSON.parse(opts.body || '{}');
-      const key = this._quoteArg(j.key || j.code || '');
-      await this._inputShell('fox fifo send input key ' + key);
+      await this._inputRpc({ v: 1, op: 'input', args: { action: 'key', key: j.key || j.code || '' } });
       return makeResp(200, enc.encode('{"ok":true}'));
     }
 
     if (method === 'POST' && path === '/api/cmd') {
       const j = JSON.parse(opts.body || '{}');
-      const argv = Array.isArray(j.argv) ? j.argv : [];
+      const req = j.v === 1 ? j : this._rpcFromArgv(Array.isArray(j.argv) ? j.argv : []);
       const id = this.nextJob++;
-      const out = argv.length ? await this._shellText('fox fifo send ' + argv.map(a => this._quoteArg(a)).join(' ')) : '';
-      this.jobs[id] = { data: out, sent: false, exit_code: 0 };
+      const res = await this._rpcShell(req);
+      this.jobs[id] = { data: res.out || res.ndjson, sent: false, exit_code: res.code };
       return makeResp(200, enc.encode(JSON.stringify({ id })));
     }
 
@@ -456,12 +472,12 @@ const UsbProvider = Object.assign(Object.create(UsbBase), {
 
     return makeResp(404, enc.encode('{"error":"not found"}'));
   },
-  async _inputShell(command) {
+  async _inputRpc(req) {
     this.inputActive = true;
     this.deferScreenUntil = Date.now() + 350;
     try {
-      dbg('input command', command);
-      return await this._shellText(command);
+      dbg('input rpc', req);
+      return await this._rpcShell(req);
     } finally {
       this.inputActive = false;
       this.deferScreenUntil = Date.now() + 180;
@@ -469,7 +485,8 @@ const UsbProvider = Object.assign(Object.create(UsbBase), {
   },
   async _screenBytes() {
     dbg('screencap request');
-    const b64 = await this._shellText('fox fifo send screencap --base64');
+    const res = await this._rpcShell({ v: 1, op: 'screencap', args: { base64: true } });
+    const b64 = (res.data.screencap && res.data.screencap.base64) || res.out;
     const png = this._base64ToBytes(b64);
     if (png.length < 24 || png[0] !== 0x89 || png[1] !== 0x50 || png[2] !== 0x4e || png[3] !== 0x47) {
       warn('screencap invalid', png.length, 'base64 preview:', b64.slice(0, 160));
@@ -537,14 +554,14 @@ const UsbStreamProvider = Object.assign(Object.create(UsbProvider), {
     try { if (this.streamProc && this.streamProc.kill) await this.streamProc.kill(); } catch (e) {}
     this.streamProc = null;
     if (this.adb && !restarting) {
-      try { await this._shellText('fox fifo send screenstream stop'); } catch (e) { warn('screenstream stop failed', e); }
+      try { await this._rpcShell({ v: 1, op: 'screenstream', args: { action: 'stop' } }); } catch (e) { warn('screenstream stop failed', e); }
     }
     if (img && !restarting) img.removeAttribute('src');
   },
   async _screenStreamLoop(img) {
     const fps = Math.max(1, Math.min(30, parseInt($('#usb-fps').value || '10', 10) || 10));
     dbg('screenstream start', fps, 'fps');
-    const startOut = await this._shellText('fox fifo send screenstream start --fps ' + fps);
+    const startOut = (await this._rpcShell({ v: 1, op: 'screenstream', args: { action: 'start', fps } })).out;
     const pathM = startOut.match(/path=([^\s]+)/);
     const streamPath = pathM ? pathM[1] : '/system/bin/foxscreenout';
     dbg('screenstream output', startOut.trim());
@@ -593,8 +610,8 @@ const UsbTunnelProvider = Object.assign(Object.create(UsbBase), {
   port: 80, token: '',
   async connect() {
     await UsbBase.connect.call(this);
-    const webOut = await this._shellText('fox fifo send webserver start');
-    const ctlOut = await this._shellText('fox fifo send control start');
+    const webOut = (await this._rpcShell({ v: 1, op: 'webserver', args: { action: 'start' } })).out;
+    const ctlOut = (await this._rpcShell({ v: 1, op: 'control', args: { action: 'start' } })).out;
     const portM = webOut.match(/port=(\d+)/);
     const tokM = webOut.match(/token=([0-9a-f]+)/i);
     if (portM) this.port = parseInt(portM[1], 10);
@@ -826,13 +843,35 @@ async function key(name) {
 }
 
 let pollTimer = null, curJob = 0, curOff = 0;
+function rpcFromArgv(argv) {
+  const op = argv[0] || 'status';
+  const rest = argv.slice(1);
+  const args = {};
+  if (rest[0]) args.action = rest[0];
+  if (rest[1]) args.subaction = rest[1];
+  if (rest.length > 2) args.values = rest.slice(2);
+  if (op === 'mount' || op === 'unmount') args.paths = rest;
+  else if (op === 'backup') args.parts = rest;
+  else if (op === 'wipe') args.parts = rest;
+  else if (op === 'input') {
+    args.action = rest[0] || 'tap';
+    if (args.action === 'key') args.key = rest[1] || '';
+    else { args.x = rest[1] | 0; args.y = rest[2] | 0; }
+  } else if (op === 'screencap') {
+    args.base64 = rest.includes('--base64');
+  } else if (op === 'screenstream') {
+    args.action = rest[0] || 'status';
+    const i = rest.indexOf('--fps'); if (i >= 0) args.fps = rest[i + 1] | 0;
+  }
+  return { v: 1, op, args };
+}
 async function runCmd() {
   if (!connected) { $('#out').textContent = '(connect first)'; return; }
   const raw = $('#cmd').value.trim();
   if (!raw) return;
   const argv = raw.split(/\s+/);
   try {
-    const r = await provider.api('POST', '/api/cmd', { body: JSON.stringify({ argv }) });
+    const r = await provider.api('POST', '/api/cmd', { body: JSON.stringify(rpcFromArgv(argv)) });
     const j = r.json();
     if (j.id) { curJob = j.id; curOff = 0; $('#out').textContent = ''; pollJob(); }
     else $('#out').textContent = 'error: ' + JSON.stringify(j);
@@ -841,7 +880,7 @@ async function runCmd() {
 function quick(v) { $('#cmd').value = v === 'backup' ? 'backup' : v; runCmd(); }
 
 async function runFoxJob(argv) {
-  const r = await provider.api('POST', '/api/cmd', { body: JSON.stringify({ argv }) });
+  const r = await provider.api('POST', '/api/cmd', { body: JSON.stringify(rpcFromArgv(argv)) });
   if (!r.ok) throw new Error('job submit failed: ' + r.status);
   const j = r.json();
   if (!j.id) throw new Error('job submit returned no id');

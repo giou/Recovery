@@ -16,6 +16,7 @@ public:
 	static bool IsRunning();
 	static int Port();
 	static std::string Shell();
+	static std::string LastError();
 };
 
 #endif // _FOX_TTYD_HPP

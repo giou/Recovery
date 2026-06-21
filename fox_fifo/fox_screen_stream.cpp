@@ -21,6 +21,7 @@
 #include <unistd.h>
 
 #include "fox_protocol.hpp"
+#include "fox_command_dispatcher.hpp"
 #include "fox_screen_service.hpp"
 #include "../orscmd/orscmd.h"
 #include "../twcommon.h"
@@ -218,51 +219,48 @@ void Fox_Screen_Stream::Stop()
 		close(fd);
 }
 
-bool Fox_Screen_Stream::HandleCommand(const std::vector<std::string>& argv, FILE* out, int* code)
+int Fox_Screen_Stream::HandleCommand(const Json::Value& args, FILE* out)
 {
-	if (argv.empty() || argv[0] != "screenstream")
-		return false;
-
-	std::string sub = argv.size() > 1 ? argv[1] : "status";
+	std::string sub = args.isObject() && args["action"].isString() ? args["action"].asString() : "";
+	if (sub.empty())
+		sub = "status";
 	if (sub == "start") {
 		int fps = 10;
-		for (size_t i = 2; i + 1 < argv.size(); i++) {
-			if (argv[i] == "--fps")
-				fps = atoi(argv[i + 1].c_str());
-		}
+		const Json::Value& v = args["fps"];
+		if (v.isIntegral())
+			fps = (int)v.asInt64();
+		else if (v.isString() && !v.asString().empty())
+			fps = atoi(v.asString().c_str());
 		int rc = Start(fps);
 		if (rc == 0) {
-			fprintf(out, "FOX_SCREENSTREAM_BEGIN\n");
-			fprintf(out, "path=%s\n", FOX_SCREEN_STREAM_FILE);
-			fprintf(out, "fps=%d\n", Fox_Protocol::ClampFps(fps));
-			fprintf(out, "format=base64-png-lines\n");
-			fprintf(out, "FOX_SCREENSTREAM_END\n");
+			Json::Value s(Json::objectValue);
+			s["running"] = true;
+			s["path"] = FOX_SCREEN_STREAM_FILE;
+			s["fps"] = Fox_Protocol::ClampFps(fps);
+			s["format"] = "base64-png-lines";
+			Fox_Command_Dispatcher::EmitData("screenstream", s);
 		} else {
 			fprintf(out, "fox: unable to start screen stream\n");
 		}
-		*code = rc;
-		return true;
+		return rc;
 	}
 	if (sub == "stop") {
 		Stop();
 		fprintf(out, "Screen stream stopped\n");
-		*code = 0;
-		return true;
+		return 0;
 	}
 	if (sub == "status") {
 		pthread_mutex_lock(&g_lock);
 		int fps = g_fps;
 		pthread_mutex_unlock(&g_lock);
-		fprintf(out, "FOX_SCREENSTREAM_BEGIN\n");
-		fprintf(out, "running=%d\n", IsActive() ? 1 : 0);
-		fprintf(out, "path=%s\n", FOX_SCREEN_STREAM_FILE);
-		fprintf(out, "fps=%d\n", fps);
-		fprintf(out, "FOX_SCREENSTREAM_END\n");
-		*code = 0;
-		return true;
+		Json::Value s(Json::objectValue);
+		s["running"] = IsActive();
+		s["path"] = FOX_SCREEN_STREAM_FILE;
+		s["fps"] = fps;
+		Fox_Command_Dispatcher::EmitData("screenstream", s);
+		return 0;
 	}
 
 	fprintf(out, "fox: unknown screenstream subcommand '%s' (start|stop|status)\n", sub.c_str());
-	*code = 2;
-	return true;
+	return 2;
 }

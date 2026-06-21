@@ -20,6 +20,17 @@
 
 LOCAL_CFLAGS += -Wno-unused-parameter -Wno-unused-function -Wno-unused-variable
 
+# libvterm backs the in-UI terminal (gui/terminal.cpp) and is ALWAYS required
+# (the terminal page is part of the always-built GUI, independent of OF_ENABLE_WLAN).
+# It is built from sources (external/libvterm, Soong cc_library_static "libvterm");
+# the pre-generated encoding tables ship in-tree so no codegen step is needed.
+ifeq ($(wildcard external/libvterm/Android.bp),)
+    $(warning libvterm sources not found! You need to clone the sources.)
+    $(warning Please run: "git clone --depth=1 https://github.com/neovim/libvterm -b master external/libvterm")
+    $(warning (then add external/libvterm/Android.bp from the OrangeFox tree if your clone lacks it))
+    $(error libvterm sources not present; exiting.)
+endif
+
 # Canonical release version
 FOX_INTERNAL_RELEASE := R12.0
 LOCAL_CFLAGS += -DFOX_INTERNAL_RELEASE='"$(FOX_INTERNAL_RELEASE)"'
@@ -326,8 +337,8 @@ ifeq ($(OF_ENABLE_LAB),1)
     LOCAL_CFLAGS += -DOF_ENABLE_LAB='"1"'
 endif
 
-ifeq ($(FOX_USE_NANO_EDITOR), 1)
-    LOCAL_CFLAGS += -DFOX_USE_NANO_EDITOR='"1"'
+ifeq ($(OF_USE_NANO_EDITOR), 1)
+    LOCAL_CFLAGS += -DOF_USE_NANO_EDITOR='"1"'
 endif
 
 ifeq ($(OF_NO_MIUI_OTA_VENDOR_BACKUP),1)
@@ -419,7 +430,7 @@ ifeq ($(FOX_EXCLUDE_NANO_EDITOR),1)
     TW_EXCLUDE_NANO := true
 endif
 
-ifeq ($(FOX_USE_NANO_EDITOR),1)
+ifeq ($(OF_USE_NANO_EDITOR),1)
     TW_EXCLUDE_NANO := true
 endif
 
@@ -664,37 +675,37 @@ ifeq ($(OF_SUPPORT_VBMETA_AVB2_PATCHING),1)
 endif
 
 # custom settings directory
-ifeq ($(FOX_USE_DATA_RECOVERY_FOR_SETTINGS),1)
-    ifneq ($(FOX_SETTINGS_ROOT_DIRECTORY),)
-       $(error You cannot use "FOX_SETTINGS_ROOT_DIRECTORY" with "FOX_USE_DATA_RECOVERY_FOR_SETTINGS")
+ifeq ($(OF_USE_DATA_RECOVERY_FOR_SETTINGS),1)
+    ifneq ($(OF_SETTINGS_ROOT_DIRECTORY),)
+       $(error You cannot use "OF_SETTINGS_ROOT_DIRECTORY" with "OF_USE_DATA_RECOVERY_FOR_SETTINGS")
     endif
-    ifneq ($(FOX_MISCELLANEOUS_ROOT_DIRECTORY),)
-       $(error You cannot use "FOX_MISCELLANEOUS_ROOT_DIRECTORY" with "FOX_USE_DATA_RECOVERY_FOR_SETTINGS")
+    ifneq ($(OF_MISCELLANEOUS_ROOT_DIRECTORY),)
+       $(error You cannot use "OF_MISCELLANEOUS_ROOT_DIRECTORY" with "OF_USE_DATA_RECOVERY_FOR_SETTINGS")
     endif
-    LOCAL_CFLAGS += -DFOX_SETTINGS_ROOT_DIRECTORY='"/data/recovery"'
-    LOCAL_CFLAGS += -DFOX_MISCELLANEOUS_ROOT_DIRECTORY='"/data/recovery"'
-    LOCAL_CFLAGS += -DFOX_USE_DATA_RECOVERY_FOR_SETTINGS
+    LOCAL_CFLAGS += -DOF_SETTINGS_ROOT_DIRECTORY='"/data/recovery"'
+    LOCAL_CFLAGS += -DOF_MISCELLANEOUS_ROOT_DIRECTORY='"/data/recovery"'
+    LOCAL_CFLAGS += -DOF_USE_DATA_RECOVERY_FOR_SETTINGS
 endif
 
-ifneq ($(FOX_SETTINGS_ROOT_DIRECTORY),)
-    ifeq ($(FOX_MISCELLANEOUS_ROOT_DIRECTORY),)
-       LOCAL_CFLAGS += -DFOX_MISCELLANEOUS_ROOT_DIRECTORY='"$(FOX_SETTINGS_ROOT_DIRECTORY)"'
+ifneq ($(OF_SETTINGS_ROOT_DIRECTORY),)
+    ifeq ($(OF_MISCELLANEOUS_ROOT_DIRECTORY),)
+       LOCAL_CFLAGS += -DOF_MISCELLANEOUS_ROOT_DIRECTORY='"$(OF_SETTINGS_ROOT_DIRECTORY)"'
     endif
-    LOCAL_CFLAGS += -DFOX_SETTINGS_ROOT_DIRECTORY='"$(FOX_SETTINGS_ROOT_DIRECTORY)"'
+    LOCAL_CFLAGS += -DOF_SETTINGS_ROOT_DIRECTORY='"$(OF_SETTINGS_ROOT_DIRECTORY)"'
 endif
 
-ifneq ($(FOX_MISCELLANEOUS_ROOT_DIRECTORY),)
-    ifneq ($(FOX_USE_DATA_RECOVERY_FOR_SETTINGS),1)
-        $(warning "FOX_MISCELLANEOUS_ROOT_DIRECTORY" is used. This is EXPERIMENTAL. Ensure that "$(FOX_MISCELLANEOUS_ROOT_DIRECTORY)" will ALWAYS be accessible on the device)
+ifneq ($(OF_MISCELLANEOUS_ROOT_DIRECTORY),)
+    ifneq ($(OF_USE_DATA_RECOVERY_FOR_SETTINGS),1)
+        $(warning "OF_MISCELLANEOUS_ROOT_DIRECTORY" is used. This is EXPERIMENTAL. Ensure that "$(OF_MISCELLANEOUS_ROOT_DIRECTORY)" will ALWAYS be accessible on the device)
     endif
-    LOCAL_CFLAGS += -DFOX_MISCELLANEOUS_ROOT_DIRECTORY='"$(FOX_MISCELLANEOUS_ROOT_DIRECTORY)"'
+    LOCAL_CFLAGS += -DOF_MISCELLANEOUS_ROOT_DIRECTORY='"$(OF_MISCELLANEOUS_ROOT_DIRECTORY)"'
 endif
 
-ifeq ($(FOX_ALLOW_EARLY_SETTINGS_LOAD),1)
-    #ifeq ($(FOX_SETTINGS_ROOT_DIRECTORY),)
-    #   $(error You cannot use "FOX_ALLOW_EARLY_SETTINGS_LOAD" without "FOX_SETTINGS_ROOT_DIRECTORY")
+ifeq ($(OF_ALLOW_EARLY_SETTINGS_LOAD),1)
+    #ifeq ($(OF_SETTINGS_ROOT_DIRECTORY),)
+    #   $(error You cannot use "OF_ALLOW_EARLY_SETTINGS_LOAD" without "OF_SETTINGS_ROOT_DIRECTORY")
     #endif
-    LOCAL_CFLAGS += -DFOX_ALLOW_EARLY_SETTINGS_LOAD='"1"'
+    LOCAL_CFLAGS += -DOF_ALLOW_EARLY_SETTINGS_LOAD='"1"'
 endif
 
 # whether to wipe /metadata after formatting data
@@ -887,6 +898,16 @@ ifeq ($(OF_ENABLE_WLAN),1)
         $(error wpa_supplicant_8 sources not present; exiting.)
     endif
 
+    # ttyd is built from sources (external/ttyd), not shipped as a prebuilt.
+    # Only the cc_binary (ttyd_src, stem "ttyd" -> /system/bin/ttyd) is required;
+    # the fork's ttyd.rc is deliberately NOT installed, so ttyd stays FIFO-only
+    # (fox terminal / fox web) and is never coupled to an init service.
+    ifeq ($(wildcard external/ttyd/Android.bp),)
+        $(warning ttyd sources not found! You need to clone the sources.)
+        $(warning Please run: "git clone --depth=1 https://github.com/OrangeFox16/android_external_ttyd -b fox_16.0 external/ttyd")
+        $(error ttyd sources not present; exiting.)
+    endif
+
     TW_ENABLE_NETWORK := true
     LOCAL_CFLAGS += -DOF_ENABLE_WLAN
 
@@ -896,16 +917,18 @@ ifeq ($(OF_ENABLE_WLAN),1)
         wpa_supplicant \
         android.hardware.wifi.supplicant.xml \
         wpa_cli \
-        dhcptool \
+        dhcpdbg \
         ttyd_src \
         rclone_prebuilt \
         fusermount3
 
     RECOVERY_BINARY_SOURCE_FILES += $(TARGET_OUT_VENDOR_EXECUTABLES)/hw/wpa_supplicant
     RECOVERY_BINARY_SOURCE_FILES += $(TARGET_OUT_VENDOR_EXECUTABLES)/wpa_cli
-    RECOVERY_BINARY_SOURCE_FILES += $(TARGET_OUT_VENDOR_EXECUTABLES)/dhcptool
-    RECOVERY_BINARY_SOURCE_FILES += $(TARGET_OUT_VENDOR_EXECUTABLES)/ttyd
-    RECOVERY_BINARY_SOURCE_FILES += $(TARGET_OUT_EXECUTABLES)/microhttpd
+    # AOSP 16 builds libnetutils/dhcptool.c as the module "dhcpdbg" (in /system/bin),
+    # not "dhcptool" in /vendor/bin. Ship it and expose it under the name wlan.cpp expects.
+    RECOVERY_BINARY_SOURCE_FILES += $(TARGET_OUT_EXECUTABLES)/dhcpdbg
+    BOARD_RECOVERY_IMAGE_PREPARE += ln -sf dhcpdbg $(TARGET_RECOVERY_ROOT_OUT)/system/bin/dhcptool;
+    RECOVERY_BINARY_SOURCE_FILES += $(TARGET_RECOVERY_ROOT_OUT)/system/bin/ttyd
 
     RECOVERY_LIBRARY_SOURCE_FILES += $(TARGET_OUT_VENDOR_SHARED_LIBRARIES)/libkeystore-engine-wifi-hidl.so
     RECOVERY_LIBRARY_SOURCE_FILES += $(TARGET_OUT_VENDOR_SHARED_LIBRARIES)/android.system.keystore2-V1-ndk.so
@@ -923,6 +946,27 @@ $(TARGET_RECOVERY_ROOT_OUT)/$(WIFI_SUPP_VINTF): $(TARGET_OUT_VENDOR_ETC)/vintf/m
 
 ALL_DEFAULT_INSTALLED_MODULES += $(TARGET_RECOVERY_ROOT_OUT)/$(WIFI_SUPP_VINTF)
 endif
+
+    # WiFi hotspot / SoftAP support.
+    #
+    # Brings up wpa_supplicant in AP mode (mode=2) and hands out leases with
+    # dnsmasq, so the recovery can create a hotspot (e.g. for clients to reach
+    # the remote dashboard). Requires an AP-capable WiFi driver in the device
+    # tree. dnsmasq is the only extra dependency; it is the DHCP/DNS server.
+    ifeq ($(OF_WLAN_AP),1)
+        # AOSP keeps the dnsmasq Soong module under src/ (cc_binary "dnsmasq").
+        ifeq ($(wildcard external/dnsmasq/src/Android.bp)$(wildcard external/dnsmasq/Android.bp)$(wildcard external/dnsmasq/Android.mk),)
+            $(warning dnsmasq sources not found! WiFi AP (OF_WLAN_AP=1) needs a DHCP server.)
+            $(warning Please run: "git clone --depth=1 https://android.googlesource.com/platform/external/dnsmasq external/dnsmasq")
+            $(error dnsmasq sources not present; exiting.)
+        endif
+
+        LOCAL_CFLAGS += -DOF_WLAN_AP
+        $(warning OF_WLAN_AP enabled: WiFi hotspot/AP support will be built (requires an AP-capable WiFi driver).)
+
+        TWRP_REQUIRED_MODULES += dnsmasq
+        RECOVERY_BINARY_SOURCE_FILES += $(TARGET_OUT_EXECUTABLES)/dnsmasq
+    endif
 
 endif
 

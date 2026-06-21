@@ -288,7 +288,7 @@ func globalSrcs(ctx android.BaseContext) []string {
 	} else {
 		srcs = append(srcs, "hardwarekeyboard.cpp")
 	}
-	if ctx.AConfig().Getenv("OF_ENABLE_WLAN") == "1" {
+	if getMakeVars(ctx, "OF_ENABLE_WLAN") == "1" {
 		srcs = append(srcs, "wlan.cpp")
 	}
 	return srcs
@@ -322,7 +322,7 @@ func libGuiDefaults(ctx android.LoadHookContext) {
 }
 
 func init() {
-	android.RegisterModuleType("libguitwrp_defaults", libGuiDefaultsFactory)
+	android.RegisterModuleType("libfoxui_defaults", libGuiDefaultsFactory)
 }
 
 func libGuiDefaultsFactory() android.Module {

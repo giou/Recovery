@@ -32,8 +32,7 @@
 // remote-control plane (screen mirroring + input injection) are toggled
 // independently, so the dashboard can run without exposing screen/input
 // ("dashboard but no remote control"), and screen/input can be driven over a
-// plain adb shell (`fox input` / `fox screencap`) without the server. The CLI
-// surfaces this as `fox webserver` and `fox control`.
+// plain adb shell (input/screencap RPC verbs) without the server.
 //
 // It is always built but started explicitly, and every data endpoint requires a
 // per-session bearer token, because the server grants unauthenticated root with
@@ -55,6 +54,10 @@ public:
 	// The current session token (empty if not running).
 	static std::string Token();
 
+	// True when the token is the user-configured remote password (which must
+	// not be echoed to logs/console). False for the random per-boot fallback.
+	static bool AuthIsPassword();
+
 	// Best-effort first non-loopback IPv4 address, for printing the URL.
 	static std::string LocalAddress();
 
@@ -62,10 +65,32 @@ public:
 	// Independent of the server lifecycle: the flag can be set before or while
 	// the server runs. When disabled, the /screen.png, /stream.mjpeg and
 	// /api/input/* endpoints return 403; the REST/job control plane is
-	// unaffected. The CLI `fox input` / `fox screencap` commands are not gated
-	// by this (they require adb shell access already). Enabled by default.
+	// unaffected. The direct input/screencap RPC verbs are not gated by this
+	// (they require adb shell access already). Enabled by default.
 	static void SetControlEnabled(bool on);
 	static bool ControlEnabled();
+
+	// HTTPS-redirect mode for the plaintext listener. When enabled, plaintext
+	// (non-TLS) connections are answered with a 301 to the HTTPS endpoint and
+	// nothing else — no auth, no static, no API. The preference is persisted so
+	// a reboot honours it. Off by default.
+	static void SetRedirectEnabled(bool on);
+	static bool RedirectEnabled();
+
+	// The HTTPS port that plaintext redirects should target. Defaults to 443;
+	// reflects Fox_Httpsd's actual port when it is running.
+	static int HttpsPortForRedirect();
+	static void SetHttpsPortForRedirect(int port);
+
+	// Cross-origin policy. The default allow-list is the device-local origins
+	// (its WLAN IP, localhost) plus the official orangefox.tech and
+	// orangefox.download domains and their subdomains. SetCorsOverride installs
+	// a developer override ("*" = any origin; "" = restore the default).
+	// ResolveCorsOrigin maps a request's Origin header to the value echoed back
+	// in Access-Control-Allow-Origin ("" = send no CORS header).
+	static void SetCorsOverride(const std::string& origin);
+	static std::string CorsOverride();
+	static std::string ResolveCorsOrigin(const std::string& request_origin);
 };
 
 #endif // _FOX_HTTPD_HPP

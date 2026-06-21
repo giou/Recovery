@@ -8,9 +8,11 @@
 
 #include <string>
 
+#include "fox_io.hpp"
+
 namespace Fox_Http {
 
-bool ServeStatic(int fd, const std::string& url_path);
+bool ServeStatic(Fox_Io::Conn& conn, const std::string& url_path);
 
 } // namespace Fox_Http
 

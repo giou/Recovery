@@ -13,7 +13,8 @@
 
 #include <cstdio>
 #include <string>
-#include <vector>
+
+#include <json/json.h>
 
 class Fox_Remote_Input
 {
@@ -31,7 +32,9 @@ public:
 	static void Key(int code, bool down);
 	static void KeyTap(int code);
 
-	static int RunCommand(const std::vector<std::string>& args, std::string* output);
+	// Execute an input request from its typed args ({action, key, code, x, y,
+	// x2, y2, duration}). Diagnostics are appended to *output.
+	static int RunCommand(const Json::Value& args, std::string* output);
 };
 
 #endif // _FOX_REMOTE_INPUT_HPP

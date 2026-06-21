@@ -24,6 +24,8 @@
 #include <string>
 #include <vector>
 
+#include "../fox_fifo/fox_protocol.hpp"
+
 // Fox_Jobs turns the synchronous, single-command "fox" engine into an
 // asynchronous, pollable job model so a remote dashboard can submit a command,
 // get an id back immediately, and stream output + a final exit code.
@@ -48,7 +50,7 @@ public:
 		int id;
 		State state;
 		int exit_code;
-		std::vector<std::string> argv;
+		Fox_Rpc_Request request;
 		size_t output_size;
 		time_t created;
 		time_t finished;
@@ -56,8 +58,8 @@ public:
 
 	// ---- HTTP-thread side -------------------------------------------------
 
-	// Queue a command. Returns the new job id (>0), or 0 if argv is empty.
-	static int Submit(const std::vector<std::string>& argv);
+	// Queue a command. Returns the new job id (>0), or 0 if request is invalid.
+	static int Submit(const Fox_Rpc_Request& request);
 
 	// Copy the state of one job. Returns false if the id is unknown.
 	static bool Get(int id, Snapshot& out);
@@ -81,13 +83,11 @@ public:
 	static bool HasPending();
 
 	// Promote the next PENDING job to RUNNING and hand back what the GUI needs
-	// to dispatch it: the argv to run and a FILE* that mirrors gui_print output
-	// into the job's buffer. Returns
-	// false (and leaves *out_file/​*out_argv untouched) if nothing is pending or
-	// a job is already running. The returned FILE* is owned by the caller and
-	// must be fclose()d when the command finishes (closing it does not destroy
-	// the job).
-	static bool BeginNext(FILE** out_file, std::vector<std::string>& out_argv);
+	// to dispatch it: the request to run and a FILE* that receives the NDJSON
+	// event stream. Returns false if nothing is pending or a job is already
+	// running. The returned FILE* is owned by the caller and must be fclose()d
+	// when the command finishes (closing it does not destroy the job).
+	static bool BeginNext(FILE** out_file, Fox_Rpc_Request& out_request);
 
 	// Record the exit code for the running job (no-op if none). Called from the
 	// foxcmd action before the output FILE is closed.

@@ -342,7 +342,7 @@ void InputHandler::process_EV_ABS(input_event& ev)
 	x = ev.value >> 16;
 	y = ev.value & 0xFFFF;
 
-	#ifdef FOX_USE_MEIZU_TOUCH_MAPPING
+	#ifdef OF_USE_MEIZU_TOUCH_MAPPING
 	if (x > gr_fb_width() || y > gr_fb_height()) {
 		x /= 10;
 		y /= 10;
@@ -970,8 +970,8 @@ extern "C" int gui_loadResources(void)
 	int check = 0;
 	DataManager::GetValue(TW_IS_ENCRYPTED, check);
 
-#ifdef FOX_ALLOW_EARLY_SETTINGS_LOAD
-#ifdef FOX_SETTINGS_ROOT_DIRECTORY
+#ifdef OF_ALLOW_EARLY_SETTINGS_LOAD
+#ifdef OF_SETTINGS_ROOT_DIRECTORY
 	if (PartitionManager.Mount_Settings_Storage(false))
 		DataManager::ReadSettingsFile();
 #else
@@ -1029,8 +1029,8 @@ extern "C" int gui_loadResources(void)
 	PageManager::SelectPackage("OrangeFox");
 
 	gGuiInitialized = 1;
-#ifdef FOX_ALLOW_EARLY_SETTINGS_LOAD
-#ifdef FOX_SETTINGS_ROOT_DIRECTORY
+#ifdef OF_ALLOW_EARLY_SETTINGS_LOAD
+#ifdef OF_SETTINGS_ROOT_DIRECTORY
 	// Read the settings again to overwrite gui default settings that were loaded by PageManager::LoadPackage
 	if (PartitionManager.Mount_Settings_Storage(false))
 		DataManager::ReadSettingsFile();

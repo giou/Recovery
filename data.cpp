@@ -317,7 +317,7 @@ int DataManager::RestorePasswordBackup(void) {
 
 int DataManager::LoadPersistValues(void)
 {
-#if defined(OF_DEVICE_WITHOUT_PERSIST) || defined(FOX_SETTINGS_ROOT_DIRECTORY)
+#if defined(OF_DEVICE_WITHOUT_PERSIST) || defined(OF_SETTINGS_ROOT_DIRECTORY)
 	//LOGINFO("OF_DEVICE_WITHOUT_PERSIST is set - avoiding /persist...\n");
 	return -1;
 #endif
@@ -370,7 +370,7 @@ int DataManager::SaveValues()
   #ifndef OF_DEVICE_WITHOUT_PERSIST
   if (PartitionManager.Mount_By_Path("/persist", false))
     {
-      #ifndef FOX_SETTINGS_ROOT_DIRECTORY
+      #ifndef OF_SETTINGS_ROOT_DIRECTORY
       mPersist.SetFile(PERSIST_SETTINGS_FILE);
       mPersist.SetFileVersion(FILE_VERSION);
       pthread_mutex_lock(&m_valuesLock);
@@ -419,13 +419,19 @@ int DataManager::GetValue(const string & varName, string & value)
   if (localStr.length() > 2 && localStr[0] == '%'
       && localStr[localStr.length() - 1] == '%')
     {
-      std::regex pattern(R"(%([^%]+)%)");
-      std::smatch match;
+      // Expand each %name% reference. Equivalent to the regex %([^%]+)%, but a
+      // manual scan: std::regex (libstdc++) recurses per character and blows the
+      // stack on long values, and re-compiling the pattern every lookup is slow.
       string retVal;
-      while (std::regex_search(localStr, match, pattern))
+      size_t start;
+      while ((start = localStr.find('%')) != string::npos)
         {
-          ret = GetValue(match[1].str(), retVal) ? 1 : ret ? 1 : 0;
-          localStr.replace(match.position(0), match.length(0), retVal);
+          size_t end = localStr.find('%', start + 1);
+          if (end == string::npos || end == start + 1)
+            break; // no closing %, or empty %% (regex needs 1+ inner char)
+          string inner = localStr.substr(start + 1, end - start - 1);
+          ret = GetValue(inner, retVal) ? 1 : ret ? 1 : 0;
+          localStr.replace(start, end - start + 1, retVal);
         }
       value = localStr;
       return ret;
@@ -804,7 +810,7 @@ void DataManager::SetDefaultValues()
   mPersist.SetValue("of_keep_storage_data", "1");
 
   //[f/d] UI Vars
-  #ifdef FOX_USE_NANO_EDITOR
+  #ifdef OF_USE_NANO_EDITOR
   	mConst.SetValue("fox_use_nano_editor", "1");
   #else
     	mConst.SetValue("fox_use_nano_editor", "0");
@@ -1645,7 +1651,7 @@ void DataManager::ReadSettingsFile(void)
 #ifndef TW_OEM_BUILD
   // Load up the values for TWRP - Sleep to let the card be ready
   char mkdir_path[255], settings_file[255];
-#ifndef FOX_SETTINGS_ROOT_DIRECTORY
+#ifndef OF_SETTINGS_ROOT_DIRECTORY
   int is_enc, has_data_media;
 
   GetValue(TW_IS_ENCRYPTED, is_enc);
@@ -1666,7 +1672,7 @@ void DataManager::ReadSettingsFile(void)
 	}
   }
 
-#endif // FOX_SETTINGS_ROOT_DIRECTORY
+#endif // OF_SETTINGS_ROOT_DIRECTORY
   memset(mkdir_path, 0, sizeof(mkdir_path));
   memset(settings_file, 0, sizeof(settings_file));
   sprintf(mkdir_path, "%s", GetSettingsStoragePath().c_str());
@@ -1706,7 +1712,7 @@ string DataManager::GetCurrentPartPath(void)
 
 string DataManager::GetSettingsStoragePath(void)
 {
-#ifdef FOX_SETTINGS_ROOT_DIRECTORY
+#ifdef OF_SETTINGS_ROOT_DIRECTORY
   return Fox_Settings_Path;
 #else
   return GetStrValue("tw_settings_path");

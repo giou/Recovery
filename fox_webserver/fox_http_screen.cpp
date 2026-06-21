@@ -11,19 +11,20 @@
 
 #include "fox_http_common.hpp"
 #include "fox_httpd.hpp"
+#include "fox_httpsd.hpp"
 #include "../fox_fifo/fox_screen_service.hpp"
 
-void Fox_Http::HandleScreenPng(int fd)
+void Fox_Http::HandleScreenPng(Fox_Io::Conn& conn)
 {
 	std::string png;
 	if (!Fox_Screen_Service::GetFreshPng(png)) {
-		SendResponse(fd, "503 Service Unavailable", "text/plain", "capture failed\n");
+		SendResponse(conn, "503 Service Unavailable", "text/plain", "capture failed\n");
 		return;
 	}
-	SendResponse(fd, "200 OK", "image/png", png);
+	SendResponse(conn, "200 OK", "image/png", png);
 }
 
-void Fox_Http::HandleStream(int fd)
+void Fox_Http::HandleStream(Fox_Io::Conn& conn)
 {
 	std::string head =
 		"HTTP/1.1 200 OK\r\n"
@@ -34,7 +35,7 @@ void Fox_Http::HandleStream(int fd)
 		"Connection: close\r\n"
 		"\r\n"
 		"--foxframe\r\n";
-	if (!SendAll(fd, head))
+	if (!SendAll(conn, head))
 		return;
 
 	std::string start_png;
@@ -42,7 +43,11 @@ void Fox_Http::HandleStream(int fd)
 	bool have_start = Fox_Screen_Service::GetLatest(start_png, &start_gen);
 	uint64_t last_sent_gen = 0;
 	bool sent_any = false;
-	while (Fox_Httpd::IsRunning()) {
+	// Loop while either serving listener (plaintext or TLS) is still up. The
+	// same Conn abstraction backs both, so this works identically over TLS;
+	// checking only the plaintext listener would kill streams on a TLS-only
+	// deployment.
+	while (Fox_Httpd::IsRunning() || Fox_Httpsd::IsRunning()) {
 		Fox_Screen_Service::RequestFrames();
 		std::string png;
 		uint64_t gen = 0;
@@ -54,11 +59,11 @@ void Fox_Http::HandleStream(int fd)
 			int n = snprintf(part, sizeof(part),
 				"Content-Type: image/png\r\nContent-Length: %zu\r\n\r\n",
 				png.size());
-			if (!SendAll(fd, part, (size_t)n))
+			if (!SendAll(conn, part, (size_t)n))
 				break;
-			if (!SendAll(fd, png))
+			if (!SendAll(conn, png))
 				break;
-			if (!SendAll(fd, "\r\n--foxframe\r\n", 14))
+			if (!SendAll(conn, "\r\n--foxframe\r\n", 14))
 				break;
 		}
 		struct timespec ts = { 0, 100 * 1000 * 1000 };

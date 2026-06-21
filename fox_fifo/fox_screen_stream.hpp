@@ -13,7 +13,8 @@
 
 #include <cstdio>
 #include <string>
-#include <vector>
+
+#include <json/json.h>
 
 class Fox_Screen_Stream
 {
@@ -27,7 +28,9 @@ public:
 
 	static int Start(int fps);
 	static void Stop();
-	static bool HandleCommand(const std::vector<std::string>& argv, FILE* out, int* code);
+	// Handle a typed `screenstream` request ({action, fps}); writes its reply to
+	// 'out' and returns the result code. Called only for op == "screenstream".
+	static int HandleCommand(const Json::Value& args, FILE* out);
 };
 
 #endif // _FOX_SCREEN_STREAM_HPP

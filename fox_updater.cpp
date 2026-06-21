@@ -628,6 +628,52 @@ static string ShellGetProp(const string& prop_name) {
 	return Trim(output);
 }
 
+static vector<string> SplitCommaList(const string& value) {
+	vector<string> out;
+	size_t start = 0;
+	while (start <= value.size()) {
+		size_t comma = value.find(',', start);
+		string item = comma == string::npos ? value.substr(start) : value.substr(start, comma - start);
+		item = Trim(item);
+		std::transform(item.begin(), item.end(), item.begin(), ::tolower);
+		if (!item.empty())
+			out.push_back(item);
+		if (comma == string::npos)
+			break;
+		start = comma + 1;
+	}
+	return out;
+}
+
+static bool ContainsString(const vector<string>& values, const string& needle) {
+	return std::find(values.begin(), values.end(), needle) != values.end();
+}
+
+static bool IsValidReleaseType(const string& type) {
+	return type == "stable" || type == "beta" || type == "alpha";
+}
+
+static vector<string> CurrentTypeFilter(bool allow_beta_bool) {
+	string filter = GetVar("fox_update_type_filter");
+	if (filter.empty())
+		filter = StateRead("type_filter.txt", "");
+
+	vector<string> types = SplitCommaList(filter);
+	vector<string> valid;
+	for (const string& type : types) {
+		if (IsValidReleaseType(type) && !ContainsString(valid, type))
+			valid.push_back(type);
+	}
+
+	if (!valid.empty())
+		return valid;
+
+	valid.push_back("stable");
+	if (allow_beta_bool)
+		valid.push_back("beta");
+	return valid;
+}
+
 static string DetectCurrentBuildId() {
 	string override = GetVar("fox_update_current_build_id_override");
 	if (!override.empty()) {
@@ -702,6 +748,7 @@ static void ResetRuntimeState() {
 	SetStateVar("fox_update_latest_variant", "latest_variant.txt", "Unknown");
 	SetStateVar("fox_update_latest_url", "latest_url.txt", "");
 	SetStateVar("fox_update_zip_path", "zip_path.txt", "");
+	SetVar("fox_update_type_filter", StateRead("type_filter.txt", ""));
 
 	WriteFile(STATE_DIR + "/changelog.txt", "No changelog loaded\n");
 	SetVar("of_file_to_read", STATE_DIR + "/changelog.txt");
@@ -866,6 +913,7 @@ static void RefreshVarsFromState() {
 	SetVar("fox_update_latest_variant", StateRead("latest_variant.txt", "Unknown"));
 	SetVar("fox_update_latest_url", StateRead("latest_url.txt", ""));
 	SetVar("fox_update_zip_path", StateRead("zip_path.txt", ""));
+	SetVar("fox_update_type_filter", StateRead("type_filter.txt", GetVar("fox_update_type_filter")));
 
 	SetVar("fox_update_variant_count", StateRead("variant_count.txt", "0"));
 	SetVar("fox_update_variant_index", StateRead("variant_index.txt", "0"));
@@ -1063,17 +1111,14 @@ static void SaveDeviceVarsFromJson(const Json::Value& root, const string& fallba
 	SetStateVar("fox_update_device_codename", "device_codename.txt", codename.empty() ? "Unknown" : codename);
 }
 
-static bool IsReleaseAllowedByBetaSetting(const FoxRelease& r, bool allow_beta) {
+static bool IsReleaseAllowedByTypeFilter(const FoxRelease& r, const vector<string>& allowed_types) {
 	string type = r.type;
 	std::transform(type.begin(), type.end(), type.begin(), ::tolower);
 
-	if (type == "beta")
-		return allow_beta;
+	if (type.empty())
+		return allowed_types.empty();
 
-	if (type == "stable")
-		return true;
-
-	return true;
+	return ContainsString(allowed_types, type);
 }
 
 static bool IsSameRelease(const FoxRelease& a, const FoxRelease& b) {
@@ -1223,11 +1268,10 @@ int Check() {
 	string allow_beta = GetVar("fox_update_allow_beta");
 	bool allow_beta_bool = allow_beta == "1";
 
+	vector<string> allowed_types = CurrentTypeFilter(allow_beta_bool);
 	string type_query;
-	if (allow_beta_bool)
-		type_query = "&type=stable&type=beta";
-	else
-		type_query = "&type=stable";
+	for (const string& type : allowed_types)
+		type_query += "&type=" + UrlEncode(type);
 
 	string query =
 		"?device_id=" + UrlEncode(g_current_release.device_id) +
@@ -1269,7 +1313,7 @@ int Check() {
 		if (!r.device_id.empty() && r.device_id != g_current_release.device_id)
 			continue;
 
-		if (!IsReleaseAllowedByBetaSetting(r, allow_beta_bool))
+		if (!IsReleaseAllowedByTypeFilter(r, allowed_types))
 			continue;
 
 		if (r.download_url.empty())
@@ -1510,6 +1554,49 @@ int Install() {
 	DataManager::SetValue("install_back", "fox_updates");
 	DataManager::SetValue("tw_zip_location", zip_dir);
 	DataManager::SetValue("fox_install_built_in_zip", "0");
+
+	RefreshVarsFromState();
+	return 0;
+}
+
+int SetTestOptions(const std::string& fox_id, const std::string& type_filter) {
+	EnsureStateDir();
+
+	SetVar("fox_update_current_build_id_override", fox_id);
+	StateWrite("current_build_id_override.txt", fox_id);
+
+	if (!type_filter.empty()) {
+		vector<string> types = SplitCommaList(type_filter);
+		vector<string> valid;
+		for (const string& type : types) {
+			if (!IsValidReleaseType(type)) {
+				Status("Invalid OTA type: " + type);
+				RefreshVarsFromState();
+				return 2;
+			}
+			if (!ContainsString(valid, type))
+				valid.push_back(type);
+		}
+
+		if (valid.empty()) {
+			Status("OTA type filter is empty");
+			RefreshVarsFromState();
+			return 2;
+		}
+
+		string normalized;
+		for (size_t i = 0; i < valid.size(); i++) {
+			if (i)
+				normalized += ",";
+			normalized += valid[i];
+		}
+		SetStateVar("fox_update_type_filter", "type_filter.txt", normalized);
+		SetStateVar("fox_update_allow_beta", "allow_beta.txt",
+		            ContainsString(valid, "beta") ? "1" : "0");
+	} else {
+		SetVar("fox_update_type_filter", "");
+		StateWrite("type_filter.txt", "");
+	}
 
 	RefreshVarsFromState();
 	return 0;

@@ -6,10 +6,12 @@
 #ifndef _FOX_HTTP_SCREEN_HPP
 #define _FOX_HTTP_SCREEN_HPP
 
+#include "fox_io.hpp"
+
 namespace Fox_Http {
 
-void HandleScreenPng(int fd);
-void HandleStream(int fd);
+void HandleScreenPng(Fox_Io::Conn& conn);
+void HandleStream(Fox_Io::Conn& conn);
 
 } // namespace Fox_Http
 

@@ -29,6 +29,12 @@
 					<icon res="bs_btn_set_custom"/>
 					<action function="page">ext_custom_reset</action>
 				</listitem>
+				<listitem name="WiFi settings">
+					<condition var1="tw_enable_network" var2="1"/>
+					<icon res="bs_adv_wlan"/>
+					<action function="set">general_back=settings</action>
+					<action function="page">wlan_settings</action>
+				</listitem>
 				<listitem name="{@enter_password_cptn}">
 					<condition var1="tw_is_encrypted" var2="1"/>
 					<condition var1="tw_is_decrypted" var2="0"/>
