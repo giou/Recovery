@@ -987,15 +987,18 @@ ifeq ($(FOX_REMOTE_DASHBOARD),1)
     ifeq ($(OF_ENABLE_WLAN),1)
     FOX_DASHBOARD_DIR ?= $(commands_TWRP_local_path)/fox_webserver/dashboard
     FOX_DASHBOARD_OUT := $(TARGET_RECOVERY_ROOT_OUT)/system/etc/fox/dashboard
+    FOX_DASHBOARD_STAMP := $(TARGET_RECOVERY_ROOT_OUT)/system/etc/fox/.dashboard.stamp
 
 ifndef OF_DASHBOARD_RULE_DEFINED
 OF_DASHBOARD_RULE_DEFINED := true
 
-$(FOX_DASHBOARD_OUT): $(FOX_DASHBOARD_DIR)
+# Track a stamp FILE (not the directory) as the build output; kati/ninja reject
+# directory outputs. The dashboard bundle is populated as a side effect.
+$(FOX_DASHBOARD_STAMP): $(FOX_DASHBOARD_DIR)
 	@echo "Packing OrangeFox remote dashboard from $<"
-	@rm -rf $@ && mkdir -p $(dir $@) && cp -a $</. $@
+	@rm -rf $(FOX_DASHBOARD_OUT) && mkdir -p $(FOX_DASHBOARD_OUT) && cp -a $</. $(FOX_DASHBOARD_OUT)/ && touch $@
 
-ALL_DEFAULT_INSTALLED_MODULES += $(FOX_DASHBOARD_OUT)
+ALL_DEFAULT_INSTALLED_MODULES += $(FOX_DASHBOARD_STAMP)
 endif
     else
         $(warning FOX_REMOTE_DASHBOARD is enabled without OF_ENABLE_WLAN; skipping packaged dashboard because the HTTP server is not built.)
