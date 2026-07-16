@@ -859,6 +859,9 @@ bool Page::ProcessNode(xml_node<>* page, std::vector<xml_node<>*> *templates, in
 		}
 		else
 		{
+#ifndef OF_ENABLE_WLAN
+			if (type != "wlan")
+#endif
 			LOGERR("Unknown object type: %s.\n", type.c_str());
 		}
 
