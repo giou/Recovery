@@ -2725,7 +2725,7 @@ bool TWPartition::Wipe_F2FS() {
 			LOGINFO("OrangeFox: bind-unmounting /sdcard before f2fs data format...\n");
 			usleep(32768);
 			string nul;
-			TWFunc::Exec_Cmd("umount /sdcard", nul);
+			TWFunc::Exec_Cmd("umount -f /sdcard /data", nul);
 			usleep(32768);
 		}
 	#endif
