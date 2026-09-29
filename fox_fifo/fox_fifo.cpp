@@ -1774,7 +1774,6 @@ int Fox_Fifo::Cmd_Cors(const std::string& verb, const std::vector<std::string>& 
 	return 2;
 #endif
 }
-
 int Fox_Fifo::Cmd_Storages(const Json::Value& /*args*/) {
 	PartitionManager.Mount_All_Storage();
 	std::vector<PartitionList> storage_list;

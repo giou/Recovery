@@ -17,8 +17,10 @@ Major subsystems:
 - **fox command engine** (`fox_fifo/`) — the modern `fox` RPC engine. JSON
   requests and NDJSON events over a FIFO pair. **→ see
   [`docs/fox-protocol.md`](docs/fox-protocol.md).**
+- **USB screen streaming & input** (`fox_fifo/`) — direct USB/adb screen streaming
+  (`fox_screen_stream`), framebuffer PNG capture, and uinput touch/key injection.
 - **Network/remote stack** (under `OF_ENABLE_WLAN`) — HTTP REST dashboard +
-  MJPEG screen mirror + uinput input, WLAN, secrets, network adbd, ttyd, OTA,
+  MJPEG screen mirror + HTTP input, WLAN, secrets, network adbd, ttyd, OTA,
   NAS. **→ see [`docs/remote-control.md`](docs/remote-control.md),
   [`docs/wlan.md`](docs/wlan.md), [`docs/security.md`](docs/security.md).**
 - **Recovery core** — partition management (`partition*.cpp`,
@@ -74,21 +76,22 @@ is a Make (kati) module; Soong (Android.bp/.go) modules are referenced from it.
 - The `recovery` binary is defined in `Android.mk` (`LOCAL_MODULE := recovery`).
   It links **FoxUiEngine as a static library** `libfoxui` (built by `gui/Android.bp`,
   source list + cflags from `gui/libfoxui_defaults.go`).
-- **`OF_ENABLE_WLAN=1`** (device tree) gates ALL network features: `wlan.cpp`,
-  `fox_adbd.cpp`, `fox_secrets/`, `nas/`, `fox_updater.cpp`, and the entire
-  `fox_webserver/` folder. It also defines `-DOF_ENABLE_WLAN`, so every
-  WLAN-only source is wrapped in `#ifdef OF_ENABLE_WLAN`.
+- **`OF_ENABLE_WLAN=1`** (device tree) gates the network features: `wlan.cpp`,
+  `fox_adbd.cpp`, `fox_secrets/`, `nas/`, `fox_updater.cpp`, and the
+  `fox_webserver/` sources. It also defines `-DOF_ENABLE_WLAN` for conditional
+  use of the network stack from always-built sources.
 - **`fox_fifo/` is ALWAYS built**, even without WLAN — it is the command engine
-  and the USB/adb remote-control path (`fox input`, `fox screencap`).
+  and the USB/adb remote-control path (`fox input`, `fox screencap`,
+  `fox screen stream`).
 - **`FOX_REMOTE_DASHBOARD=1`** additionally packs `fox_webserver/dashboard/` onto
   the ramdisk at `/system/etc/fox/dashboard` (requires `OF_ENABLE_WLAN`). Without
   it the HTTP server is API-only.
 - Required external source clones (the build errors out if missing):
-  `external/wpa_supplicant_8` (`android16-s2-release`, for WLAN),
-  `external/ttyd` (`OrangeFox16/android_external_ttyd`, `fox_16.0`, for the
-  web terminal — Soong module `ttyd_src`; the fork's `ttyd.rc` is NOT
-  installed, ttyd is FIFO-launched only), and
-  `external/jsoncpp` (`libjsoncpp`, when WLAN is on).
+  `external/jsoncpp` (`libjsoncpp`, always), `external/wpa_supplicant_8`
+  (`android16-s2-release`, for WLAN), and `external/ttyd`
+  (`OrangeFox16/android_external_ttyd`, `fox_16.0`, for the web terminal — Soong
+  module `ttyd_src`; the fork's `ttyd.rc` is NOT installed, ttyd is FIFO-launched
+  only).
 - libmicrohttpd was removed — `fox_httpd` is a hand-written POSIX-socket
   server, not an MHD-based one. Don't reintroduce it.
 - Conditional GUI sources (`gui/wlan.cpp`, custom keyboards) are added in
@@ -102,10 +105,11 @@ verification); there is no test harness aimed at the fox modules.
 
 - **C++ style:** follow `.clang-format` (tabs-ish, Allman-ish braces, GPL header
   block on fox_* files). Match the surrounding file's density and naming.
-- **Always-built vs WLAN-only:** anything reusable over plain adb (engine, input,
-  screencap) goes in `fox_fifo/` and stays unconditional. Anything needing the
-  network stack goes in `fox_webserver/` / `fox_adbd.cpp` / `wlan.cpp` and is
-  `#ifdef OF_ENABLE_WLAN` + gated in `Android.mk`.
+- **Always-built vs WLAN-only:** anything reusable over plain adb/USB (engine,
+  input, screencap, screen stream) goes in `fox_fifo/` and stays unconditional.
+  Network features go in `fox_webserver/` / `fox_adbd.cpp` / `wlan.cpp` and are
+  `#ifdef OF_ENABLE_WLAN` where called from always-built sources and gated in
+  `Android.mk`.
 - The old `OF_ENABLE_REMOTE` flag was **deleted** — the remote-control engine is
   always built; the HTTP server is the part gated by WLAN.
 - The Rust `fox` client lives in a **separate repo** (`external/foxcli`, gitlab),

@@ -325,7 +325,6 @@ static bool OF_WlanSsidIsOpen(const std::string& ssid)
 
 	return enc == "OPEN";
 }
-
 // [f/d]
 void GUIListBox::ReadFileToList(const char* fileName)
 {
@@ -356,7 +355,6 @@ void GUIListBox::ReadFileToList(const char* fileName)
 
 	if (!is_wlan_list)
 		lines.push_back(L"");
-
 	if (TWFunc::Get_File_Size(fileName) > 1572864) { // 1.5mb
 		error = gui_parse_text("{@file_read_error_size=File is bigger than 1.5MB!}");
 	} else if (TWFunc::read_file(fileName, lines) == 0) {
@@ -365,7 +363,6 @@ void GUIListBox::ReadFileToList(const char* fileName)
 		} else {
 			if (!is_wlan_list)
 				lines.push_back(L"");
-
 			unsigned int vector_size = lines.size();
 
 			for (unsigned int i = 0; i < vector_size; i++) {
@@ -778,7 +775,6 @@ int GUIListBox::NotifyTouch(TOUCH_STATE state, int x, int y)
 	default:
 		break;
 	}
-
 	return GUIScrollList::NotifyTouch(state, x, y);
 }
 
@@ -799,7 +795,6 @@ void GUIListBox::NotifySelect(size_t item_selected)
 			mListItems[i].selected = 0;
 		}
 	}
-
 	ListItem& item = mListItems[mVisibleItems[item_selected]];
 
 	if (mVariable == "tw_crypto_user_id_list") {

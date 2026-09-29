@@ -1,8 +1,8 @@
 # Fox RPC v1
 
 Scope: the modern `fox` command engine in `fox_fifo/`. It is always built and is
-the common application protocol for local FIFO/WebUSB-style clients and the WLAN
-HTTP job API.
+the common application protocol for local FIFO/WebUSB-style clients, direct USB
+screen streaming clients, and the WLAN HTTP job API.
 
 The **op/args field contract** (which op accepts which JSON fields) is the single
 shared schema in [`fox-rpc-schema.md`](fox-rpc-schema.md) — change both ends and
@@ -16,6 +16,9 @@ FIFO paths are defined in `orscmd/orscmd.h`:
 - `FOX_OUTPUT_FILE` = `/system/bin/foxout`
 - `FOX_CANCEL_FILE` = `/system/bin/foxcancel`
 - `FOX_SCREEN_STREAM_FILE` = `/system/bin/foxscreenout`
+
+`screenstream` start/stop/status uses the JSON request and NDJSON event FIFOs;
+the frame data itself uses `foxscreenout` as base64-encoded PNG lines, not NDJSON.
 
 One request is written to `foxin` as a UTF-8 JSON object, then the writer closes
 the FIFO:

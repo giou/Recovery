@@ -1002,7 +1002,6 @@ endif
         $(warning FOX_REMOTE_DASHBOARD is enabled without OF_ENABLE_WLAN; skipping packaged dashboard because the HTTP server is not built.)
     endif
 endif
-
 # whether to skip substituting some permissions
 ifeq ($(OF_DONT_SUBSTITUTE_PERMISSIONS),1)
     LOCAL_CFLAGS += -DOF_DONT_SUBSTITUTE_PERMISSIONS
@@ -1020,5 +1019,14 @@ endif
 # blocking
 ifeq ($(OF_BLOCK_OPERATIONS_AFTER_ROM_FLASH),1)
     LOCAL_CFLAGS += -DOF_BLOCK_OPERATIONS_AFTER_ROM_FLASH='"1"'
+endif
+
+# GUI double-tap-to-wake for devices with screen blanking off
+ifeq ($(FOX_NO_BLANK_DT2W),1)
+    ifneq ($(TW_NO_SCREEN_BLANK),true)
+        $(error 'FOX_NO_BLANK_DT2W' requires 'TW_NO_SCREEN_BLANK := true')
+    else
+        LOCAL_CFLAGS += -DFOX_NO_BLANK_DT2W
+    endif
 endif
 #

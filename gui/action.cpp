@@ -722,7 +722,6 @@ int GUIAction::doAction(Action action)
   if (function == "fox_update_install")
     return FoxUpdater::Install();
 #endif
-
   if (!Hide_Reboot_Kludge_Fix(function))
     LOGERR("Unknown action '%s'\n", function.c_str());
 
