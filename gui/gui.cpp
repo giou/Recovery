@@ -748,12 +748,15 @@ static void loopTimer(int input_timeout_ms)
 
 static int runPages(const char *page_name, const int stop_on_page_done)
 {
+	gui_set_main_thread();
+
 	DataManager::SetValue("tw_page_done", 0);
 	DataManager::SetValue("tw_gui_done", 0);
 
 	if (page_name) {
 		PageManager::SetStartPage(page_name);
-		gui_changePage(page_name);
+		PageManager::ChangePage(page_name);
+		gForceRender.set_value(1);
 	}
 
 	gGuiRunning = 1;
