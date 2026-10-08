@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2007 The Android Open Source Project
  *
- * Copyright (C) 2018-2025 OrangeFox Recovery Project
+ * Copyright (C) 2018-2026 OrangeFox Recovery Project
  * This file is part of the OrangeFox Recovery Project.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -180,7 +180,6 @@ static int Fox_Current_ROM_IsMIUI = 0; // is the currently installed ROM a MIUI 
 #define FOX_NOTIFY_AFTER_BACKUP       	"fox_inject_after_backup"
 #define FOX_FLASHLIGHT_VAR     		"flashlight"
 #define FOX_FSYNC_CHECK       		"fox_boot_fsync_check"
-#define FOX_FORCE_FAST_CHARGE_CHECK     "fox_boot_fastcharge_check"
 #define FOX_T2W_CHECK       		"fox_boot_t2w_check"
 #define FOX_PERFORMANCE_CHECK       	"fox_boot_performance_check"
 #define FOX_POWERSAVE_CHECK       	"fox_boot_powersave_check"

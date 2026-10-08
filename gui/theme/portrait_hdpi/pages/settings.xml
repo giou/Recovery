@@ -277,9 +277,6 @@
 				<listitem name="{@restoredialog_readonly}">
 					<data variable="tw_never_show_system_ro_page"/>
 				</listitem>
-				<listitem name="{@fox_boot_fastcharge}">
-					<data variable="fox_boot_fastcharge_check"/>
-				</listitem>
 				<listitem name="{@files_auto_open}">
 					<data variable="fm_auto_open"/>
 				</listitem>
