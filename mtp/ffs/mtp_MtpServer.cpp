@@ -196,10 +196,17 @@ int twmtp_MtpServer::mtppipe_thread(void)
 			if (mtp_message.message_type == MTP_MESSAGE_ADD_STORAGE) {
 				MTPI("mtppipe add storage %i '%s'\n", mtp_message.storage_id, mtp_message.path);
 				if (mtp_message.storage_id) {
-					bool removable = false;
-					MtpStorage* storage = new MtpStorage(mtp_message.storage_id, &mtp_message.path[0], &mtp_message.display[0], removable, mtp_message.maxFileSize, refserver);
-					server->addStorage(storage);
-					MTPD("mtppipe done adding storage\n");
+					// apollon fork: the recovery side re-sends ADD on page
+					// visits without a matching remove; skip duplicates so
+					// hosts don't list the same storage N times.
+					if (server->getStorage(mtp_message.storage_id)) {
+						MTPD("mtppipe storage %i already added, skipping duplicate\n", mtp_message.storage_id);
+					} else {
+						bool removable = false;
+						MtpStorage* storage = new MtpStorage(mtp_message.storage_id, &mtp_message.path[0], &mtp_message.display[0], removable, mtp_message.maxFileSize, refserver);
+						server->addStorage(storage);
+						MTPD("mtppipe done adding storage\n");
+					}
 				} else {
 					MTPE("Invalid storage ID %i specified\n", mtp_message.storage_id);
 				}
