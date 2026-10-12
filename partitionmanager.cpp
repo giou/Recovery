@@ -4961,8 +4961,11 @@ mount:
 					continue;
 				usbotg->Primary_Block_Device = cand;
 				if (usbotg->Mount(false)) {
+					LOGINFO("apollon OTG: mounted %s\n", cand.c_str());
 					mounted_otg = true;
 					break;
+				} else {
+					LOGINFO("apollon OTG: %s not mountable, trying next\n", cand.c_str());
 				}
 			}
 			if (!mounted_otg)
