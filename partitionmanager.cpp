@@ -36,6 +36,8 @@
 #include <zlib.h>
 #include <iostream>
 #include <iomanip>
+#include <thread>
+#include <chrono>
 #include <sys/wait.h>
 #include <linux/fs.h>
 #include <sys/mount.h>
@@ -932,7 +934,10 @@ int TWPartitionManager::Mount_By_Path(string Path, bool Display_Error) {
 	// Iterate through all partitions
 	for (iter = Partitions.begin(); iter != Partitions.end(); iter++) {
 		if ((*iter)->Mount_Point == Local_Path || (!(*iter)->Symlink_Mount_Point.empty() && (*iter)->Symlink_Mount_Point == Local_Path)) {
-			ret = (*iter)->Mount(Display_Error);
+			if (Local_Path == "/usb-otg")
+				ret = Mount_Usb_Otg(*iter, Display_Error);
+			else
+				ret = (*iter)->Mount(Display_Error);
 			found = true;
 		} else if ((*iter)->Is_SubPartition && (*iter)->SubPartition_Of == Local_Path) {
 			(*iter)->Mount(Display_Error);
@@ -4914,72 +4919,59 @@ bool TWPartitionManager::Check_Pending_Merges() {
 
 void TWPartitionManager::Check_UsbOtg_Status() {
 	static bool mtp_was_enabled;
-	static bool usbotg_mounted = false;
-	static string usbotg_prim = "";
-	static string usbotg_alt = "";
+	static bool nodes_present_last = false;
+	// Stable probe range: a sticky winner rewrites Primary on success,
+	// so derive it once from the fstab value, not the live one.
+	static std::string usb_prefix = "";
 	static TWPartition* usbotg = Find_Partition_By_Path("usb_otg");
 
-	if (usbotg && !usbotg->Primary_Block_Device.empty()) {
-		usbotg_prim = usbotg->Primary_Block_Device;
-		usbotg_alt = usbotg->Alternate_Block_Device;
-	} else return;
-
-	if (TWFunc::Path_Exists(usbotg_prim) || (!usbotg_alt.empty() && TWFunc::Path_Exists(usbotg_alt))) {
-		// Auto-mount only once when usb_otg was connected
-		if (!usbotg_mounted) goto mount;
-	} else if (usbotg_mounted) {
-		// Is seems usb_otg was disconnected, so unmount it
-		goto unmount;
+	if (!usbotg || usbotg->Primary_Block_Device.empty())
+		return;
+	if (usb_prefix.empty()) {
+		usb_prefix = usbotg->Primary_Block_Device;
+		while (!usb_prefix.empty() && usb_prefix[usb_prefix.size()-1] >= '0' && usb_prefix[usb_prefix.size()-1] <= '9')
+			usb_prefix.erase(usb_prefix.size()-1);
 	}
+
+	bool nodes_now = false;
+	if (!usb_prefix.empty()) {
+		for (int n = 1; n <= 16; n++) {
+			char num[8];
+			snprintf(num, sizeof(num), "%d", n);
+			if (TWFunc::Path_Exists(usb_prefix + num)) {
+				nodes_now = true;
+				break;
+			}
+		}
+	}
+
+	// No latched state: act on plug/unplug edges and live mount truth.
+	// A transient failure (drive still spinning up) simply tries again
+	// on the next plug event instead of wedging the session.
+	if (nodes_now && !nodes_present_last && !usbotg->Is_Mounted())
+		goto mount;   // plug event (or boot with drive attached)
+	else if (!nodes_now && nodes_present_last)
+		goto unmount; // drive pulled
+	nodes_present_last = nodes_now;
 	return;
 
 mount:
 	mtp_was_enabled = TWFunc::Toggle_MTP(false);
 	{
-		// apollon fork: USB sticks/disks often carry an unmountable
-		// first partition (MSR/EFI stubs) with data sitting later,
-		// while TWRP only ever tries Primary (sdg1). Try Primary
-		// first, then each same-prefix sibling (sdg2..sdg16); the
-		// first successful mount wins and sticks as the new Primary
-		// so UI/MTP/unmount stay consistent. Attempts are quiet; the
-		// familiar error is shown only if nothing mounts at all.
-		// Inline (not a helper): Primary_Block_Device is private to
-		// TWPartition, writable only from member scope. Iteration
-		// restarts from partition 1 on every attempt, so a stale
-		// winner from a previous drive can never stick.
-		std::string orig_primary = usbotg->Primary_Block_Device;
-		std::string prefix = orig_primary;
-		while (!prefix.empty() && prefix[prefix.size()-1] >= '0' && prefix[prefix.size()-1] <= '9')
-			prefix.erase(prefix.size()-1);
+		// Bounded retries on the plug event: spinning disks need
+		// seconds after enumeration before probes succeed.
 		bool mounted_otg = false;
-		if (!prefix.empty()) {
-			for (int n = 1; n <= 16; n++) {
-				char num[8];
-				snprintf(num, sizeof(num), "%d", n);
-				std::string cand = prefix + num;
-				if (!TWFunc::Path_Exists(cand))
-					continue;
-				usbotg->Primary_Block_Device = cand;
-				if (usbotg->Mount(false)) {
-					LOGINFO("apollon OTG: mounted %s\n", cand.c_str());
-					mounted_otg = true;
-					break;
-				} else {
-					LOGINFO("apollon OTG: %s not mountable, trying next\n", cand.c_str());
-				}
-			}
-			if (!mounted_otg)
-				usbotg->Primary_Block_Device = orig_primary;
+		for (int attempt = 0; attempt < 5 && !mounted_otg; attempt++) {
+			if (attempt > 0)
+				std::this_thread::sleep_for(std::chrono::seconds(2));
+			mounted_otg = Mount_Usb_Otg(usbotg, false);
 		}
 		if (!mounted_otg) {
-			usbotg->Mount(true);
-			// Total failure: hand MTP back (it was taken at branch
-			// entry). Without this a single failed attempt silently
-			// kills MTP for the rest of the session.
+			LOGINFO("apollon OTG: no mountable partition on this drive\n");
 			TWFunc::Toggle_MTP(mtp_was_enabled);
 		}
 	}
-	usbotg_mounted = true;
+	nodes_present_last = true;
 	if (PageManager::GetCurrentPage() == "filemanagerlist" && DataManager::GetStrValue("tw_file_location1") == "/usb_otg")
 		gui_changePage("filemanagerlist");
 	return;
@@ -4990,10 +4982,44 @@ unmount:
 	usbotg->Size = 0;
 	usbotg->Used = 0;
 	usbotg->Free = 0;
-	usbotg_mounted = false;
+	nodes_present_last = false;
 	if (PageManager::GetCurrentPage() == "filemanagerlist" && DataManager::GetStrValue("tw_file_location1") == "/usb_otg")
 		gui_changePage("filemanagerlist");
 	TWFunc::Toggle_MTP(mtp_was_enabled);
+}
+
+// apollon fork: USB sticks/disks often carry an unmountable first
+// partition (MSR/EFI stubs) with data sitting later, while TWRP only
+// ever tries Primary (sdg1). Try Primary first, then each same-prefix
+// sibling (sdg2..sdg16); the first successful mount wins and sticks as
+// the new Primary so UI/MTP/unmount stay consistent. Shared by the
+// plug-event auto-mounter (quiet) and the manual Mount action (loud),
+// so user action and automation agree. Member scope (not a helper):
+// Primary_Block_Device is TWPartition-private (friend class proven).
+bool TWPartitionManager::Mount_Usb_Otg(TWPartition* usbotg, bool Display_Error) {
+	std::string orig_primary = usbotg->Primary_Block_Device;
+	std::string prefix = orig_primary;
+	while (!prefix.empty() && prefix[prefix.size()-1] >= '0' && prefix[prefix.size()-1] <= '9')
+		prefix.erase(prefix.size()-1);
+	if (!prefix.empty()) {
+		for (int n = 1; n <= 16; n++) {
+			char num[8];
+			snprintf(num, sizeof(num), "%d", n);
+			std::string cand = prefix + num;
+			if (!TWFunc::Path_Exists(cand))
+				continue;
+			usbotg->Primary_Block_Device = cand;
+			if (usbotg->Mount(Display_Error)) {
+				LOGINFO("apollon OTG: mounted %s\n", cand.c_str());
+				return true;
+			}
+			LOGINFO("apollon OTG: %s not mountable, trying next\n", cand.c_str());
+		}
+		usbotg->Primary_Block_Device = orig_primary;
+	}
+	if (Display_Error)
+		return usbotg->Mount(true);
+	return false;
 }
 
 std::pair<string, string> TWPartitionManager::Get_Partition_Checksums(TWPartition* twrpPart) {

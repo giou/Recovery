@@ -446,6 +446,7 @@ public:
 	bool Check_Pending_Merges();                                              // Check and run pending merges on data for VAB devices
 	bool Disable_AVB2(bool Display_Info);                                     // Disable AVB2.0 in vbmeta/vbmeta_system
 	void Check_UsbOtg_Status();						  // Checks if usb_otg is connected
+	bool Mount_Usb_Otg(TWPartition* Part, bool Display_Error);                // Mounts usb_otg at the first mountable partition (MSR-tolerant)
 	std::pair<string, string> Get_Partition_Checksums(TWPartition* twrpPart); // Generates and returns the SHA-256 checksum for the specified partition
 	bool Mount_Super_Toggle(const string& arg, bool user_toggle = false);	  // Changes Mount_Read_Only flag for all dynamic partitions
 
