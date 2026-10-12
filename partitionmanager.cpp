@@ -4968,8 +4968,13 @@ mount:
 			if (!mounted_otg)
 				usbotg->Primary_Block_Device = orig_primary;
 		}
-		if (!mounted_otg)
+		if (!mounted_otg) {
 			usbotg->Mount(true);
+			// Total failure: hand MTP back (it was taken at branch
+			// entry). Without this a single failed attempt silently
+			// kills MTP for the rest of the session.
+			TWFunc::Toggle_MTP(mtp_was_enabled);
+		}
 	}
 	usbotg_mounted = true;
 	if (PageManager::GetCurrentPage() == "filemanagerlist" && DataManager::GetStrValue("tw_file_location1") == "/usb_otg")
