@@ -944,6 +944,15 @@ int TWPartitionManager::Mount_By_Path(string Path, bool Display_Error) {
 		}
 	}
 	if (found) {
+#ifdef TW_INCLUDE_FBE
+		// apollon: fscrypt's CE/file-name keys live in a per-superblock keyring
+		// that the kernel destroys when /data is unmounted, so a remount would
+		// show ciphertext filenames even though the partition is decrypted.
+		// If we are still decrypted, re-apply the cached secret so names stay
+		// readable without a reboot.
+		if (ret && Local_Path == "/data")
+			android::keystore::Decrypt_Reapply_All_CE();
+#endif
 		return ret;
 	} else if (Display_Error) {
 		gui_msg(Msg(msg::kError, "unable_find_part_path=Unable to find partition for path '{1}'")(Local_Path));
