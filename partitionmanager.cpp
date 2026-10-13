@@ -934,7 +934,7 @@ int TWPartitionManager::Mount_By_Path(string Path, bool Display_Error) {
 	// Iterate through all partitions
 	for (iter = Partitions.begin(); iter != Partitions.end(); iter++) {
 		if ((*iter)->Mount_Point == Local_Path || (!(*iter)->Symlink_Mount_Point.empty() && (*iter)->Symlink_Mount_Point == Local_Path)) {
-			if (Local_Path == "/usb-otg")
+			if (Local_Path == "/usb_otg")
 				ret = Mount_Usb_Otg(*iter, Display_Error);
 			else
 				ret = (*iter)->Mount(Display_Error);
