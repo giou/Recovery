@@ -293,7 +293,7 @@
 			</image>
 
 			<text style="text_body2_hl">
-				<placement x="%col1_x%" y="%row2_1a_y%"/>
+				<placement x="%col1_x_indent%" y="%row2_1a_y%"/>
 				<text>{@sel_encrypt_backup}</text>
 			</text>
 
