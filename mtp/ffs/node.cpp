@@ -29,6 +29,7 @@
 #include "btree.hpp"
 #include "mtp.h"
 #include "MtpDebug.h"
+#include "MtpUtils.h"
 
 
 Node::Node()
@@ -106,13 +107,23 @@ void Node::addProperties(const std::string& path, int storageID) {
 	int mFormat = 0;
 	uint64_t puid = ((uint64_t)storageID << 32) + handle;
 	off_t file_size = 0;
+	time_t mtime = 0;
 
 	mFormat = MTP_FORMAT_UNDEFINED;   // file
 	if (lstat(path.c_str(), &st) == 0) {
 		file_size = st.st_size;
+		mtime = st.st_mtime;
 		if (S_ISDIR(st.st_mode))
 			mFormat = MTP_FORMAT_ASSOCIATION; // folder
 	}
+
+	// MTP/PTP defines the Date* properties as DateTime STRINGS
+	// ("YYYYMMDDThhmmss"). Upstream sent them as UINT64, so Windows Explorer
+	// (which reads them via GetObjectPropList -> queryNodeProperties) showed a
+	// blank Date, while Linux/libmtp still showed dates because the ObjectInfo
+	// path already formatted them correctly. Emit proper strings here too.
+	char datebuf[32];
+	formatDateTime(mtime, datebuf, sizeof(datebuf));
 
 	// TODO: don't store properties with constant values at all, add them at query time instead
 	addProperty(MTP_PROPERTY_STORAGE_ID, storageID, "", MTP_TYPE_UINT32);
@@ -120,7 +131,7 @@ void Node::addProperties(const std::string& path, int storageID) {
 	addProperty(MTP_PROPERTY_PROTECTION_STATUS, 0, "", MTP_TYPE_UINT16);
 	addProperty(MTP_PROPERTY_OBJECT_SIZE, file_size, "", MTP_TYPE_UINT64);
 	addProperty(MTP_PROPERTY_OBJECT_FILE_NAME, 0, getName().c_str(), MTP_TYPE_STR);
-	addProperty(MTP_PROPERTY_DATE_MODIFIED, st.st_mtime, "", MTP_TYPE_UINT64);
+	addProperty(MTP_PROPERTY_DATE_MODIFIED, 0, datebuf, MTP_TYPE_STR);
 	addProperty(MTP_PROPERTY_PARENT_OBJECT, parent, "", MTP_TYPE_UINT32);
 	addProperty(MTP_PROPERTY_PERSISTENT_UID, puid, "", MTP_TYPE_UINT128);
 		// TODO: we can't really support persistent UIDs without a persistent DB.
@@ -129,7 +140,7 @@ void Node::addProperties(const std::string& path, int storageID) {
 		// however, Microsoft's own impl (Zune, etc.) does not support persistent UIDs either
 	addProperty(MTP_PROPERTY_NAME, 0, getName().c_str(), MTP_TYPE_STR);
 	addProperty(MTP_PROPERTY_DISPLAY_NAME, 0, getName().c_str(), MTP_TYPE_STR);
-	addProperty(MTP_PROPERTY_DATE_ADDED, st.st_mtime, "", MTP_TYPE_UINT64);
+	addProperty(MTP_PROPERTY_DATE_ADDED, 0, datebuf, MTP_TYPE_STR);
 	addProperty(MTP_PROPERTY_DESCRIPTION, 0, "", MTP_TYPE_STR);
 	addProperty(MTP_PROPERTY_ARTIST, 0, "", MTP_TYPE_STR);
 	addProperty(MTP_PROPERTY_ALBUM_NAME, 0, "", MTP_TYPE_STR);
