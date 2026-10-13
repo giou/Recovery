@@ -681,7 +681,7 @@
 			</image>
 
 			<text style="text_body2_hl">
-				<placement x="%col1_x_indent%" y="%row1_1_y%"/>
+				<placement x="%col1_x_icon_text%" y="%row1_1_y%"/>
 				<text>{@gst_navbar_error}</text>
 			</text>
 

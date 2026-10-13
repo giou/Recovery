@@ -466,12 +466,12 @@
 
 			<fill color="%text_fail%">
 				<condition var1="tw_password_not_match" var2="1"/>
-				<placement x="%col1_x_caption%" y="%row2_3a_y%" w="%input_w%" h="%input_line_height%" placement="1"/>
+				<placement x="%col1_x%" y="%row2_3a_y%" w="%input_w%" h="%input_line_height%" placement="1"/>
 			</fill>
 
 			<text style="text_input_fail">
 				<condition var1="tw_password_not_match" var2="1"/>
-				<placement x="%col1_x_caption%" y="%row2_3a_y%"/>
+				<placement x="%col1_x%" y="%row2_3a_y%"/>
 				<text>{@pass_not_match}</text>
 			</text>
 
@@ -513,12 +513,12 @@
 			</text>
 
 			<text style="caption_hl">
-				<placement x="%col1_x_caption%" y="%row2_1a_y%"/>
+				<placement x="%col1_x%" y="%row2_1a_y%"/>
 				<text>{@verifying_pas}</text>
 			</text>
 
 			<input>
-				<placement x="%col1_x_caption%" y="%row2_2a_y%" w="%input_w%" h="%input_height%"/>
+				<placement x="%col1_x%" y="%row2_2a_y%" w="%input_w%" h="%input_height%"/>
 				<text>%tw_backup_encrypt_display2%</text>
 				<data name="tw_backup_password2" mask="*" maskvariable="tw_backup_encrypt_display2"/>
 				<restrict minlen="1" maxlen="32" allow="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890_"/>
@@ -526,7 +526,7 @@
 			</input>
 
 			<fill color="%accent%">
-				<placement x="%col1_x_caption%" y="%row2_3a_y%" w="%input_w%" h="%input_line_height%" placement="1"/>
+				<placement x="%col1_x%" y="%row2_3a_y%" w="%input_w%" h="%input_line_height%" placement="1"/>
 			</fill>
 			
 			<template name="gestures_key"/>

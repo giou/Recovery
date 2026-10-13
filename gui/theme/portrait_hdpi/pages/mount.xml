@@ -301,46 +301,46 @@
 
 			<text style="text_body2_hl">
 				<condition var1="tw_password_fail" op="!=" var2="1"/>
-				<placement x="%col1_x_indent%" y="%row2_1a_y%"/>
+				<placement x="%col1_x_icon_text%" y="%row2_1a_y%"/>
 				<text>{@encrypt_data_part}</text>
 			</text>
 
 			<text style="text_body2">
 				<condition var1="of_decrypt_from_menu" op="!=" var2="2"/>
 				<condition var1="tw_password_fail" op="!=" var2="1"/>
-				<placement x="%col1_x_indent%" y="%row2_3a_y%"/>
+				<placement x="%col1_x%" y="%row2_3a_y%"/>
 				<text>{@decrypt_data_enter_note1a}</text>
 			</text>
 
 			<text style="text_body2">
 				<condition var1="of_decrypt_from_menu" op="!=" var2="2"/>
 				<condition var1="tw_password_fail" op="!=" var2="1"/>
-				<placement x="%col1_x_indent%" y="%row3_1a_y%"/>
+				<placement x="%col1_x%" y="%row3_1a_y%"/>
 				<text>{@decrypt_data_enter_note2}</text>
 			</text>
 
 			<text style="text_body2_fail">
 				<condition var1="tw_password_fail" var2="1"/>
-				<placement x="%col1_x_indent%" y="%row2_1a_y%"/>
+				<placement x="%col1_x%" y="%row2_1a_y%"/>
 				<text>{@decrypt_data_failed_pattern}</text>
 			</text>
 			
 			
 			<text style="caption_hl">
 				<condition var1="of_decrypt_from_menu" var2="2"/>
-				<placement x="%col1_x_caption%" y="%row2_3a_y%"/>
+				<placement x="%col1_x%" y="%row2_3a_y%"/>
 				<text>{@decrypt_data_user}</text>
 			</text>
 			
 			<text style="text_body1">
 				<condition var1="of_decrypt_from_menu" var2="2"/>
-				<placement x="%col1_x_caption%" y="%row3_1a_y%"/>
+				<placement x="%col1_x%" y="%row3_1a_y%"/>
 				<text>%tw_crypto_user_display%</text>
 			</text>
 
 			<button style="menu_btn">
 				<condition var1="of_decrypt_from_menu" var2="2"/>
-				<placement x="%col1_x_caption%" y="%row2_3a_y%" w="%input_w%" h="%mb_h_hide%"/>
+				<placement x="%col1_x%" y="%row2_3a_y%" w="%input_w%" h="%mb_h_hide%"/>
 				<action function="set">tw_page_done=1</action>
 				<action function="page">decrypt_redirect</action>
 			</button>

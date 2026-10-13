@@ -136,7 +136,7 @@
 			</image>
 
 			<text style="text_body2_hl">
-				<placement x="%col1_x_indent%" y="%row1_1_y%"/>
+				<placement x="%col1_x_icon_text%" y="%row1_1_y%"/>
 				<text>{@new_pass_info_1_gk}</text>
 			</text>
 
@@ -224,7 +224,7 @@
 			</image>
 
 			<text style="text_body2_hl">
-				<placement x="%col1_x_indent%" y="%row1_1_y%"/>
+				<placement x="%col1_x_icon_text%" y="%row1_1_y%"/>
 				<text>{@new_pass_info_1_gk}</text>
 			</text>
 
@@ -270,7 +270,7 @@
 			<template name="page_new_pass"/>
 			
 			<input>
-				<placement x="%col1_x_caption%" y="%row3_1_y%" w="%input_w%" h="%input_height%"/>
+				<placement x="%col1_x%" y="%row3_1_y%" w="%input_w%" h="%input_height%"/>
 				<text>%pass_new_1_mask%</text>
 				<data name="pass_new_1" mask="*" maskvariable="pass_new_1_mask"/>
 				<restrict minlen="0" maxlen="64" />
@@ -286,7 +286,7 @@
 			<template name="page_new_pass_2"/>
 			
 			<input>
-				<placement x="%col1_x_caption%" y="%row3_1_y%" w="%input_w%" h="%input_height%"/>
+				<placement x="%col1_x%" y="%row3_1_y%" w="%input_w%" h="%input_height%"/>
 				<text>%pass_new_2_mask%</text>
 				<data name="pass_new_2" mask="*" maskvariable="pass_new_2_mask"/>
 				<restrict minlen="0" maxlen="64"/>
@@ -303,7 +303,7 @@
 			<template name="page_new_pass"/>
 			
 			<input>
-				<placement x="%col1_x_caption%" y="%row3_1_y%" w="%input_w%" h="%input_height%"/>
+				<placement x="%col1_x%" y="%row3_1_y%" w="%input_w%" h="%input_height%"/>
 				<text>%pass_new_1_mask%</text>
 				<data name="pass_new_1" mask="*" maskvariable="pass_new_1_mask"/>
 				<restrict minlen="0" maxlen="64" />
@@ -319,7 +319,7 @@
 			<template name="page_new_pass_2"/>
 
 			<input>
-				<placement x="%col1_x_caption%" y="%row3_1_y%" w="%input_w%" h="%input_height%"/>
+				<placement x="%col1_x%" y="%row3_1_y%" w="%input_w%" h="%input_height%"/>
 				<text>%pass_new_2_mask%</text>
 				<data name="pass_new_2" mask="*" maskvariable="pass_new_2_mask"/>
 				<restrict minlen="0" maxlen="64"/>

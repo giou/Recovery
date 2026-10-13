@@ -132,7 +132,7 @@
 			</image>
 
 			<text style="text_body2_hl">
-				<placement x="%col1_x_indent%" y="%row1_1_y%"/>
+				<placement x="%col1_x_icon_text%" y="%row1_1_y%"/>
 				<text>{@new_pass_info_1}</text>
 			</text>
 
@@ -152,12 +152,12 @@
 			</text>
 
 			<text style="caption_hl">
-				<placement x="%col1_x_caption%" y="%row2_3_y%"/>
+				<placement x="%col1_x%" y="%row2_3_y%"/>
 				<text>{@decrypt_data_enter_pass}</text>
 			</text>
 			
 			<fill color="%accent%">
-				<placement x="%col1_x_caption%" y="%row3_2_y%" w="%input_w%" h="%input_line_height%" placement="1"/>
+				<placement x="%col1_x%" y="%row3_2_y%" w="%input_w%" h="%input_line_height%" placement="1"/>
 			</fill>
 			
 			<action>
@@ -186,7 +186,7 @@
 			</image>
 
 			<text style="text_body2_hl">
-				<placement x="%col1_x_indent%" y="%row1_1_y%"/>
+				<placement x="%col1_x_icon_text%" y="%row1_1_y%"/>
 				<text>{@new_pass_info_1}</text>
 			</text>
 
@@ -206,23 +206,23 @@
 			</text>
 
 			<text style="caption_hl">
-				<placement x="%col1_x_caption%" y="%row2_3_y%"/>
+				<placement x="%col1_x%" y="%row2_3_y%"/>
 				<text>{@decrypt_data_enter_pass}</text>
 			</text>
 			
 			<fill color="%accent%">
 				<condition var1="pass_notm" var2="0"/>
-				<placement x="%col1_x_caption%" y="%row3_2_y%" w="%input_w%" h="%input_line_height%" placement="1"/>
+				<placement x="%col1_x%" y="%row3_2_y%" w="%input_w%" h="%input_line_height%" placement="1"/>
 			</fill>
 
 			<fill color="%text_fail%">
 				<condition var1="pass_notm" var2="1"/>
-				<placement x="%col1_x_caption%" y="%row3_2_y%" w="%input_w%" h="%input_line_height%" placement="1"/>
+				<placement x="%col1_x%" y="%row3_2_y%" w="%input_w%" h="%input_line_height%" placement="1"/>
 			</fill>
 
 			<text style="text_input_fail">
 				<condition var1="pass_notm" var2="1"/>
-				<placement x="%col1_x_caption%" y="%row3_2_y%"/>
+				<placement x="%col1_x%" y="%row3_2_y%"/>
 				<text>{@pass_not_match}</text>
 			</text>
 
@@ -276,7 +276,7 @@
 			</image>
 
 			<text style="text_body2_hl">
-				<placement x="%col1_x_indent%" y="%row1_1_y%"/>
+				<placement x="%col1_x_icon_text%" y="%row1_1_y%"/>
 				<text>{@locked_info_1}</text>
 			</text>
 
@@ -323,12 +323,12 @@
 			<template name="page_enter_pass"/>
 			
 			<text style="caption_hl">
-				<placement x="%col1_x_caption%" y="%row2_3_y%"/>
+				<placement x="%col1_x%" y="%row2_3_y%"/>
 				<text>{@decrypt_data_enter_pass}</text>
 			</text>
 
 			<input>
-				<placement x="%col1_x_caption%" y="%row3_1_y%" w="%input_w%" h="%input_height%"/>
+				<placement x="%col1_x%" y="%row3_1_y%" w="%input_w%" h="%input_height%"/>
 				<text>%pass_enter_mask%</text>
 				<data name="pass_enter" mask="*" maskvariable="pass_enter_mask"/>
 				<restrict minlen="0" maxlen="64" />
@@ -337,17 +337,17 @@
 
 			<fill color="%accent%">
 				<condition var1="pass_not_match" var2="0"/>
-				<placement x="%col1_x_caption%" y="%row3_2_y%" w="%input_w%" h="%input_line_height%" placement="1"/>
+				<placement x="%col1_x%" y="%row3_2_y%" w="%input_w%" h="%input_line_height%" placement="1"/>
 			</fill>
 
 			<fill color="%text_fail%">
 				<condition var1="pass_not_match" var2="1"/>
-				<placement x="%col1_x_caption%" y="%row3_2_y%" w="%input_w%" h="%input_line_height%" placement="1"/>
+				<placement x="%col1_x%" y="%row3_2_y%" w="%input_w%" h="%input_line_height%" placement="1"/>
 			</fill>
 
 			<text style="text_input_fail">
 				<condition var1="pass_not_match" var2="1"/>
-				<placement x="%col1_x_caption%" y="%row3_2_y%"/>
+				<placement x="%col1_x%" y="%row3_2_y%"/>
 				<text>{@pass_not_match}</text>
 			</text>
 		</template>
@@ -449,7 +449,7 @@
 			</image>
 
 			<text style="text_body2_hl">
-				<placement x="%col1_x_indent%" y="%row2_1a_y%"/>
+				<placement x="%col1_x_icon_text%" y="%row2_1a_y%"/>
 				<text>{@ts_inform}</text>
 			</text>
 
@@ -827,17 +827,17 @@
 			</image>
 
 			<text style="text_body2_hl">
-				<placement x="%col1_x_indent%" y="%row2_1a_y%"/>
+				<placement x="%col1_x_icon_text%" y="%row2_1a_y%"/>
 				<text>{@encrypt_data_part}</text>
 			</text>
 			
 			<text style="caption_hl">
-				<placement x="%col1_x_caption%" y="%row2_3a_y%"/>
+				<placement x="%col1_x%" y="%row2_3a_y%"/>
 				<text>{@decrypt_data_enter_pass}</text>
 			</text>
 
 			<input>
-				<placement x="%col1_x_caption%" y="%row3_1a_y%" w="%input_backup_w%" h="%input_height%"/>
+				<placement x="%col1_x%" y="%row3_1a_y%" w="%input_backup_w%" h="%input_height%"/>
 				<text>%tw_crypto_display%</text>
 				<data name="tw_crypto_password" mask="*" maskvariable="tw_crypto_display"/>
 				<restrict minlen="1" maxlen="254"/>
@@ -846,7 +846,7 @@
 
 			<input>
 				<condition var1="of_show_pass" var2="1"/>
-				<placement x="%col1_x_caption%" y="%row3_1a_y%" w="%input_backup_w%" h="%input_height%"/>
+				<placement x="%col1_x%" y="%row3_1a_y%" w="%input_backup_w%" h="%input_height%"/>
 				<text>%tw_crypto_password%</text>
 				<data name="tw_crypto_password"/>
 				<cursor color="%transparent%" hasfocus="0" width="0"/>
@@ -862,35 +862,35 @@
 
 			<fill color="%accent%">
 				<condition var1="tw_password_fail" op="!=" var2="1"/>
-				<placement x="%col1_x_caption%" y="%row3_2a_y%" w="%input_backup_w%" h="%input_line_height%" placement="1"/>
+				<placement x="%col1_x%" y="%row3_2a_y%" w="%input_backup_w%" h="%input_line_height%" placement="1"/>
 			</fill>
 
 			<fill color="%text_fail%">
 				<condition var1="tw_password_fail" var2="1"/>
-				<placement x="%col1_x_caption%" y="%row3_2a_y%" w="%input_backup_w%" h="%input_line_height%" placement="1"/>
+				<placement x="%col1_x%" y="%row3_2a_y%" w="%input_backup_w%" h="%input_line_height%" placement="1"/>
 			</fill>
 
 			<text style="text_input_fail">
 				<condition var1="tw_password_fail" var2="1"/>
-				<placement x="%col1_x_caption%" y="%row3_2a_y%"/>
+				<placement x="%col1_x%" y="%row3_2a_y%"/>
 				<text>{@restore_dec_fail}</text>
 			</text>
 			
 			<text style="caption_hl">
 				<condition var1="of_decrypt_from_menu" var2="2"/>
-				<placement x="%col1_x_caption%" y="%row4_1_y%"/>
+				<placement x="%col1_x%" y="%row4_1_y%"/>
 				<text>{@decrypt_data_user}</text>
 			</text>
 			
 			<text style="text_body1">
 				<condition var1="of_decrypt_from_menu" var2="2"/>
-				<placement x="%col1_x_caption%" y="%row4_2_y%"/>
+				<placement x="%col1_x%" y="%row4_2_y%"/>
 				<text>%tw_crypto_user_display%</text>
 			</text>
 
 			<button style="menu_btn">
 				<condition var1="of_decrypt_from_menu" var2="2"/>
-				<placement x="%col1_x_caption%" y="%row4_1_y%" w="%input_w%" h="%mb_h_hide%"/>
+				<placement x="%col1_x%" y="%row4_1_y%" w="%input_w%" h="%mb_h_hide%"/>
 				<action function="set">tw_page_done=1</action>
 				<action function="page">decrypt_redirect</action>
 			</button>
@@ -958,7 +958,7 @@
 			</text>
 
 			<input>
-				<placement x="%col1_x_caption%" y="%row3_2a_y%" w="%input_w%" h="%input_height%"/>
+				<placement x="%col1_x%" y="%row3_2a_y%" w="%input_w%" h="%input_height%"/>
 				<cursor color="%transparent%" hasfocus="0" width="0"/>
 				<data name="ft_inf_sha1"/>
 				<restrict disable="1"/>
@@ -971,7 +971,7 @@
 			</text>
 
 			<input>
-				<placement x="%col1_x_caption%" y="%row4_2a_y%" w="%input_w%" h="%input_height%"/>
+				<placement x="%col1_x%" y="%row4_2a_y%" w="%input_w%" h="%input_height%"/>
 				<cursor color="%transparent%" hasfocus="0" width="0"/>
 				<data name="ft_inf_sha2"/>
 				<restrict disable="1"/>
@@ -984,7 +984,7 @@
 			</text>
 			
 			<input>
-				<placement x="%col1_x_caption%" y="%row5_2a_y%" w="%input_w%" h="%input_height%"/>
+				<placement x="%col1_x%" y="%row5_2a_y%" w="%input_w%" h="%input_height%"/>
 				<cursor color="%transparent%" hasfocus="0" width="0"/>
 				<data name="ft_inf_sha5"/>
 				<restrict disable="1"/>

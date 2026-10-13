@@ -938,7 +938,7 @@
 			</image>
 
 			<text style="text_body2_hl">
-				<placement x="%col1_x_small_indent%" y="%row_btn2_y%"/>
+				<placement x="%col1_x_icon_text%" y="%row_btn2_y%"/>
 				<text>{@sideload_usage}</text>
 			</text>
 
