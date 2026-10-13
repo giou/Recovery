@@ -920,6 +920,7 @@ int TWPartitionManager::Mount_By_Path(string Path, bool Display_Error) {
 	std::vector<TWPartition*>::iterator iter;
 	int ret = false;
 	bool found = false;
+	bool data_remounted = false;
 	string Local_Path = TWFunc::Get_Root_Path(Path);
 	
 
@@ -934,10 +935,17 @@ int TWPartitionManager::Mount_By_Path(string Path, bool Display_Error) {
 	// Iterate through all partitions
 	for (iter = Partitions.begin(); iter != Partitions.end(); iter++) {
 		if ((*iter)->Mount_Point == Local_Path || (!(*iter)->Symlink_Mount_Point.empty() && (*iter)->Symlink_Mount_Point == Local_Path)) {
-			if (Local_Path == "/usb_otg")
+			if (Local_Path == "/usb_otg") {
 				ret = Mount_Usb_Otg(*iter, Display_Error);
-			else
+			} else {
+				bool was_mounted = (*iter)->Is_Mounted();
 				ret = (*iter)->Mount(Display_Error);
+				// Only arm the CE re-apply on a real mount transition: a no-op
+				// Mount_By_Path() on an already-mounted /data must not evict and
+				// re-add a perfectly good key.
+				if (ret && !was_mounted && Local_Path == "/data")
+					data_remounted = true;
+			}
 			found = true;
 		} else if ((*iter)->Is_SubPartition && (*iter)->SubPartition_Of == Local_Path) {
 			(*iter)->Mount(Display_Error);
@@ -945,12 +953,13 @@ int TWPartitionManager::Mount_By_Path(string Path, bool Display_Error) {
 	}
 	if (found) {
 #ifdef TW_INCLUDE_FBE
-		// apollon: fscrypt's CE/file-name keys live in a per-superblock keyring
-		// that the kernel destroys when /data is unmounted, so a remount would
-		// show ciphertext filenames even though the partition is decrypted.
-		// If we are still decrypted, re-apply the cached secret so names stay
-		// readable without a reboot.
-		if (ret && Local_Path == "/data")
+		// apollon: fscrypt keys live in a keyring owned by the /data superblock,
+		// so unmounting /data destroys the device key and every DE/CE key with
+		// it, and a remount shows ciphertext filenames even though the partition
+		// is still "decrypted".  Rebuild the keyring from the cached CE secret
+		// (the device and DE keys come from their on-disk blobs -- the PIN is
+		// not needed) so names stay readable without a reboot.
+		if (data_remounted)
 			android::keystore::Decrypt_Reapply_All_CE();
 #endif
 		return ret;
