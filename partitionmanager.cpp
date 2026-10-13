@@ -4948,9 +4948,10 @@ void TWPartitionManager::Check_UsbOtg_Status() {
 	// No latched state: act on plug/unplug edges and live mount truth.
 	// A transient failure (drive still spinning up) simply tries again
 	// on the next plug event instead of wedging the session.
-	if (nodes_now && !nodes_present_last && !usbotg->Is_Mounted())
+	if (nodes_now && !nodes_present_last && !usbotg->Is_Mounted()) {
+		LOGINFO("apollon OTG: plug event, attempting mount\n");
 		goto mount;   // plug event (or boot with drive attached)
-	else if (!nodes_now && nodes_present_last)
+	} else if (!nodes_now && nodes_present_last)
 		goto unmount; // drive pulled
 	nodes_present_last = nodes_now;
 	return;
@@ -5009,7 +5010,9 @@ bool TWPartitionManager::Mount_Usb_Otg(TWPartition* usbotg, bool Display_Error) 
 			if (!TWFunc::Path_Exists(cand))
 				continue;
 			usbotg->Primary_Block_Device = cand;
-			if (usbotg->Mount(Display_Error)) {
+			// Candidates always quiet; only the final fallback is
+			// loud (and only for explicit/manual mounts).
+			if (usbotg->Mount(false)) {
 				LOGINFO("apollon OTG: mounted %s\n", cand.c_str());
 				return true;
 			}
