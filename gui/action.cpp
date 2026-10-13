@@ -41,10 +41,6 @@
 #include <string>
 #include <sstream>
 #include <fstream>
-#include <memory>
-#include <atomic>
-#include <thread>
-#include <chrono>
 #include "../partitions.hpp"
 #include "../twrp-functions.hpp"
 #include "../twrpRepacker.hpp"
@@ -2088,39 +2084,6 @@ int GUIAction::checkbackupname(std::string arg __unused)
 }
 
 
-// apollon fork: the synthetic-password unwrap (secdis/QSEE) hangs
-// intermittently with no timeout and no error, wedging the PIN screen
-// forever; a reboot always clears it. Watchdog: 60s after PIN submit
-// with no return, reboot to recovery. Capped at 2 consecutive
-// auto-reboots (counter in /cache, which survives reboots and is cleared
-// on success) so a deterministic hang can't loop the device.
-static void Fox_Decrypt_Watchdog(std::shared_ptr<std::atomic<bool>> done) {
-	for (int i = 0; i < 60 && !done->load(); i++)
-		std::this_thread::sleep_for(std::chrono::seconds(1));
-	if (done->load())
-		return;
-	int trips = 0;
-	FILE* f = fopen("/cache/recovery/fox_decrypt_wdt", "rt");
-	if (f) {
-		if (fscanf(f, "%d", &trips) != 1)
-			trips = 0;
-		fclose(f);
-	}
-	if (trips >= 2) {
-		LOGERR("apollon decrypt watchdog: still stuck after %d auto-reboots, NOT rebooting - reboot manually\n", trips);
-		return;
-	}
-	f = fopen("/cache/recovery/fox_decrypt_wdt", "wt");
-	if (f) {
-		fprintf(f, "%d\n", trips + 1);
-		fclose(f);
-	}
-	LOGERR("apollon decrypt watchdog: no result in 60s, rebooting to recovery (trip %d)\n", trips + 1);
-	sync();
-	DataManager::SetValue("tw_gui_done", 1);
-	DataManager::SetValue("tw_reboot_arg", "recovery");
-}
-
 int GUIAction::decrypt(std::string arg __unused)
 {
 	int op_status = 0;
@@ -2136,12 +2099,7 @@ int GUIAction::decrypt(std::string arg __unused)
 		if (DataManager::GetIntValue(TW_IS_FBE)) {  // for FBE
 			DataManager::GetValue("tw_crypto_user_id", userID);
 			if (userID != "") {
-				auto decrypt_done = std::make_shared<std::atomic<bool>>(false);
-				std::thread(Fox_Decrypt_Watchdog, decrypt_done).detach();
 				op_status = PartitionManager.Decrypt_Device(Password, atoi(userID.c_str()));
-				decrypt_done->store(true);
-				if (op_status == 0)
-					remove("/cache/recovery/fox_decrypt_wdt");
 				if (userID != "0") {
 					if (op_status != 0)
 						op_status = 1;
