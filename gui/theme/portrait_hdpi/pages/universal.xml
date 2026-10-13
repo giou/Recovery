@@ -186,7 +186,7 @@
 
 			<text style="text_body2_hl">
 				<condition var1="tw_action" op="!=" var2="fixpermissions"/>
-				<placement x="%col1_x_caption%" y="%row1_3_y%"/>
+				<placement x="%col1_x%" y="%row1_3_y%"/>
 				<text>%tw_text2%</text>
 			</text>
 
