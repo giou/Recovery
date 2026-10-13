@@ -873,14 +873,14 @@
 				<placement x="%col1_x%" y="%row1_3_y%" w="%input_w%" h="%input_line_height%" placement="1"/>
 			</fill>
 
-			<fill color="%text_fail%">
+			<fill id="idfail_6" color="%text_fail%">
 				<condition var1="zone_error" var2="1"/>
 				<placement x="%col1_x%" y="%row1_3_y%" w="%input_w%" h="%input_line_height%" placement="1"/>
 			</fill>
 
 			<text style="text_input_fail">
 				<condition var1="zone_error" var2="1"/>
-				<placement x="%col1_x%" y="%row1_3_y%"/>
+				<placement x="%col1_x%" y="below:idfail_6+27"/>
 				<text>{@offset_wrong}</text>
 			</text>
 

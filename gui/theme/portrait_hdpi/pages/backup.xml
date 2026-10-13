@@ -140,7 +140,7 @@
 				<placement x="%col1_x%" y="%row2_3a_y%" w="%input_w%" h="%input_line_height%" placement="1"/>
 			</fill>
 
-			<fill color="%text_fail%">
+			<fill id="idfail_1" color="%text_fail%">
 				<condition var1="tw_fileexists" var2="1"/>
 				<condition var1="tw_backup_name" op="!=" var2="{@auto_gen}"/>
 				<placement x="%col1_x%" y="%row2_3a_y%" w="%input_w%" h="%input_line_height%" placement="1"/>
@@ -149,7 +149,7 @@
 			<text style="text_input_fail">
 				<condition var1="tw_fileexists" var2="1"/>
 				<condition var1="tw_backup_name" op="!=" var2="{@auto_gen}"/>
-				<placement x="%col1_x%" y="%row2_3a_y%"/>
+				<placement x="%col1_x%" y="below:idfail_1+27"/>
 				<text>{@backup_name_exists}</text>
 			</text>
 
@@ -314,14 +314,14 @@
 				<placement x="%col1_x%" y="%row2_3a_y%" w="%input_backup_w%" h="%input_line_height%" placement="1"/>
 			</fill>
 
-			<fill color="%text_fail%">
+			<fill id="idfail_2" color="%text_fail%">
 				<condition var1="tw_fileexists" var2="1"/>
 				<placement x="%col1_x%" y="%row2_3a_y%" w="%input_backup_w%" h="%input_line_height%" placement="1"/>
 			</fill>
 
 			<text style="text_input_fail">
 				<condition var1="tw_fileexists" var2="1"/>
-				<placement x="%col1_x%" y="%row2_3a_y%"/>
+				<placement x="%col1_x%" y="below:idfail_2+27"/>
 				<text>{@backup_name_exists}</text>
 			</text>
 
@@ -464,14 +464,14 @@
 				<placement x="%col1_x%" y="%row2_3a_y%" w="%input_w%" h="%input_line_height%" placement="1"/>
 			</fill>
 
-			<fill color="%text_fail%">
+			<fill id="idfail_3" color="%text_fail%">
 				<condition var1="tw_password_not_match" var2="1"/>
 				<placement x="%col1_x%" y="%row2_3a_y%" w="%input_w%" h="%input_line_height%" placement="1"/>
 			</fill>
 
 			<text style="text_input_fail">
 				<condition var1="tw_password_not_match" var2="1"/>
-				<placement x="%col1_x%" y="%row2_3a_y%"/>
+				<placement x="%col1_x%" y="below:idfail_3+27"/>
 				<text>{@pass_not_match}</text>
 			</text>
 
