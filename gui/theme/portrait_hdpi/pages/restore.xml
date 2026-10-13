@@ -293,7 +293,7 @@
 			</image>
 
 			<text style="text_body2_hl">
-				<placement x="%col1_x_small_indent%" y="%row2_1a_y%"/>
+				<placement x="%col1_x_indent%" y="%row2_1a_y%"/>
 				<text>{@sel_encrypt_backup}</text>
 			</text>
 
@@ -308,12 +308,12 @@
 			</text>
 
 			<text style="caption_hl">
-				<placement x="%col1_x%" y="%row4_1_y%"/>
+				<placement x="%col1_x_caption%" y="%row4_1_y%"/>
 				<text>{@enter_password_restore}</text>
 			</text>
 
 			<input>
-				<placement x="%col1_x%" y="%row4_2_y%" w="%input_w%" h="%input_height%"/>
+				<placement x="%col1_x_caption%" y="%row4_2_y%" w="%input_w%" h="%input_height%"/>
 				<text>%tw_restore_display%</text>
 				<data name="tw_restore_password" mask="*" maskvariable="tw_restore_display"/>
 				<restrict minlen="1" maxlen="32" allow="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890_"/>
@@ -322,17 +322,17 @@
 
 			<fill color="%accent%">
 				<condition var1="tw_password_fail" op="!=" var2="1"/>
-				<placement x="%col1_x%" y="%row4_3_y%" w="%input_w%" h="%input_line_height%" placement="1"/>
+				<placement x="%col1_x_caption%" y="%row4_3_y%" w="%input_w%" h="%input_line_height%" placement="1"/>
 			</fill>
 
 			<fill color="%text_fail%">
 				<condition var1="tw_password_fail" var2="1"/>
-				<placement x="%col1_x%" y="%row4_3_y%" w="%input_w%" h="%input_line_height%" placement="1"/>
+				<placement x="%col1_x_caption%" y="%row4_3_y%" w="%input_w%" h="%input_line_height%" placement="1"/>
 			</fill>
 
 			<text style="text_input_fail">
 				<condition var1="tw_password_fail" var2="1"/>
-				<placement x="%col1_x%" y="%row4_3_y%"/>
+				<placement x="%col1_x_caption%" y="%row4_3_y%"/>
 				<text>{@restore_dec_fail}</text>
 			</text>
 
