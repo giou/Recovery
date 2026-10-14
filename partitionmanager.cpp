@@ -4935,33 +4935,38 @@ bool TWPartitionManager::Check_Pending_Merges() {
 	return true;
 }
 
+// apollon fork: USB sticks/disks often carry an unmountable first partition
+// (MSR/EFI stub) with the data later, so the usable node is not necessarily
+// sdX1. The plug detector and the mounter both work over the same candidate
+// set, derived here so the two can never disagree about which nodes exist.
+static std::vector<std::string> Usb_Otg_Dev_Candidates(const std::string& dev) {
+	std::vector<std::string> candidates;
+	std::string prefix = dev;
+	// Dropping the trailing index keeps this stable even after a sticky winner
+	// rewrote Primary to a later node.
+	while (!prefix.empty() && prefix[prefix.size()-1] >= '0' && prefix[prefix.size()-1] <= '9')
+		prefix.erase(prefix.size()-1);
+	if (prefix.empty())
+		return candidates;
+	for (int n = 1; n <= 16; n++) {
+		char num[8];
+		snprintf(num, sizeof(num), "%d", n);
+		std::string cand = prefix + num;
+		if (TWFunc::Path_Exists(cand))
+			candidates.push_back(cand);
+	}
+	return candidates;
+}
+
 void TWPartitionManager::Check_UsbOtg_Status() {
 	static bool mtp_was_enabled;
 	static bool nodes_present_last = false;
-	// Stable probe range: a sticky winner rewrites Primary on success,
-	// so derive it once from the fstab value, not the live one.
-	static std::string usb_prefix = "";
 	static TWPartition* usbotg = Find_Partition_By_Path("usb_otg");
 
 	if (!usbotg || usbotg->Primary_Block_Device.empty())
 		return;
-	if (usb_prefix.empty()) {
-		usb_prefix = usbotg->Primary_Block_Device;
-		while (!usb_prefix.empty() && usb_prefix[usb_prefix.size()-1] >= '0' && usb_prefix[usb_prefix.size()-1] <= '9')
-			usb_prefix.erase(usb_prefix.size()-1);
-	}
 
-	bool nodes_now = false;
-	if (!usb_prefix.empty()) {
-		for (int n = 1; n <= 16; n++) {
-			char num[8];
-			snprintf(num, sizeof(num), "%d", n);
-			if (TWFunc::Path_Exists(usb_prefix + num)) {
-				nodes_now = true;
-				break;
-			}
-		}
-	}
+	bool nodes_now = !Usb_Otg_Dev_Candidates(usbotg->Primary_Block_Device).empty();
 
 	// No latched state: act on plug/unplug edges and live mount truth.
 	// A transient failure (drive still spinning up) simply tries again
@@ -5007,37 +5012,27 @@ unmount:
 	TWFunc::Toggle_MTP(mtp_was_enabled);
 }
 
-// apollon fork: USB sticks/disks often carry an unmountable first
-// partition (MSR/EFI stubs) with data sitting later, while TWRP only
-// ever tries Primary (sdg1). Try Primary first, then each same-prefix
-// sibling (sdg2..sdg16); the first successful mount wins and sticks as
-// the new Primary so UI/MTP/unmount stay consistent. Shared by the
-// plug-event auto-mounter (quiet) and the manual Mount action (loud),
-// so user action and automation agree. Member scope (not a helper):
-// Primary_Block_Device is TWPartition-private (friend class proven).
+// apollon fork: try each candidate node (see Usb_Otg_Dev_Candidates) in
+// order; the first successful mount wins and sticks as the new Primary so UI,
+// MTP and unmount stay consistent. Shared by the plug-event auto-mounter
+// (quiet) and the manual Mount action (loud), so user action and automation
+// agree. Member scope: Primary_Block_Device is TWPartition-private
+// (friend class proven).
 bool TWPartitionManager::Mount_Usb_Otg(TWPartition* usbotg, bool Display_Error) {
 	std::string orig_primary = usbotg->Primary_Block_Device;
-	std::string prefix = orig_primary;
-	while (!prefix.empty() && prefix[prefix.size()-1] >= '0' && prefix[prefix.size()-1] <= '9')
-		prefix.erase(prefix.size()-1);
-	if (!prefix.empty()) {
-		for (int n = 1; n <= 16; n++) {
-			char num[8];
-			snprintf(num, sizeof(num), "%d", n);
-			std::string cand = prefix + num;
-			if (!TWFunc::Path_Exists(cand))
-				continue;
-			usbotg->Primary_Block_Device = cand;
-			// Candidates always quiet; only the final fallback is
-			// loud (and only for explicit/manual mounts).
-			if (usbotg->Mount(false)) {
-				LOGINFO("apollon OTG: mounted %s\n", cand.c_str());
-				return true;
-			}
-			LOGINFO("apollon OTG: %s not mountable, trying next\n", cand.c_str());
+	std::vector<std::string> candidates = Usb_Otg_Dev_Candidates(orig_primary);
+	for (const std::string& cand : candidates) {
+		usbotg->Primary_Block_Device = cand;
+		// Candidates always quiet; only the final fallback is loud (and only
+		// for explicit/manual mounts).
+		if (usbotg->Mount(false)) {
+			LOGINFO("apollon OTG: mounted %s\n", cand.c_str());
+			return true;
 		}
-		usbotg->Primary_Block_Device = orig_primary;
+		LOGINFO("apollon OTG: %s not mountable, trying next\n", cand.c_str());
 	}
+	if (!candidates.empty())
+		usbotg->Primary_Block_Device = orig_primary;
 	if (Display_Error)
 		return usbotg->Mount(true);
 	return false;
