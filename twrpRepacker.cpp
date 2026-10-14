@@ -151,7 +151,7 @@ bool twrpRepacker::Repack_Image_And_Flash(const std::string& Target_Image, const
 		}
 	#else
 		// we shouldn't reach here, because of the code in twrpRepacker::Flash_Current_Twrp(); but if we do, then handle it
-		if (PartitionManager.Find_Partition_By_Path("/recovery") && is_AB_for_repacker()) {
+		if (PartitionManager.Find_Partition_By_Path("/recovery")) {
 			dest_partition = "/recovery";
 		}
 	#endif
