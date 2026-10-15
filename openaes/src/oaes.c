@@ -153,6 +153,7 @@ int main(int argc, char** argv)
 			else
 				_key_data_len = 32;
 			memcpy(_key_data, argv[_i], __min(32, strlen(argv[_i])));
+			continue; // value consumed: never re-test it as an option
 		}
 		
 		if( 0 == strcmp( argv[_i], "--in" ) )
@@ -167,6 +168,7 @@ int main(int argc, char** argv)
 				return EXIT_FAILURE;
 			}
 			_file_in = argv[_i];
+			continue; // value consumed: never re-test it as an option
 		}
 		
 		if( 0 == strcmp( argv[_i], "--out" ) )
@@ -181,6 +183,7 @@ int main(int argc, char** argv)
 				return EXIT_FAILURE;
 			}
 			_file_out = argv[_i];
+			continue; // value consumed: never re-test it as an option
 		}
 		
 		if( 0 == _found )

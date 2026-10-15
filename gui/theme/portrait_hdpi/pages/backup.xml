@@ -455,7 +455,8 @@
 				<placement x="%col1_x%" y="%row2_2a_y%" w="%input_w%" h="%input_height%"/>
 				<text>%tw_backup_encrypt_display%</text>
 				<data name="tw_backup_password" mask="*" maskvariable="tw_backup_encrypt_display"/>
-				<restrict minlen="1" maxlen="32" allow="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890_"/>
+				<!-- printable ASCII incl. space: a password symbol must reach the key byte-for-byte -->
+				<restrict minlen="1" maxlen="32" allow=" !&quot;#$%&amp;'()*+,-./0123456789:;&lt;=&gt;?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}~"/>
 				<action function="page">backup_encryption2</action>
 			</input>
 
@@ -521,7 +522,8 @@
 				<placement x="%col1_x%" y="%row2_2a_y%" w="%input_w%" h="%input_height%"/>
 				<text>%tw_backup_encrypt_display2%</text>
 				<data name="tw_backup_password2" mask="*" maskvariable="tw_backup_encrypt_display2"/>
-				<restrict minlen="1" maxlen="32" allow="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890_"/>
+				<!-- printable ASCII incl. space: a password symbol must reach the key byte-for-byte -->
+				<restrict minlen="1" maxlen="32" allow=" !&quot;#$%&amp;'()*+,-./0123456789:;&lt;=&gt;?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}~"/>
 				<action function="page">checkbackuppassword</action>
 			</input>
 

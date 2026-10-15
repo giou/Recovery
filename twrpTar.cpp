@@ -1470,6 +1470,21 @@ unsigned long long twrpTar::get_size() {
 	return 0;
 }
 
+// Quote a string for /bin/sh. The password comes from the user, so an
+// unescaped double quote, $, backtick or backslash would be interpreted by
+// the shell (wrong key at best, command execution at worst).
+static string Shell_Quote(const string& s) {
+	string out = "'";
+	for (size_t i = 0; i < s.size(); i++) {
+		if (s[i] == '\'')
+			out += "'\\''";
+		else
+			out += s[i];
+	}
+	out += "'";
+	return out;
+}
+
 unsigned long long twrpTar::uncompressedSize(string filename) {
 	unsigned long long total_size = 0;
 	string Tar, Command, result;
@@ -1505,7 +1520,7 @@ unsigned long long twrpTar::uncompressedSize(string filename) {
 			LOGERR("Decrypted file is not in tar format.\n");
 			total_size = TWFunc::Get_File_Size(filename);
 		} else if (ret == 3) {
-			Command = "openaes dec --key \"" + password + "\" --in '" + filename + "' | pigz -l";
+			Command = "openaes dec --key " + Shell_Quote(password) + " --in " + Shell_Quote(filename) + " | pigz -l";
 			/* if we set Command = "pigz -l " + tarfn + " | sed '1d' | cut -f5 -d' '";
 			we get the uncompressed size at once. */
 			TWFunc::Exec_Cmd(Command, result, false);

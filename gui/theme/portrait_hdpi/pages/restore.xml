@@ -316,7 +316,8 @@
 				<placement x="%col1_x%" y="%row4_2_y%" w="%input_w%" h="%input_height%"/>
 				<text>%tw_restore_display%</text>
 				<data name="tw_restore_password" mask="*" maskvariable="tw_restore_display"/>
-				<restrict minlen="1" maxlen="32" allow="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890_"/>
+				<!-- printable ASCII incl. space: a password symbol must reach the key byte-for-byte -->
+				<restrict minlen="1" maxlen="32" allow=" !&quot;#$%&amp;'()*+,-./0123456789:;&lt;=&gt;?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}~"/>
 				<action function="page">try_restore_decrypt</action>
 			</input>
 
