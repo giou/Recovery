@@ -90,7 +90,11 @@ bootstrap_go_package {
 }
 
 libaosprecovery_defaults {
-    name: "libaosprecovery_defaults"
+    name: "libaosprecovery_defaults",
+    // system/vold's libvold references this so the flags derived from the
+    // twrpVarsPlugin soong config namespace reach it too. Soong visibility
+    // defaults to private, which would make that a build error.
+    visibility: ["//visibility:public"],
 }
 
 cc_library_shared {
