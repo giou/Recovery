@@ -90,7 +90,11 @@ bootstrap_go_package {
 }
 
 libaosprecovery_defaults {
-    name: "libaosprecovery_defaults"
+    name: "libaosprecovery_defaults",
+    // system/vold's libvold references this so the fscrypt policy version
+    // (TW_USE_FSCRYPT_POLICY) reaches it too. Soong visibility defaults to
+    // private, which would make that cross-repo reference a build error.
+    visibility: ["//visibility:public"],
 }
 
 cc_library_shared {
