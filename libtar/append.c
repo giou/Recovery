@@ -138,6 +138,15 @@ tar_append_file(TAR *t, const char *realname, const char *savename)
 #ifdef USE_FSCRYPT
 	if (TH_ISDIR(t) && t->options & TAR_STORE_FSCRYPT_POL)
 	{
+		/* Fail loud if libvold was built with a different policy struct than we
+		 * allocate here: it memsets its own struct into our buffer, and a v1/v2
+		 * split silently corrupted the heap (apollon, 2026-10-15). */
+		if (fscrypt_policy_struct_size() != sizeof(*t->th_buf.fep)) {
+			LOG("fscrypt policy size mismatch: libtar %zu, libvold %zu\n",
+			    sizeof(*t->th_buf.fep), fscrypt_policy_struct_size());
+			return -1;
+		}
+
 		if (t->th_buf.fep != NULL)
 		{
 			free(t->th_buf.fep);

@@ -354,6 +354,14 @@ th_read(TAR *t)
 #ifdef USE_FSCRYPT
 			start = strstr(buf, FSCRYPT_TAG);
 			if (start && start+FSCRYPT_TAG_LEN < buf+len) {
+				/* Same contract as in append.c: never fill a buffer whose size
+				 * libvold's build disagrees with. */
+				if (fscrypt_policy_struct_size() != sizeof(*t->th_buf.fep)) {
+					LOG("fscrypt policy size mismatch: libtar %zu, libvold %zu\n",
+					    sizeof(*t->th_buf.fep), fscrypt_policy_struct_size());
+					return -1;
+				}
+
 #ifdef USE_FSCRYPT_POLICY_V1
 				t->th_buf.fep = (struct fscrypt_policy_v1*)malloc(sizeof(struct fscrypt_policy_v1));
 #else
