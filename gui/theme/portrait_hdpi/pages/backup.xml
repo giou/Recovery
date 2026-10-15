@@ -125,7 +125,7 @@
 				<placement x="%col1_x%" y="%row2_2a_y%" w="%input_w%" h="%input_height%"/>
 				<cursor color="%transparent%" hasfocus="0" width="0"/>
 				<data name="tw_backup_name"/>
-				<restrict disable="1"/>
+				<restrict minlen="0" maxlen="64" allow=" !&quot;#$%&amp;()*+,-.0123456789:;&lt;=&gt;?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}~"/>
 				<text>%tw_backup_name%</text>
 			</input>
 
@@ -295,7 +295,7 @@
 				<placement x="%col1_x%" y="%row2_2a_y%"  w="%input_backup_w%" h="%input_height%"/>
 				<text>%tw_backup_name%</text>
 				<data name="tw_backup_name"/>
-				<restrict minlen="0" maxlen="64" allow="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890-_.{}[]"/>
+				<restrict minlen="0" maxlen="64" allow=" !&quot;#$%&amp;()*+,-.0123456789:;&lt;=&gt;?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}~"/>
 				<action function="set">tw_filecheck=%tw_backups_folder%/%tw_backup_name%</action>
 				<action function="set">tw_existpage=backupname</action>
 				<action function="set">tw_notexistpage=backup</action>
@@ -386,7 +386,7 @@
 				<placement x="%col1_x%" y="%row2_2a_y%" w="%input_w%" h="%input_height%"/>
 				<cursor color="%transparent%" hasfocus="0" width="0"/>
 				<data name="tw_backup_name"/>
-				<restrict minlen="0" maxlen="64" disable="1"/>
+				<restrict minlen="0" maxlen="64" allow=" !&quot;#$%&amp;()*+,-.0123456789:;&lt;=&gt;?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}~"/>
 				<text>%tw_backup_name%</text>
 			</input>
 

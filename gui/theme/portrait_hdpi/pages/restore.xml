@@ -98,7 +98,7 @@
 				<condition var1="of_backup_empty" var2="0"/>
 				<placement x="%ab_back_x%" y="%ab_y%" placement="4"/>
 				<action function="set">tw_back=restore</action>
-				<action function="set">tw_action_param=if [ -d "%tw_backups_folder%" ]; then rm -rf %tw_backups_folder%/*; fi;</action>
+				<action function="set">tw_action_param=if [ -d "%tw_backups_folder%" ]; then rm -rf '%tw_backups_folder%'/*; fi;</action>
 				<action function="set">tw_text1={@backups_remove}</action>
 				<action function="set">tw_text2={@backups_remove_all}</action>
 				<action function="page">deletebackup</action>
@@ -266,7 +266,7 @@
 			<button style="actionbar">
 				<placement x="%ab_btn1_x%" y="%ab_y%" placement="4"/>
 				<action function="set">tw_back=restore_decrypt</action>
-				<action function="set">tw_action_param=cd %tw_backups_folder% &amp;&amp; rm -rf "%tw_restore_name%"</action>
+				<action function="set">tw_action_param=cd '%tw_backups_folder%' &amp;&amp; rm -rf '%tw_restore_name%'</action>
 				<action function="set">tw_text1={@del_backup_confirm}</action>
 				<action function="set">tw_text2=%tw_restore_name%</action>
 				<action function="page">deletebackup</action>
@@ -422,7 +422,7 @@
 			<button style="actionbar">
 				<placement x="%ab_btn1_x%" y="%ab_y%" placement="4"/>
 				<action function="set">tw_back=restore_select</action>
-				<action function="set">tw_action_param=cd %tw_backups_folder% &amp;&amp; rm -rf "%tw_restore_name%"</action>
+				<action function="set">tw_action_param=cd '%tw_backups_folder%' &amp;&amp; rm -rf '%tw_restore_name%'</action>
 				<action function="set">tw_text1={@del_backup_confirm}</action>
 				<action function="set">tw_text2=%tw_restore_name%</action>
 				<action function="page">deletebackup</action>
@@ -516,8 +516,8 @@
 				<placement x="%col1_x%" y="%row2_2a_y%" w="%input_w%" h="%input_height%"/>
 				<text>%tw_backup_rename%</text>
 				<data name="tw_backup_rename"/>
-				<restrict minlen="1" maxlen="64" allow="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890-_.{}[]() "/>
-				<action function="set">tw_action_param=cd %tw_backups_folder% &amp;&amp; mv "%tw_restore_name%" '%tw_backup_rename%'</action>
+				<restrict minlen="1" maxlen="64" allow=" !&quot;#$%&amp;()*+,-.0123456789:;&lt;=&gt;?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}~"/>
+				<action function="set">tw_action_param=cd '%tw_backups_folder%' &amp;&amp; mv '%tw_restore_name%' '%tw_backup_rename%'</action>
 				<action function="set">tw_action_text1={@renaming_backup}</action>
 				<action function="set">tw_complete_text1={@rename_backup_complete}</action>
 				<action function="set">tw_filecheck=%tw_backups_folder%/%tw_backup_rename%</action>

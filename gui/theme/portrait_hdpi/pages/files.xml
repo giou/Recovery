@@ -225,7 +225,7 @@
 				<placement x="%col1_x%" y="%row2_2a_y%" w="%input_w%" h="%input_height%"/>
 				<text>%tw_filemanager_rename%</text>
 				<data name="mkdir_folder"/>
-				<restrict minlen="1" maxlen="32" allow="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890-_.{}[]() " />
+				<restrict minlen="1" maxlen="32" allow=" !&quot;#$%&amp;()*+,-.0123456789:;&lt;=&gt;?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}~" />
 				<actions>
 					<action function="overlay"/>
 					<action function="terminalcommand">mkdir '%tw_file_location1%/%mkdir_folder%'</action>
@@ -1414,7 +1414,7 @@
 				<placement x="%col1_x%" y="%row2_2a_y%" w="%input_w%" h="%input_height%"/>
 				<text>%tw_filemanager_rename%</text>
 				<data name="tw_filemanager_rename"/>
-				<restrict minlen="1" maxlen="64" allow="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890-_.{}[]() "/>
+				<restrict minlen="1" maxlen="64" allow=" !&quot;#$%&amp;()*+,-.0123456789:;&lt;=&gt;?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}~"/>
 				<action function="set">tw_fm_text2={@fordowns_to}</action>
 				<action function="set">tw_fm_text3=%tw_filemanager_rename%</action>
 				<action function="set">tw_include_text3=1</action>
@@ -1466,7 +1466,7 @@
 				<placement x="%col1_x%" y="%row2_2a_y%" w="%input_w%" h="%input_height%"/>
 				<text>%tw_filemanager_rename%</text>
 				<data name="tw_filemanager_rename"/>
-				<restrict minlen="1" maxlen="64" allow="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890-_.{}[]() "/>
+				<restrict minlen="1" maxlen="64" allow=" !&quot;#$%&amp;()*+,-.0123456789:;&lt;=&gt;?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}~"/>
 				<action function="set">tw_fm_text2={@fordowns_to}</action>
 				<action function="set">tw_fm_text3=%tw_filemanager_rename%</action>
 				<action function="set">tw_include_text3=1</action>

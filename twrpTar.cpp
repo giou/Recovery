@@ -1495,7 +1495,7 @@ unsigned long long twrpTar::uncompressedSize(string filename) {
 		total_size = TWFunc::Get_File_Size(filename);
 	} else if (current_archive_type == COMPRESSED) {
 		// Compressed
-		Command = "pigz -l '" + filename + "'";
+		Command = "pigz -l " + Shell_Quote(filename);
 		/* if we set Command = "pigz -l " + tarfn + " | sed '1d' | cut -f5 -d' '";
 		we get the uncompressed size at once. */
 		TWFunc::Exec_Cmd(Command, result, false);
