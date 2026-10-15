@@ -179,6 +179,12 @@ int twrpTar::createTarFork(pid_t *tar_fork_pid) {
 			core_count = sysconf(_SC_NPROCESSORS_CONF);
 			if (core_count > 8)
 				core_count = 8;
+			// DIAGNOSTIC (apollon): phase 2 with 8 threads corrupts the heap. See the
+			// device tree's TODO.md, "encrypted backups abort with heap corruption".
+			// One thread still backs up every file: the list division
+			// (target_size = encrypt_size / core_count) and the thread loop both follow
+			// core_count, so nothing is skipped. Revert once the threaded path is fixed.
+			core_count = 1;
 			LOGINFO("   Core Count      : %u\n", core_count);
 			Archive_Current_Size = 0;
 
