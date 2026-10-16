@@ -1081,24 +1081,18 @@ int TWPartitionManager::Check_Backup_Name(const std::string& Backup_Name, bool D
   for (index = 0; index < copy_size; index++)
     {
       cur_char = (int) backup_name[index];
-      if (cur_char == 32 || (cur_char >= 48 && cur_char <= 57)
-	  || (cur_char >= 65 && cur_char <= 91) || cur_char == 93
-	  || cur_char == 95 || (cur_char >= 97 && cur_char <= 123)
-	  || cur_char == 125 || cur_char == 45 || cur_char == 46)
+      if (cur_char >= 32 && cur_char <= 126
+	  && cur_char != 39 && cur_char != 47)
 	{
-	  // These are valid characters
-	  // Numbers
-	  // Upper case letters
-	  // Lower case letters
-	  // Space
-	  // and -_.{}[]
+	  // Valid: every printable character except ' (breaks single-quoted shell
+	  // commands) and / (path separator). Matches the theme's name fields.
 	}
       else
 	{
 	  if (Display_Error)
 	    gui_msg(Msg
 		    (msg::kError,
-		     "backup_name_invalid=Backup name '{1}' contains invalid character: '{1}'")
+		     "backup_name_invalid=Backup name '{1}' contains invalid character: '{2}'")
 		    (Backup_Name) ((char) cur_char));
 	  return -3;
 	}
