@@ -680,6 +680,14 @@ int twrpTar::Generate_TarList(string Path, std::vector<TarListStruct> *TarList, 
 		closedir(d);
 		return -1;
 	}
+	// Store the root itself, not just its children: its fscrypt policy, SELinux
+	// context and ownership would otherwise be missing from the tar, and restore
+	// recreates top-level directories implicitly without any of them - the first
+	// system boot then fails set_policy_failed on each in turn (apollon,
+	// 2026-10-16). Zero size impact: directories add no bytes and are not counted.
+	TarItem.fn = Path;
+	TarItem.thread_id = *thread_id;
+	TarList->push_back(TarItem);
 	while ((de = readdir(d)) != NULL) {
 		FileName = Path + "/" + de->d_name;
 
