@@ -1081,13 +1081,12 @@ int TWPartitionManager::Check_Backup_Name(const std::string& Backup_Name, bool D
   for (index = 0; index < copy_size; index++)
     {
       cur_char = (int) backup_name[index];
-      if (cur_char >= 32 && cur_char <= 126
-	  && cur_char != 39 && cur_char != 47)
-	{
-	  // Valid: every printable character except ' (breaks single-quoted shell
-	  // commands) and / (path separator). Matches the theme's name fields.
-	}
-      else
+      // Portable names only, matching the theme's name fields: every printable
+      // character except ' (breaks single-quoted shell commands), / (path
+      // separator), and " * + , : ; < = > ? [ \ ] | (illegal on Windows and
+      // FAT family filesystems, so backups stay copyable to a PC or SD card).
+      if (cur_char < 32 || cur_char > 126
+	  || strchr("\"'*+,/:;<=>?[\\]|", cur_char) != NULL)
 	{
 	  if (Display_Error)
 	    gui_msg(Msg
@@ -1097,6 +1096,32 @@ int TWPartitionManager::Check_Backup_Name(const std::string& Backup_Name, bool D
 	  return -3;
 	}
     }
+  // Windows refuses names ending in a space or a dot, and the reserved device
+  // names CON, PRN, AUX, NUL, COM1-9, LPT1-9 (with or without an extension).
+  if (copy_size > 0 && (Backup_Name[copy_size - 1] == ' ' || Backup_Name[copy_size - 1] == '.'))
+    {
+      if (Display_Error)
+	gui_err("backup_name_trailing=Backup name cannot end with a space or a dot (Windows compatibility).");
+      return -3;
+    }
+  {
+    std::string stem;
+    for (size_t i = 0; i < Backup_Name.size() && Backup_Name[i] != '.'; i++)
+      {
+	char c = Backup_Name[i];
+	stem += (c >= 'a' && c <= 'z') ? (char)(c - 32) : c;
+      }
+    static const char* reserved[] = { "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9", NULL };
+    for (int i = 0; reserved[i] != NULL; i++)
+      {
+	if (stem == reserved[i])
+	  {
+	    if (Display_Error)
+	      gui_err("backup_name_reserved=Backup name is a reserved Windows device name.");
+	    return -3;
+	  }
+      }
+  }
 
 	if (Must_Be_Unique) {
 		// Check to make sure that a backup with this name doesn't already exist
