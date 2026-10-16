@@ -13,4 +13,3 @@
 - https://sourceforge.net/projects/wqy/files/wqy-microhei/0.2.0-beta/
 - https://github.com/anthonyfok/fonts-wqy-microhei
 - https://salsa.debian.org/fonts-team/fonts-wqy-microhei
-

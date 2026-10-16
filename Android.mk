@@ -71,6 +71,50 @@ LOCAL_STATIC_LIBRARIES += libjsoncpp
 LOCAL_C_INCLUDES += \
     external/jsoncpp/include
 
+ifeq ($(OF_ENABLE_WLAN),1)
+LOCAL_SRC_FILES += \
+    wlan.cpp \
+    wlan_worker.cpp \
+    wpa_ctrl_client.cpp \
+    fox_adbd.cpp \
+    fox_secrets/fox_secrets.cpp \
+    nas/NasManager.cpp \
+    fox_updater.cpp \
+    fox_webserver/fox_http_api.cpp \
+    fox_webserver/fox_http_common.cpp \
+    fox_webserver/fox_io.cpp \
+    fox_webserver/fox_job_dispatcher.cpp \
+    fox_webserver/fox_http_routes.cpp \
+    fox_webserver/fox_http_screen.cpp \
+    fox_webserver/fox_http_static.cpp \
+    fox_webserver/fox_httpsd.cpp \
+    fox_webserver/fox_json.cpp \
+    fox_webserver/fox_jobs.cpp \
+    fox_webserver/fox_tls_cert.cpp \
+    fox_webserver/fox_ttyd.cpp \
+    fox_webserver/fox_httpd.cpp
+LOCAL_C_INCLUDES += \
+    $(LOCAL_PATH) \
+    packages/modules/adb/pairing_connection/include \
+    packages/modules/adb/pairing_auth/include
+# Link the pairing libraries statically: recovery has no APEX/.so search path,
+# so the shared variants would fail at runtime with
+# "library libadb_pairing_server.so not found". The transitive static deps
+# (crypto/protos/tls_connection) must be listed explicitly because kati does
+# not propagate the static closure the way Soong does.
+LOCAL_STATIC_LIBRARIES += \
+    libadb_pairing_server_static \
+    libadb_pairing_connection_static \
+    libadb_pairing_auth_static \
+    libadb_crypto_static \
+    libadb_tls_connection_static \
+    libadb_protos_static \
+    libadb_sysdeps \
+    libcrypto_utils
+# libadb_tls_connection_static needs boringssl libssl (SSL_*); recovery already
+# links libcrypto but not libssl.
+LOCAL_SHARED_LIBRARIES += libssl
+endif
 
 ifeq ($(TW_EXCLUDE_APEX),)
     LOCAL_SRC_FILES += twrpApex.cpp
@@ -140,7 +184,8 @@ LOCAL_C_INCLUDES += \
     $(LOCAL_PATH)/twinstall/include
 
 LOCAL_STATIC_LIBRARIES += libfoxui libvold
-# libvterm backs the in-UI terminal (gui/terminal.cpp).
+# libvterm backs the in-UI terminal (gui/terminal.cpp). Always linked, because
+# the terminal page is part of the always-built GUI (not gated by OF_ENABLE_WLAN).
 LOCAL_STATIC_LIBRARIES += libvterm
 LOCAL_SHARED_LIBRARIES += libz libc libcutils libstdc++ libtar libblkid libminuitwrp libmtdutils libtwadbbu
 LOCAL_SHARED_LIBRARIES += libbootloader_message libcrecovery libtwrpdigest libc++ libaosprecovery libcrypto libbase
@@ -326,6 +371,13 @@ ifeq ($(TW_NO_EXFAT_FUSE), true)
 endif
 ifeq ($(TW_NO_HAPTICS), true)
     LOCAL_CFLAGS += -DTW_NO_HAPTICS
+endif
+ifeq ($(TW_ENABLE_NETWORK), true)
+    LOCAL_CFLAGS += -DTW_ENABLE_NETWORK
+endif
+ifeq ($(OF_ENABLE_WLAN),1)
+    TWRP_REQUIRED_MODULES += \
+        ttyd
 endif
 ifneq ($(TW_ADDITIONAL_APEX_FILES),)
     LOCAL_CFLAGS += -DTW_ADDITIONAL_APEX_FILES=$(TW_ADDITIONAL_APEX_FILES)

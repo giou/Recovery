@@ -64,6 +64,15 @@
 				<action function="set">adb_started=1</action>
 			</action>
 
+			<!-- Auto-start WiFi on boot (worker enables the radio and re-joins the
+			     last network when the of_wlan_auto_* settings are on). Fires once. -->
+			<action>
+				<condition var1="first_start" op="!=" var2="1"/>
+				<condition var1="of_wlan_auto_enable" var2="1"/>
+				<condition var1="of_wlan_autostart_done" op="!=" var2="1"/>
+				<action function="set">of_wlan_autostart_done=1</action>
+				<action function="wlan_autostart"/>
+			</action>
 
 			<!-- Go to FM -->
 			<action>

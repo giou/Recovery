@@ -13,6 +13,10 @@
 #include "fox_channel.hpp"
 #include "fox_screen_service.hpp"
 #include "fox_screen_stream.hpp"
+#ifdef OF_ENABLE_WLAN
+#include "../fox_webserver/fox_httpd.hpp"
+#include "../fox_webserver/fox_jobs.hpp"
+#endif
 
 bool Fox_Remote_State::CommandActive(bool legacy_command_active)
 {
@@ -36,15 +40,27 @@ bool Fox_Remote_State::ScreenStreamActive()
 
 bool Fox_Remote_State::ServerRunning()
 {
+#ifdef OF_ENABLE_WLAN
+	return Fox_Httpd::IsRunning();
+#else
 	return false;
+#endif
 }
 
 bool Fox_Remote_State::ControlEnabled()
 {
+#ifdef OF_ENABLE_WLAN
+	return Fox_Httpd::ControlEnabled();
+#else
 	return true;
+#endif
 }
 
 int Fox_Remote_State::ActiveJob()
 {
+#ifdef OF_ENABLE_WLAN
+	return Fox_Jobs::Active();
+#else
 	return 0;
+#endif
 }

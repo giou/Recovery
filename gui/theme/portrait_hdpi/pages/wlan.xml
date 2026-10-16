@@ -1,0 +1,1622 @@
+<?xml version="1.0"?>
+<recovery>
+	<pages>
+
+		<!-- Main WiFi page: Connection / Apps tabs -->
+		<page name="wlan">
+			<action>
+				<action function="set">tw_back=advanced</action>
+				<action function="set">wlanlistdisplay=0</action>
+				<action function="wlan_info"/>
+			</action>
+
+			<!-- If scan results exist, show them on this page -->
+			<action>
+				<condition var1="fileexists" var2="/tmp/wlan/list.txt"/>
+				<action function="set">wlanlistdisplay=1</action>
+				<action function="set">of_file_to_read=/tmp/wlan/list.txt</action>
+			</action>
+
+			<action>
+				<condition var1="fileexists" op="!=" var2="/tmp/wlan/list.txt"/>
+				<action function="set">of_file_to_read=</action>
+			</action>
+
+			<template name="base"/>
+
+			<text style="text_ab_title">
+				<placement x="%col1_x_indent%" y="%ab_bc_y%"/>
+				<text>{@wlan_menu}</text>
+			</text>
+
+			<!-- Settings (gear) -->
+			<button style="actionbar">
+				<placement x="%ab_btn1_x%" y="%ab_y%" placement="4"/>
+				<action function="set">general_back=wlan</action>
+				<action function="page">wlan_settings</action>
+			</button>
+
+			<image>
+				<placement x="%ab_btn1_x%" y="%ab_y%" placement="4"/>
+				<image resource="actionbar_settings"/>
+			</image>
+
+			<!-- ===== Tabs (Connection active) ===== -->
+			<button style="tab_btn_hl">
+				<placement x="156" y="%tab_btn_y%" w="360" h="84"/>
+				<text>Connection</text>
+			</button>
+
+			<button style="tab_btn">
+				<placement x="564" y="%tab_btn_y%" w="360" h="84"/>
+				<text>Apps</text>
+				<action function="page">wlan_apps</action>
+			</button>
+
+			<image style="tab">
+				<placement x="180" y="%tab_title_h%" placement="2"/>
+			</image>
+
+				<!-- WiFi enabled card -->
+				<image>
+					<condition var1="tw_wlan_enabled" var2="1"/>
+					<placement x="40" y="%wifi_card_y%"/>
+					<image resource="main_switch_card_active"/>
+				</image>
+
+				<image style="switch_on">
+					<condition var1="tw_wlan_enabled" var2="1"/>
+					<condition var1="wlan_state" op="!=" var2="disabling"/>
+					<placement x="%main_switch_icon_x%" y="%wifi_switch_icon_y%" placement="4"/>
+				</image>
+
+				<object type="spinningimage">
+					<condition var1="tw_wlan_enabled" var2="1"/>
+					<condition var1="wlan_state" var2="disabling"/>
+					<placement x="%main_switch_icon_x%" y="%wifi_switch_icon_y%" placement="4"/>
+					<image resource="wlan_loading"/>
+					<speed render="2"/>
+					<rotate speed="640" clockwise="1" start="0"/>
+				</object>
+
+				<text style="text_ab_switch_on">
+					<condition var1="tw_wlan_enabled" var2="1"/>
+					<placement x="%switch_text_x%" y="%wifi_switch_text_y%"/>
+					<text>WiFi</text>
+				</text>
+
+				<button style="bs_btn">
+					<condition var1="tw_wlan_enabled" var2="1"/>
+					<condition var1="wlan_state" op="!=" var2="disabling"/>
+					<placement x="0" y="%wifi_card_y%" w="%screen_w%" h="%ab_btn_h%"/>
+					<action function="wlan_disable"/>
+					<action function="set">of_file_to_read=</action>
+					<action function="set">wlanlistdisplay=0</action>
+					<action function="set">wlanselectedid=</action>
+					<action function="set">wlanempty=</action>
+					<action function="set">wlan_connected_name=</action>
+					<action function="set">wlan_connect_text=</action>
+					<action function="set">wlan_connect_done=0</action>
+					<action function="set">wlan_refreshing=0</action>
+					<action function="set">wlan_info_connected=0</action>
+					<action function="set">wlan_info_text=</action>
+					<action function="set">wlan_info_ssid=</action>
+					<action function="set">wlan_info_ip=</action>
+					<action function="page">wlan</action>
+				</button>
+
+				<!-- WiFi disabled card -->
+				<image>
+					<condition var1="tw_wlan_enabled" op="!=" var2="1"/>
+					<placement x="40" y="%wifi_card_y%"/>
+					<image resource="main_switch_card_not_active"/>
+				</image>
+
+				<image style="switch_off">
+					<condition var1="tw_wlan_enabled" op="!=" var2="1"/>
+					<condition var1="wlan_state" op="!=" var2="enabling"/>
+					<placement x="%main_switch_icon_x%" y="%wifi_switch_icon_y%" placement="4"/>
+				</image>
+
+				<object type="spinningimage">
+					<condition var1="tw_wlan_enabled" op="!=" var2="1"/>
+					<condition var1="wlan_state" var2="enabling"/>
+					<placement x="%main_switch_icon_x%" y="%wifi_switch_icon_y%" placement="4"/>
+					<image resource="wlan_loading"/>
+					<speed render="2"/>
+					<rotate speed="640" clockwise="1" start="0"/>
+				</object>
+
+				<text style="text_ab_switch_off">
+					<condition var1="tw_wlan_enabled" op="!=" var2="1"/>
+					<placement x="%switch_text_x%" y="%wifi_switch_text_y%"/>
+					<text>WiFi</text>
+				</text>
+
+				<button style="bs_btn">
+					<condition var1="tw_wlan_enabled" op="!=" var2="1"/>
+					<condition var1="wlan_state" op="!=" var2="enabling"/>
+					<placement x="0" y="%wifi_card_y%" w="%screen_w%" h="%ab_btn_h%"/>
+					<action function="set">wlan_connect_done=0</action>
+					<action function="wlan_enable"/>
+					<action function="page">wlan</action>
+				</button>
+
+				<!-- Available networks header + actions -->
+				<text style="caption">
+					<condition var1="tw_wlan_enabled" var2="1"/>
+					<placement x="%gl_text_x%" y="%wifi_caption_y%"/>
+					<text>{@wlan_list}</text>
+				</text>
+
+				<!-- Saved networks shortcut -->
+				<button style="actionbar">
+					<condition var1="tw_wlan_enabled" var2="1"/>
+					<placement x="876" y="%wifi_btn_row_y%" placement="4"/>
+					<action function="page">wlan_saved</action>
+				</button>
+				<image>
+					<condition var1="tw_wlan_enabled" var2="1"/>
+					<placement x="876" y="%wifi_btn_row_y%" placement="4"/>
+					<image resource="wlan_saved"/>
+				</image>
+
+				<!-- Scan / refresh (the reset icon spins while scanning) -->
+				<button style="actionbar">
+					<condition var1="tw_wlan_enabled" var2="1"/>
+					<placement x="%ab_btn1_x%" y="%wifi_btn_row_y%" w="96" h="112" placement="4"/>
+					<action function="set">wlan_refreshing=1</action>
+					<action function="page">wlan_refresh</action>
+				</button>
+
+				<image>
+					<condition var1="tw_wlan_enabled" var2="1"/>
+					<condition var1="wlan_refreshing" op="!=" var2="1"/>
+					<placement x="%ab_btn1_x%" y="%wifi_btn_row_y%" placement="4"/>
+					<image resource="actionbar_reset"/>
+				</image>
+
+				<object type="spinningimage">
+					<condition var1="tw_wlan_enabled" var2="1"/>
+					<condition var1="wlan_refreshing" var2="1"/>
+					<placement x="%ab_btn1_x%" y="%wifi_btn_row_y%" placement="4"/>
+					<offset x="0" y="0"/>
+					<image resource="actionbar_reset"/>
+					<speed render="2"/>
+					<rotate speed="640" clockwise="0" start="0"/>
+				</object>
+
+				<!-- Full-height network list (scrolls internally). -->
+				<listbox style="group_list">
+					<condition var1="tw_wlan_enabled" var2="1"/>
+					<condition var1="fileexists" var2="/tmp/wlan/list.txt"/>
+					<placement x="0" y="%wifi_list_y%" w="%screen_w%" h="%wifi_list_h%"/>
+					<icon selected="wlan_saved" unselected="wlan" locked="wlan_locked"/>
+					<data name="of_file_to_read"/>
+				</listbox>
+
+			<template name="gestures"/>
+
+			<action>
+				<touch key="home"/>
+				<action function="set">wlanlistdisplay=</action>
+				<action function="set">of_file_to_read=</action>
+				<action function="set">wlan_refreshing=0</action>
+				<action function="set">wlan_connect_done=0</action>
+				<action function="page">main</action>
+			</action>
+
+			<action>
+				<touch key="back"/>
+				<action function="set">wlanlistdisplay=</action>
+				<action function="set">of_file_to_read=</action>
+				<action function="set">wlan_refreshing=0</action>
+				<action function="set">wlan_connect_done=0</action>
+				<action function="page">advanced</action>
+			</action>
+		</page>
+
+		<!-- WiFi Apps tab: network apps & services (no toggle here) -->
+		<page name="wlan_apps">
+			<template name="base"/>
+
+			<text style="text_ab_title">
+				<placement x="%col1_x_indent%" y="%ab_bc_y%"/>
+				<text>{@wlan_menu}</text>
+			</text>
+
+			<!-- Settings (gear) -->
+			<button style="actionbar">
+				<placement x="%ab_btn1_x%" y="%ab_y%" placement="4"/>
+				<action function="set">general_back=wlan_apps</action>
+				<action function="page">wlan_settings</action>
+			</button>
+
+			<image>
+				<placement x="%ab_btn1_x%" y="%ab_y%" placement="4"/>
+				<image resource="actionbar_settings"/>
+			</image>
+
+			<!-- ===== Tabs (Apps active) ===== -->
+			<button style="tab_btn">
+				<placement x="156" y="%tab_btn_y%" w="360" h="84"/>
+				<text>Connection</text>
+				<action function="page">wlan</action>
+			</button>
+
+			<button style="tab_btn_hl">
+				<placement x="564" y="%tab_btn_y%" w="360" h="84"/>
+				<text>Apps</text>
+			</button>
+
+			<image style="tab">
+				<placement x="588" y="%tab_title_h%" placement="2"/>
+			</image>
+
+			<text style="caption">
+				<placement x="%gl_text_x%" y="%tab_title_h%"/>
+				<text>Network apps &amp; services</text>
+			</text>
+
+			<listbox style="group_list">
+				<placement x="0" y="%wifi_apps_list_y%" w="%screen_w%" h="%wifi_apps_list_h%"/>
+
+				<listitem name="Test Network Connection">
+					<icon res="wlan_test"/>
+					<action function="set">wlan_test_title=Network Connection</action>
+					<action function="set">wlan_test_line1=Testing network connection...</action>
+					<action function="set">wlan_test_line2=</action>
+					<action function="set">wlan_test_line3=</action>
+					<action function="set">wlan_test_line4=</action>
+					<action function="set">wlan_test_line5=</action>
+					<action function="set">wlan_test_done=0</action>
+					<action function="overlay">wlan_test_connection</action>
+					<action function="wlan_test_connection"/>
+				</listitem>
+
+				<listitem name="OrangeFox Updates">
+					<icon res="overview"/>
+					<action function="page">fox_updates</action>
+				</listitem>
+
+				<listitem name="Remote Web Access">
+					<icon res="rwa"/>
+					<action function="page">remote_web_access_settings</action>
+				</listitem>
+
+				<listitem name="Network Storage (NAS)">
+					<icon res="smb_share"/>
+					<action function="page">nas_settings</action>
+				</listitem>
+			</listbox>
+
+			<template name="gestures"/>
+
+			<action>
+				<touch key="home"/>
+				<action function="page">main</action>
+			</action>
+
+			<action>
+				<touch key="back"/>
+				<action function="page">advanced</action>
+			</action>
+		</page>
+
+		<!-- WiFi settings page (gear target) -->
+		<page name="wlan_settings">
+			<template name="base"/>
+
+			<text style="text_ab_title">
+				<placement x="%col1_x_indent%" y="%ab_bc_y%"/>
+				<text>WiFi Settings</text>
+			</text>
+
+			<text style="caption">
+				<placement x="%gl_text_x%" y="%row2_1a_y%"/>
+				<text>Automatic connection</text>
+			</text>
+
+			<listbox style="settingslist_group">
+				<placement x="0" y="%row2_2a_y%" w="%screen_w%" h="%lb_group_l2%"/>
+				<listitem name="Enable WiFi automatically">
+					<data variable="of_wlan_auto_enable"/>
+				</listitem>
+				<listitem name="Connect to last WiFi automatically">
+					<data variable="of_wlan_auto_connect"/>
+				</listitem>
+			</listbox>
+
+			<template name="gestures"/>
+
+			<action>
+				<touch key="home"/>
+				<action function="page">main</action>
+			</action>
+
+			<action>
+				<touch key="back"/>
+				<action function="page">%general_back%</action>
+			</action>
+		</page>
+
+		<!-- OrangeFox updater main page -->
+		<page name="fox_updates">
+			<template name="base"/>
+
+			<action>
+				<action function="set">wlanlistdisplay=0</action>
+				<action function="set">wlansaveddisplay=0</action>
+			</action>
+
+			<text style="text_ab_title">
+				<placement x="%col1_x_indent%" y="%ab_bc_y%"/>
+				<text>OrangeFox Updates</text>
+			</text>
+
+			<button style="actionbar">
+				<placement x="%ab_btn1_x%" y="%ab_y%" placement="4"/>
+				<action function="page">fox_update_settings</action>
+			</button>
+
+			<image>
+				<placement x="%ab_btn1_x%" y="%ab_y%" placement="4"/>
+				<image resource="actionbar_settings"/>
+			</image>
+
+			<image>
+				<placement x="40" y="%ab_h%"/>
+				<image resource="main_switch_card_active"/>
+			</image>
+
+			<image>
+				<placement x="%main_switch_icon_x%" y="%ab2_y%" placement="4"/>
+				<image resource="overview"/>
+			</image>
+
+			<text style="text_ab_switch_on">
+				<placement x="%switch_text_x%" y="%ab_bc2_y%"/>
+				<text>Recovery Updater</text>
+			</text>
+
+			<text style="caption">
+				<placement x="%gl_text_x%" y="%row2_1a_y%"/>
+				<text>Status</text>
+			</text>
+
+			<text style="text_body2_hl">
+				<placement x="%gl_text_x%" y="%row2_2a_y%"/>
+				<text>%fox_update_status%</text>
+			</text>
+
+			<text style="caption">
+				<placement x="%gl_text_x%" y="%row3_1a_y%"/>
+				<text>Update details</text>
+			</text>
+
+			<listbox style="group_list_flat">
+				<placement x="0" y="%row3_2a_y%" w="%screen_w%" h="%bl_h6%"/>
+				<data requireReload="1"/>
+				<listitem name="Device: %fox_update_device_name%">
+					<icon res="devices"/>
+				</listitem>
+				<listitem name="Current: %fox_update_current_version% / %fox_update_current_type%">
+					<icon res="check"/>
+				</listitem>
+				<listitem name="Latest: %fox_update_latest_version% / %fox_update_latest_type%">
+					<icon res="overview"/>
+					<action function="fox_update_prepare_available"/>
+					<action function="page">fox_update_releases</action>
+				</listitem>
+				<listitem name="Variant: %fox_update_latest_variant%">
+					<icon res="category"/>
+				</listitem>
+				<listitem name="File: %fox_update_latest_filename%">
+					<icon res="archive"/>
+				</listitem>
+				<listitem name="MD5: %fox_update_latest_md5%">
+					<icon res="text_snippet"/>
+				</listitem>
+			</listbox>
+
+			<button style="btn_raised_hl">
+				<placement x="%btn_raised_left_x%" y="%row_btn_y%"/>
+				<text>Check</text>
+				<action function="fox_update_check"/>
+				<action function="page">fox_update_after_check</action>
+			</button>
+
+			<button style="btn_raised">
+				<placement x="%btn_raised_right_x%" y="%row_btn_y%" placement="1"/>
+				<text>Changelog</text>
+				<action function="set">wlanlistdisplay=0</action>
+				<action function="set">wlansaveddisplay=0</action>
+				<action function="set">of_file_to_read=</action>
+				<action function="set">of_file_to_read=/tmp/fox_update/changelog.txt</action>
+				<action function="page">fox_update_changelog</action>
+			</button>
+
+			<button style="btn_raised">
+				<condition var1="fox_update_available" var2="1"/>
+				<condition var1="fox_update_downloaded" op="!=" var2="1"/>
+				<placement x="%btn_raised_left_x%" y="%row_btn1_y%"/>
+				<text>Download</text>
+				<action function="fox_update_download"/>
+				<action function="page">fox_updates</action>
+			</button>
+
+			<button style="btn_raised_hl">
+				<condition var1="fox_update_downloaded" var2="1"/>
+				<placement x="%btn_raised_left_x%" y="%row_btn1_y%"/>
+				<text>Install</text>
+				<action function="fox_update_install"/>
+				<action function="page">fox_update_queue_zip</action>
+			</button>
+
+			<template name="gestures"/>
+
+			<action>
+				<touch key="home"/>
+				<action function="set">of_file_to_read=</action>
+				<action function="page">main</action>
+			</action>
+
+			<action>
+				<touch key="back"/>
+				<action function="set">of_file_to_read=</action>
+				<action function="page">wlan_apps</action>
+			</action>
+		</page>
+
+		<!-- OrangeFox updater settings -->
+		<page name="fox_update_settings">
+			<template name="base"/>
+
+			<text style="text_ab_title">
+				<placement x="%col1_x_indent%" y="%ab_bc_y%"/>
+				<text>Updater Settings</text>
+			</text>
+
+			<text style="caption">
+				<placement x="%gl_text_x%" y="%row2_1a_y%"/>
+				<text>Update channel</text>
+			</text>
+
+			<listbox style="settingslist_group">
+				<placement x="0" y="%row2_2a_y%" w="%screen_w%" h="%lb_group_l1%"/>
+				<listitem name="Receive beta updates">
+					<data variable="fox_update_allow_beta"/>
+				</listitem>
+			</listbox>
+
+			<template name="gestures"/>
+
+			<action>
+				<touch key="home"/>
+				<action function="page">main</action>
+			</action>
+
+			<action>
+				<touch key="back"/>
+				<action function="page">fox_updates</action>
+			</action>
+		</page>
+
+		<!-- Queue updater ZIP using the standard file-browser install flow -->
+		<page name="fox_update_queue_zip">
+			<action>
+				<action function="queueclear"/>
+				<action function="queuezip"/>
+				<action function="set">tw_q_1=%tw_file%</action>
+				<action function="page">flash_confirm</action>
+			</action>
+		</page>
+
+		<!-- Route after checking: open variant picker only when needed -->
+		<page name="fox_update_after_check">
+			<action>
+				<condition var1="fox_update_need_variant" var2="1"/>
+				<action function="page">fox_update_variants</action>
+			</action>
+
+			<action>
+				<condition var1="fox_update_need_variant" op="!=" var2="1"/>
+				<action function="page">fox_updates</action>
+			</action>
+		</page>
+
+		<!-- Available update releases -->
+		<page name="fox_update_releases">
+			<template name="base"/>
+
+			<action>
+				<action function="set">wlanlistdisplay=0</action>
+				<action function="set">wlansaveddisplay=0</action>
+				<action function="set">fox_update_release_selection=/tmp/fox_update/available_list.txt</action>
+			</action>
+
+			<text style="text_ab_title">
+				<placement x="%col1_x_indent%" y="%ab_bc_y%"/>
+				<text>Available Releases</text>
+			</text>
+
+			<text style="caption">
+				<placement x="%gl_text_x%" y="%row2_1a_y%"/>
+				<text>%fox_update_available_count% releases found</text>
+			</text>
+
+			<listbox style="group_list_flat">
+				<placement x="0" y="%row2_2a_y%" w="%screen_w%" h="%bl_h5%"/>
+				<iconsize w="55" h="%bl_h1%" padding="0"/>
+				<data name="fox_update_release_selection"/>
+			</listbox>
+
+			<template name="gestures"/>
+
+			<action>
+				<touch key="home"/>
+				<action function="set">fox_update_release_selection=</action>
+				<action function="page">main</action>
+			</action>
+
+			<action>
+				<touch key="back"/>
+				<action function="set">fox_update_release_selection=</action>
+				<action function="page">fox_updates</action>
+			</action>
+		</page>
+
+		<!-- OrangeFox update changelog page -->
+		<page name="fox_update_changelog">
+			<template name="base"/>
+
+			<action>
+				<action function="set">wlanlistdisplay=0</action>
+				<action function="set">wlansaveddisplay=0</action>
+				<action function="set">of_file_to_read=</action>
+				<action function="set">of_file_to_read=/tmp/fox_update/changelog.txt</action>
+			</action>
+
+			<text style="text_ab_title">
+				<placement x="%col1_x_indent%" y="%ab_bc_y%"/>
+				<text>Update Changelog</text>
+			</text>
+
+			<text style="caption">
+				<placement x="%gl_text_x%" y="%row2_1a_y%"/>
+				<text>Changelog</text>
+			</text>
+
+			<text style="text_body2_hl">
+				<condition var1="fileexists" op="!=" var2="/tmp/fox_update/changelog.txt"/>
+				<placement x="%gl_text_x%" y="%row2_2a_y%"/>
+				<text>No changelog loaded</text>
+			</text>
+
+			<listbox style="group_list_flat">
+				<condition var1="fileexists" var2="/tmp/fox_update/changelog.txt"/>
+				<placement x="0" y="%row2_2a_y%" w="%screen_w%" h="%bl_h5%"/>
+				<iconsize w="55" h="%bl_h1%" padding="0"/>
+				<data name="of_file_to_read"/>
+			</listbox>
+
+			<template name="gestures"/>
+
+			<action>
+				<touch key="home"/>
+				<action function="set">of_file_to_read=</action>
+				<action function="page">main</action>
+			</action>
+
+			<action>
+				<touch key="back"/>
+				<action function="set">of_file_to_read=</action>
+				<action function="page">fox_updates</action>
+			</action>
+		</page>
+
+		<!-- Variant picker page -->
+		<page name="fox_update_variants">
+			<template name="base"/>
+
+			<action>
+				<action function="set">of_file_to_read=/tmp/fox_update/changelog.txt</action>
+			</action>
+
+			<text style="text_ab_title">
+				<placement x="%col1_x_indent%" y="%ab_bc_y%"/>
+				<text>Select Update Variant</text>
+			</text>
+
+			<button style="actionbar">
+				<placement x="%ab_btn1_x%" y="%ab_y%" placement="4"/>
+				<action function="page">fox_updates</action>
+			</button>
+
+			<image>
+				<placement x="%ab_btn1_x%" y="%ab_y%" placement="4"/>
+				<image resource="actionbar_back"/>
+			</image>
+
+			<text style="caption">
+				<placement x="%gl_text_x%" y="%row2_1a_y%"/>
+				<text>Multiple variants found</text>
+			</text>
+
+			<text style="text_body2_hl">
+				<placement x="%gl_text_x%" y="%row2_2a_y%"/>
+				<text>Variant %fox_update_variant_index% of %fox_update_variant_count%</text>
+			</text>
+
+			<text style="text_body2">
+				<placement x="%gl_text_x%" y="%row3_1a_y%"/>
+				<text>%fox_update_variant_text%</text>
+			</text>
+
+			<text style="text_body2">
+				<placement x="%gl_text_x%" y="%row4_1a_y%"/>
+				<text>File: %fox_update_variant_filename%</text>
+			</text>
+
+			<text style="text_body2">
+				<placement x="%gl_text_x%" y="%row5_1a_y%"/>
+				<text>MD5: %fox_update_variant_md5%</text>
+			</text>
+
+			<button style="btn_flat_qw">
+				<placement x="%btn_raised_left_x%" y="%row8_1a_y%"/>
+				<text>Previous</text>
+				<action function="fox_update_variant_prev"/>
+				<action function="page">fox_update_variants</action>
+			</button>
+
+			<button style="btn_flat_qw">
+				<placement x="%btn_raised_center_x%" y="%row8_1a_y%"/>
+				<text>Use</text>
+				<action function="fox_update_select_variant"/>
+				<action function="page">fox_updates</action>
+			</button>
+
+			<button style="btn_flat_qw">
+				<placement x="%btn_raised_right_x%" y="%row8_1a_y%"/>
+				<text>Next</text>
+				<action function="fox_update_variant_next"/>
+				<action function="page">fox_update_variants</action>
+			</button>
+
+			<template name="gestures"/>
+
+			<action>
+				<touch key="home"/>
+				<action function="page">main</action>
+			</action>
+
+			<action>
+				<touch key="back"/>
+				<action function="page">fox_updates</action>
+			</action>
+		</page>
+
+		<!-- NAS / Network Storage settings page -->
+		<page name="nas_settings">
+			<action>
+				<action function="nas_info"/>
+			</action>
+
+			<template name="base"/>
+
+			<text style="text_ab_title">
+				<placement x="%col1_x_indent%" y="%ab_bc_y%"/>
+				<text>Network Storage</text>
+			</text>
+
+			<image>
+				<condition var1="tw_nas_mounted" var2="1"/>
+				<placement x="40" y="%ab_h%"/>
+				<image resource="main_switch_card_active"/>
+			</image>
+
+			<text style="text_ab_switch_on">
+				<condition var1="tw_nas_mounted" var2="1"/>
+				<placement x="%switch_text_x%" y="%ab_bc2_y%"/>
+				<text>NAS mounted</text>
+			</text>
+
+			<image>
+				<condition var1="tw_nas_mounted" op="!=" var2="1"/>
+				<placement x="40" y="%ab_h%"/>
+				<image resource="main_switch_card_not_active"/>
+			</image>
+
+			<text style="text_ab_switch_off">
+				<condition var1="tw_nas_mounted" op="!=" var2="1"/>
+				<placement x="%switch_text_x%" y="%ab_bc2_y%"/>
+				<text>NAS not mounted</text>
+			</text>
+
+			<text style="text_body2_hl">
+				<placement x="%gl_text_x%" y="%row2_1_y%"/>
+				<text>%tw_nas_status_text%</text>
+			</text>
+
+			<text style="caption">
+				<placement x="%gl_text_x%" y="%row2_2a_y%"/>
+				<text>Connection</text>
+			</text>
+
+			<listbox style="group_list">
+				<placement x="0" y="%row2_3a_y%" w="%screen_w%" h="1320"/>
+				<data requireReload="1"/>
+
+				<listitem name="Type: %tw_nas_type%">
+					<icon res="smb_share"/>
+					<action function="page">nas_type_select</action>
+				</listitem>
+
+				<listitem name="Host / IP: %tw_nas_host%">
+					<icon res="wlan"/>
+					<action function="page">nas_edit_host</action>
+				</listitem>
+
+				<listitem name="Username: %tw_nas_user%">
+					<icon res="wlan_saved"/>
+					<action function="page">nas_edit_user</action>
+				</listitem>
+
+				<listitem name="Password: ***">
+					<condition var1="tw_nas_pass" op="!=" var2=""/>
+					<icon res="wlan_locked"/>
+					<action function="page">nas_edit_pass</action>
+				</listitem>
+
+				<listitem name="Password">
+					<condition var1="tw_nas_pass" var2=""/>
+					<icon res="wlan_locked"/>
+					<action function="page">nas_edit_pass</action>
+				</listitem>
+
+				<listitem name="Share: %tw_nas_share%">
+					<icon res="smb_share"/>
+					<action function="page">nas_edit_share</action>
+				</listitem>
+
+				<listitem name="Path: %tw_nas_path%">
+					<icon res="rwa"/>
+					<action function="page">nas_edit_path</action>
+				</listitem>
+
+				<listitem name="Domain: %tw_nas_domain%">
+					<icon res="smb_share"/>
+					<action function="page">nas_edit_domain</action>
+				</listitem>
+
+				<listitem name="Port: %tw_nas_port%">
+					<icon res="wlan"/>
+					<action function="page">nas_edit_port</action>
+				</listitem>
+
+				<listitem name="Cache: %tw_nas_cache_mode%">
+					<icon res="hard_disk"/>
+					<action function="page">nas_cache_select</action>
+				</listitem>
+			</listbox>
+
+			<button style="btn_raised_hl">
+				<condition var1="tw_nas_mounted" op="!=" var2="1"/>
+				<placement x="%btn_raised_left_x%" y="%row_btn1_y%"/>
+				<text>Mount + Use</text>
+				<action function="nas_mount"/>
+				<action function="nas_select"/>
+				<action function="page">nas_settings</action>
+			</button>
+
+			<button style="btn_raised_hl">
+				<condition var1="tw_nas_mounted" var2="1"/>
+				<placement x="%btn_raised_left_x%" y="%row_btn1_y%"/>
+				<text>Use NAS</text>
+				<action function="nas_select"/>
+				<action function="page">nas_settings</action>
+			</button>
+
+			<button style="btn_raised">
+				<condition var1="tw_nas_mounted" var2="1"/>
+				<placement x="%btn_raised_right_x%" y="%row_btn1_y%" placement="1"/>
+				<text>Unmount</text>
+				<action function="nas_unmount"/>
+				<action function="page">nas_settings</action>
+			</button>
+
+			<template name="gestures"/>
+
+			<action>
+				<touch key="home"/>
+				<action function="page">main</action>
+			</action>
+
+			<action>
+				<touch key="back"/>
+				<action function="page">wlan_apps</action>
+			</action>
+		</page>
+
+		<!-- NAS cache selector -->
+		<page name="nas_cache_select">
+			<template name="base"/>
+
+			<text style="text_ab_title">
+				<placement x="%col1_x_indent%" y="%ab_bc_y%"/>
+				<text>Select NAS Cache</text>
+			</text>
+
+			<text style="caption">
+				<placement x="%gl_text_x%" y="%row2_1a_y%"/>
+				<text>Current cache</text>
+			</text>
+
+			<text style="text_body2_hl">
+				<placement x="%gl_text_x%" y="%row2_2a_y%"/>
+				<text>%tw_nas_cache_mode%</text>
+			</text>
+
+			<text style="caption">
+				<placement x="%gl_text_x%" y="%row3_1a_y%"/>
+				<text>Cache mode</text>
+			</text>
+
+			<listbox style="group_list">
+				<placement x="0" y="%row3_2a_y%" w="%screen_w%" h="%bl_h2%"/>
+
+				<listitem name="No cache">
+					<icon res="rwa"/>
+					<action function="set">tw_nas_cache_mode=off</action>
+					<action function="page">nas_settings</action>
+				</listitem>
+
+				<listitem name="/data cache">
+					<icon res="hard_disk"/>
+					<action function="set">tw_nas_cache_mode=data</action>
+					<action function="page">nas_settings</action>
+				</listitem>
+			</listbox>
+
+			<template name="gestures"/>
+
+			<action>
+				<touch key="back"/>
+				<action function="page">nas_settings</action>
+			</action>
+		</page>
+
+		<!-- NAS type selector -->
+		<page name="nas_type_select">
+			<template name="base"/>
+
+			<text style="text_ab_title">
+				<placement x="%col1_x_indent%" y="%ab_bc_y%"/>
+				<text>Select NAS Type</text>
+			</text>
+
+			<text style="caption">
+				<placement x="%gl_text_x%" y="%row2_1a_y%"/>
+				<text>Current type</text>
+			</text>
+
+			<text style="text_body2_hl">
+				<placement x="%gl_text_x%" y="%row2_2a_y%"/>
+				<text>%tw_nas_type%</text>
+			</text>
+
+			<text style="caption">
+				<placement x="%gl_text_x%" y="%row3_1a_y%"/>
+				<text>Connection type</text>
+			</text>
+
+			<listbox style="group_list">
+				<placement x="0" y="%row3_2a_y%" w="%screen_w%" h="%bl_h2%"/>
+
+				<listitem name="SFTP">
+					<icon res="wlan_locked"/>
+					<action function="set">tw_nas_type=sftp</action>
+					<action function="set">tw_nas_port=22</action>
+					<action function="page">nas_settings</action>
+				</listitem>
+
+				<listitem name="SMB">
+					<icon res="smb_share"/>
+					<action function="set">tw_nas_type=smb</action>
+					<action function="page">nas_settings</action>
+				</listitem>
+			</listbox>
+
+			<template name="gestures"/>
+
+			<action>
+				<touch key="back"/>
+				<action function="page">nas_settings</action>
+			</action>
+		</page>
+
+		<!-- NAS edit: Host / IP -->
+		<page name="nas_edit_host">
+			<template name="dialog_body"/>
+			<template name="keyboardtemplate"/>
+
+			<button>
+				<placement x="%bg_storage_x%" y="%bg_storage_y%"/>
+				<image resource="dialog_bg"/>
+			</button>
+
+			<text style="text_dlg_title">
+				<placement x="%bg_storage_hdr_x%" y="%bg_storage_hdr_y%"/>
+				<text>Host / IP</text>
+			</text>
+
+			<input>
+				<placement x="%bg_storage_hdr_x%" y="%db_text3_y%" w="700" h="%input_height%"/>
+				<data name="tw_nas_host"/>
+				<restrict maxlen="128"/>
+				<action function="page">nas_settings</action>
+			</input>
+
+			<button style="btn_dlg">
+				<placement x="%db_left_x%" y="%db_y%"/>
+				<text>{@cancel_btn}</text>
+				<action function="page">nas_settings</action>
+			</button>
+
+			<button style="btn_dlg_hl">
+				<placement x="%db_right_x%" y="%db_y%"/>
+				<text>{@ok_btn}</text>
+				<action function="page">nas_settings</action>
+			</button>
+
+			<action>
+				<touch key="back"/>
+				<action function="page">nas_settings</action>
+			</action>
+		</page>
+
+		<!-- NAS edit: Username -->
+		<page name="nas_edit_user">
+			<template name="dialog_body"/>
+			<template name="keyboardtemplate"/>
+
+			<button>
+				<placement x="%bg_storage_x%" y="%bg_storage_y%"/>
+				<image resource="dialog_bg"/>
+			</button>
+
+			<text style="text_dlg_title">
+				<placement x="%bg_storage_hdr_x%" y="%bg_storage_hdr_y%"/>
+				<text>Username</text>
+			</text>
+
+			<input>
+				<placement x="%bg_storage_hdr_x%" y="%db_text3_y%" w="700" h="%input_height%"/>
+				<data name="tw_nas_user"/>
+				<restrict maxlen="128"/>
+				<action function="page">nas_settings</action>
+			</input>
+
+			<button style="btn_dlg">
+				<placement x="%db_left_x%" y="%db_y%"/>
+				<text>{@cancel_btn}</text>
+				<action function="page">nas_settings</action>
+			</button>
+
+			<button style="btn_dlg_hl">
+				<placement x="%db_right_x%" y="%db_y%"/>
+				<text>{@ok_btn}</text>
+				<action function="page">nas_settings</action>
+			</button>
+
+			<action>
+				<touch key="back"/>
+				<action function="page">nas_settings</action>
+			</action>
+		</page>
+
+		<!-- NAS edit: Password -->
+		<page name="nas_edit_pass">
+			<action function="set">of_show_pass=1</action>
+
+			<template name="dialog_body"/>
+			<template name="keyboardtemplate"/>
+
+			<button>
+				<placement x="%bg_storage_x%" y="%bg_storage_y%"/>
+				<image resource="dialog_bg"/>
+			</button>
+
+			<text style="text_dlg_title">
+				<placement x="%bg_storage_hdr_x%" y="%bg_storage_hdr_y%"/>
+				<text>Password</text>
+			</text>
+
+			<input>
+				<placement x="%bg_storage_hdr_x%" y="%db_text3_y%" w="700" h="%input_height%"/>
+				<data name="tw_nas_pass" mask="*" maskvariable="pass_enter_mask"/>
+				<restrict maxlen="254"/>
+				<action function="page">nas_settings</action>
+			</input>
+
+			<button style="btn_dlg">
+				<placement x="%db_left_x%" y="%db_y%"/>
+				<text>{@cancel_btn}</text>
+				<action function="page">nas_settings</action>
+			</button>
+
+			<button style="btn_dlg_hl">
+				<placement x="%db_right_x%" y="%db_y%"/>
+				<text>{@ok_btn}</text>
+				<action function="page">nas_settings</action>
+			</button>
+
+			<action>
+				<touch key="back"/>
+				<action function="page">nas_settings</action>
+			</action>
+		</page>
+
+		<!-- NAS edit: SMB share -->
+		<page name="nas_edit_share">
+			<template name="dialog_body"/>
+			<template name="keyboardtemplate"/>
+
+			<button>
+				<placement x="%bg_storage_x%" y="%bg_storage_y%"/>
+				<image resource="dialog_bg"/>
+			</button>
+
+			<text style="text_dlg_title">
+				<placement x="%bg_storage_hdr_x%" y="%bg_storage_hdr_y%"/>
+				<text>SMB Share Name</text>
+			</text>
+
+			<input>
+				<placement x="%bg_storage_hdr_x%" y="%db_text3_y%" w="700" h="%input_height%"/>
+				<data name="tw_nas_share"/>
+				<restrict maxlen="128"/>
+				<action function="page">nas_settings</action>
+			</input>
+
+			<button style="btn_dlg">
+				<placement x="%db_left_x%" y="%db_y%"/>
+				<text>{@cancel_btn}</text>
+				<action function="page">nas_settings</action>
+			</button>
+
+			<button style="btn_dlg_hl">
+				<placement x="%db_right_x%" y="%db_y%"/>
+				<text>{@ok_btn}</text>
+				<action function="page">nas_settings</action>
+			</button>
+
+			<action>
+				<touch key="back"/>
+				<action function="page">nas_settings</action>
+			</action>
+		</page>
+
+		<!-- NAS edit: remote path -->
+		<page name="nas_edit_path">
+			<template name="dialog_body"/>
+			<template name="keyboardtemplate"/>
+
+			<button>
+				<placement x="%bg_storage_x%" y="%bg_storage_y%"/>
+				<image resource="dialog_bg"/>
+			</button>
+
+			<text style="text_dlg_title">
+				<placement x="%bg_storage_hdr_x%" y="%bg_storage_hdr_y%"/>
+				<text>Remote Folder / Path</text>
+			</text>
+
+			<input>
+				<placement x="%bg_storage_hdr_x%" y="%db_text3_y%" w="700" h="%input_height%"/>
+				<data name="tw_nas_path"/>
+				<restrict maxlen="256"/>
+				<action function="page">nas_settings</action>
+			</input>
+
+			<button style="btn_dlg">
+				<placement x="%db_left_x%" y="%db_y%"/>
+				<text>{@cancel_btn}</text>
+				<action function="page">nas_settings</action>
+			</button>
+
+			<button style="btn_dlg_hl">
+				<placement x="%db_right_x%" y="%db_y%"/>
+				<text>{@ok_btn}</text>
+				<action function="page">nas_settings</action>
+			</button>
+
+			<action>
+				<touch key="back"/>
+				<action function="page">nas_settings</action>
+			</action>
+		</page>
+
+		<!-- NAS edit: domain/workgroup -->
+		<page name="nas_edit_domain">
+			<template name="dialog_body"/>
+			<template name="keyboardtemplate"/>
+
+			<button>
+				<placement x="%bg_storage_x%" y="%bg_storage_y%"/>
+				<image resource="dialog_bg"/>
+			</button>
+
+			<text style="text_dlg_title">
+				<placement x="%bg_storage_hdr_x%" y="%bg_storage_hdr_y%"/>
+				<text>SMB Domain / Workgroup</text>
+			</text>
+
+			<input>
+				<placement x="%bg_storage_hdr_x%" y="%db_text3_y%" w="700" h="%input_height%"/>
+				<data name="tw_nas_domain"/>
+				<restrict maxlen="128"/>
+				<action function="page">nas_settings</action>
+			</input>
+
+			<button style="btn_dlg">
+				<placement x="%db_left_x%" y="%db_y%"/>
+				<text>{@cancel_btn}</text>
+				<action function="page">nas_settings</action>
+			</button>
+
+			<button style="btn_dlg_hl">
+				<placement x="%db_right_x%" y="%db_y%"/>
+				<text>{@ok_btn}</text>
+				<action function="page">nas_settings</action>
+			</button>
+
+			<action>
+				<touch key="back"/>
+				<action function="page">nas_settings</action>
+			</action>
+		</page>
+
+		<!-- NAS edit: SFTP port -->
+		<page name="nas_edit_port">
+			<template name="dialog_body"/>
+			<template name="keyboardtemplate"/>
+
+			<button>
+				<placement x="%bg_storage_x%" y="%bg_storage_y%"/>
+				<image resource="dialog_bg"/>
+			</button>
+
+			<text style="text_dlg_title">
+				<placement x="%bg_storage_hdr_x%" y="%bg_storage_hdr_y%"/>
+				<text>SFTP Port</text>
+			</text>
+
+			<input>
+				<placement x="%bg_storage_hdr_x%" y="%db_text3_y%" w="700" h="%input_height%"/>
+				<data name="tw_nas_port"/>
+				<restrict minlen="1" maxlen="5"/>
+				<action function="page">nas_settings</action>
+			</input>
+
+			<button style="btn_dlg">
+				<placement x="%db_left_x%" y="%db_y%"/>
+				<text>{@cancel_btn}</text>
+				<action function="page">nas_settings</action>
+			</button>
+
+			<button style="btn_dlg_hl">
+				<placement x="%db_right_x%" y="%db_y%"/>
+				<text>{@ok_btn}</text>
+				<action function="page">nas_settings</action>
+			</button>
+
+			<action>
+				<touch key="back"/>
+				<action function="page">nas_settings</action>
+			</action>
+		</page>
+
+		<!-- Remote Web Access settings page -->
+		<page name="remote_web_access_settings">
+			<template name="base"/>
+
+			<text style="text_ab_title">
+				<placement x="%col1_x_indent%" y="%ab_bc_y%"/>
+				<text>Remote Web Access</text>
+			</text>
+
+			<image>
+				<condition var1="of_remote_web_access_enabled" var2="1"/>
+				<placement x="40" y="%ab_h%"/>
+				<image resource="main_switch_card_active"/>
+			</image>
+
+			<image style="switch_on">
+				<condition var1="of_remote_web_access_enabled" var2="1"/>
+				<placement x="%main_switch_icon_x%" y="%ab2_y%" placement="4"/>
+			</image>
+
+			<text style="text_ab_switch_on">
+				<condition var1="of_remote_web_access_enabled" var2="1"/>
+				<placement x="%switch_text_x%" y="%ab_bc2_y%"/>
+				<text>Enable Remote Web Access</text>
+			</text>
+
+			<button style="bs_btn">
+				<condition var1="of_remote_web_access_enabled" var2="1"/>
+				<placement x="0" y="%ab_h%" w="%screen_w%" h="%ab_btn_h%"/>
+				<action function="set">of_remote_web_access_enabled=0</action>
+				<action function="foxweb">disable</action>
+				<action function="page">remote_web_access_settings</action>
+			</button>
+
+			<image>
+				<condition var1="of_remote_web_access_enabled" op="!=" var2="1"/>
+				<placement x="40" y="%ab_h%"/>
+				<image resource="main_switch_card_not_active"/>
+			</image>
+
+			<image style="switch_off">
+				<condition var1="of_remote_web_access_enabled" op="!=" var2="1"/>
+				<placement x="%main_switch_icon_x%" y="%ab2_y%" placement="4"/>
+			</image>
+
+			<text style="text_ab_switch_off">
+				<condition var1="of_remote_web_access_enabled" op="!=" var2="1"/>
+				<placement x="%switch_text_x%" y="%ab_bc2_y%"/>
+				<text>Enable Remote Web Access</text>
+			</text>
+
+			<button style="bs_btn">
+				<condition var1="of_remote_web_access_enabled" op="!=" var2="1"/>
+				<placement x="0" y="%ab_h%" w="%screen_w%" h="%ab_btn_h%"/>
+				<action function="set">of_remote_web_access_enabled=1</action>
+				<action function="foxweb">enable</action>
+				<action function="page">remote_web_access_settings</action>
+			</button>
+
+			<text style="caption">
+				<placement x="%gl_text_x%" y="%row2_1a_y%"/>
+				<text>Options</text>
+			</text>
+
+			<text style="text_body2_hl">
+				<placement x="%gl_text_x%" y="%row2_2a_y%"/>
+				<text>Empty for now</text>
+			</text>
+
+			<template name="gestures"/>
+
+			<action>
+				<touch key="home"/>
+				<action function="page">main</action>
+			</action>
+
+			<action>
+				<touch key="back"/>
+				<action function="page">wlan_apps</action>
+			</action>
+		</page>
+
+		<!-- Selected network connect flow -->
+		<page name="wlan_connect">
+			<action>
+				<action function="set">wlan_password=</action>
+				<action function="set">of_show_pass=1</action>
+				<action function="set">wlan_connect_done=0</action>
+				<action function="setvaluebyfile">wlanencryption,/tmp/wlan/list/%wlanselectedid%</action>
+				<action function="page">wlan_connect_decide</action>
+			</action>
+		</page>
+
+		<!-- Decide whether to connect directly or show password popup -->
+		<page name="wlan_connect_decide">
+			<action>
+				<condition var1="wlanencryption" op="!=" var2="OPEN"/>
+				<action function="overlay">wlan_password</action>
+				<action function="page">wlan</action>
+			</action>
+
+			<action>
+				<condition var1="wlanencryption" var2="OPEN"/>
+				<action function="page">wlan</action>
+				<action function="set">wlan_connect_text=Connecting</action>
+				<action function="set">wlan_connect_done=0</action>
+				<action function="overlay">wlan_connecting</action>
+				<action function="wlan_connect"/>
+				<action function="wlan_saved_refresh"/>
+				<action function="wlan_info"/>
+				<action function="overlay"/>
+				<action function="page">wlan</action>
+			</action>
+		</page>
+
+		<!-- Saved network auto-connect flow -->
+		<page name="wlan_connect_saved">
+			<action>
+				<action function="page">wlan</action>
+				<action function="set">wlan_connect_text=Connecting</action>
+				<action function="set">wlan_connect_done=0</action>
+				<action function="overlay">wlan_connecting</action>
+				<action function="wlan_connect_saved"/>
+				<action function="wlan_saved_refresh"/>
+				<action function="wlan_info"/>
+				<action function="overlay"/>
+				<action function="page">wlan</action>
+			</action>
+		</page>
+
+		<!-- WLAN refresh flow: keeps WLAN page visible and spins the refresh icon -->
+		<page name="wlan_refresh">
+			<action>
+				<action function="page">wlan</action>
+				<action function="set">of_file_to_read=</action>
+				<action function="set">wlanlistdisplay=0</action>
+				<action function="wlan_scan"/>
+				<action function="wlan_saved_refresh"/>
+				<action function="wlan_info"/>
+				<action function="set">wlan_refreshing=0</action>
+				<action function="page">wlan</action>
+			</action>
+
+			<!-- Toast if the scan turned up nothing -->
+			<action>
+				<condition var1="fileexists" op="!=" var2="/tmp/wlan/list.txt"/>
+				<action function="toast">[warning]No networks found</action>
+			</action>
+		</page>
+
+		<!-- Password popup overlay -->
+		<page name="wlan_password">
+			<action function="set">of_show_pass=1</action>
+
+			<template name="dialog_body"/>
+			<template name="keyboardtemplate"/>
+
+			<button>
+				<placement x="%bg_storage_x%" y="%bg_storage_y%"/>
+				<image resource="dialog_bg"/>
+			</button>
+
+			<text style="text_dlg_title">
+				<placement x="%bg_storage_hdr_x%" y="%bg_storage_hdr_y%"/>
+				<text>%wlanselectedid%</text>
+			</text>
+
+			<text style="text_body1">
+				<placement x="%bg_storage_hdr_x%" y="%db_text1_y%"/>
+				<text>{@wlan_encryption} %wlanencryption%</text>
+			</text>
+
+			<text style="text_body1">
+				<placement x="%bg_storage_hdr_x%" y="%db_text2_y%"/>
+				<text>{@decrypt_data_enter_pass}</text>
+			</text>
+
+			<input>
+				<placement x="%bg_storage_hdr_x%" y="%db_text3_y%" w="700" h="%input_height%"/>
+				<data name="wlan_password" mask="*" maskvariable="pass_enter_mask"/>
+				<restrict minlen="8" maxlen="254"/>
+				<action function="overlay"/>
+				<action function="page">wlan</action>
+				<action function="set">wlan_connect_text=Connecting</action>
+				<action function="set">wlan_connect_done=0</action>
+				<action function="overlay">wlan_connecting</action>
+				<action function="wlan_connect"/>
+				<action function="wlan_saved_refresh"/>
+				<action function="wlan_info"/>
+				<action function="overlay"/>
+				<action function="page">wlan</action>
+			</input>
+
+			<button style="btn_dlg">
+				<placement x="%db_left_x%" y="%db_y%"/>
+				<text>{@cancel_btn}</text>
+				<actions>
+					<action function="set">wlan_password=</action>
+					<action function="set">wlan_connect_done=0</action>
+					<action function="overlay"/>
+				</actions>
+			</button>
+
+			<button style="btn_dlg_hl">
+				<placement x="%db_right_x%" y="%db_y%"/>
+				<text>{@ok_btn}</text>
+				<actions>
+					<action function="overlay"/>
+					<action function="page">wlan</action>
+					<action function="set">wlan_connect_text=Connecting</action>
+					<action function="set">wlan_connect_done=0</action>
+					<action function="overlay">wlan_connecting</action>
+					<action function="wlan_connect"/>
+					<action function="wlan_saved_refresh"/>
+					<action function="wlan_info"/>
+					<action function="overlay"/>
+					<action function="page">wlan</action>
+				</actions>
+			</button>
+
+			<action>
+				<touch key="back"/>
+				<action function="set">wlan_password=</action>
+				<action function="set">wlan_connect_done=0</action>
+				<action function="overlay"/>
+			</action>
+		</page>
+
+		<!-- WLAN connecting popup overlay -->
+		<page name="wlan_connecting">
+			<template name="dialog_body"/>
+
+			<button>
+				<placement x="%bg_storage_x%" y="%bg_storage_y%"/>
+				<image resource="dialog_bg"/>
+			</button>
+
+			<text style="text_dlg_title">
+				<placement x="%bg_storage_hdr_x%" y="%bg_storage_hdr_y%"/>
+				<text>%wlanselectedid%</text>
+			</text>
+
+			<!-- Spinning icon while connecting / getting IP -->
+			<object type="spinningimage">
+				<condition var1="wlan_connect_done" op="!=" var2="1"/>
+				<placement x="%center_x%" y="%db_text2_y%" placement="5"/>
+				<offset x="40" y="0"/>
+				<image resource="wlan_loading"/>
+				<speed render="2"/>
+				<rotate speed="640" clockwise="1" start="0"/>
+			</object>
+
+			<!-- Check icon after connected -->
+			<image>
+				<condition var1="wlan_connect_done" var2="1"/>
+				<placement x="%wlan_connect_icon_x%" y="%db_text2_y%" placement="5"/>
+				<image resource="check"/>
+			</image>
+
+			<text style="text_body1">
+				<placement x="%center_x%" y="%db_text3_y%" placement="5"/>
+				<text>%wlan_connect_text%</text>
+			</text>
+
+			<action>
+				<touch key="back"/>
+			</action>
+		</page>
+
+		<!-- WLAN test connection popup overlay -->
+		<page name="wlan_test_connection">
+			<template name="dialog_body"/>
+
+			<button>
+				<placement x="%bg_storage_x%" y="%bg_storage_y%"/>
+				<image resource="dialog_bg"/>
+			</button>
+
+			<text style="text_dlg_title">
+				<placement x="%bg_storage_hdr_x%" y="%bg_storage_hdr_y%"/>
+				<text>%wlan_test_title%</text>
+			</text>
+
+			<object type="spinningimage">
+				<condition var1="wlan_test_done" op="!=" var2="1"/>
+				<placement x="%center_x%" y="%db_text2_y%" placement="5"/>
+				<offset x="40" y="0"/>
+				<image resource="wlan_loading"/>
+				<speed render="2"/>
+				<rotate speed="640" clockwise="1" start="0"/>
+			</object>
+
+			<text style="text_body1">
+				<placement x="%bg_storage_hdr_x%" y="%db_text1_y%"/>
+				<text>%wlan_test_line1%</text>
+			</text>
+
+			<text style="text_body1">
+				<placement x="%bg_storage_hdr_x%" y="%db_text2_y%"/>
+				<text>%wlan_test_line2%</text>
+			</text>
+
+			<text style="text_body1">
+				<placement x="%bg_storage_hdr_x%" y="%db_text3_y%"/>
+				<text>%wlan_test_line3%</text>
+			</text>
+
+			<text style="text_body1">
+				<placement x="%bg_storage_hdr_x%" y="%db_text4_y%"/>
+				<text>%wlan_test_line4%</text>
+			</text>
+
+			<text style="text_body1">
+				<placement x="%bg_storage_hdr_x%" y="1072"/>
+				<text>%wlan_test_line5%</text>
+			</text>
+
+			<button style="btn_dlg_hl">
+				<placement x="%db_right_x%" y="%db_y%"/>
+				<text>{@ok_btn}</text>
+				<actions>
+					<action function="overlay"/>
+				</actions>
+			</button>
+
+			<action>
+				<touch key="back"/>
+				<action function="overlay"/>
+			</action>
+		</page>
+
+		<!-- Saved networks page -->
+		<page name="wlan_saved">
+			<template name="base"/>
+
+			<text style="text_ab_title">
+				<placement x="%col1_x_indent%" y="%ab_bc_y%"/>
+				<text>Saved networks</text>
+			</text>
+
+			<action function="set">wlanlistdisplay=0</action>
+			<action function="set">wlansaveddisplay=0</action>
+			<action function="wlan_saved_refresh"/>
+
+			<action>
+				<condition var1="fileexists" var2="/tmp/wlan/saved.txt"/>
+				<action function="set">wlansaveddisplay=1</action>
+				<action function="set">of_file_to_read=/tmp/wlan/saved.txt</action>
+			</action>
+
+			<action>
+				<condition var1="fileexists" op="!=" var2="/tmp/wlan/saved.txt"/>
+				<action function="set">of_file_to_read=</action>
+			</action>
+
+			<text style="caption">
+				<placement x="%gl_text_x%" y="%row2_1a_y%"/>
+				<text>Saved Wi-Fi networks</text>
+			</text>
+
+			<text style="text_body2_hl">
+				<condition var1="fileexists" op="!=" var2="/tmp/wlan/saved.txt"/>
+				<placement x="%gl_text_x%" y="%row2_2a_y%"/>
+				<text>No saved networks found</text>
+			</text>
+
+			<listbox style="group_list">
+				<condition var1="fileexists" var2="/tmp/wlan/saved.txt"/>
+				<placement x="0" y="%row2_2a_y%" w="%screen_w%" h="%bl_h4%"/>
+				<icon selected="wlan_saved" unselected="wlan_saved" delete="delete"/>
+				<data name="of_file_to_read"/>
+			</listbox>
+
+			<template name="gestures"/>
+
+			<action>
+				<touch key="home"/>
+				<action function="set">of_file_to_read=</action>
+				<action function="set">wlansaveddisplay=0</action>
+				<action function="set">wlan_connect_done=0</action>
+				<action function="page">main</action>
+			</action>
+
+			<action>
+				<touch key="back"/>
+				<action function="set">of_file_to_read=</action>
+				<action function="set">wlansaveddisplay=0</action>
+				<action function="set">wlan_connect_done=0</action>
+				<action function="page">wlan</action>
+			</action>
+		</page>
+
+		<!-- WLAN forget saved network flow -->
+		<page name="wlan_forget_saved">
+			<action>
+				<action function="wlan_forget_saved"/>
+				<action function="page">wlan_saved</action>
+			</action>
+		</page>
+
+	</pages>
+</recovery>

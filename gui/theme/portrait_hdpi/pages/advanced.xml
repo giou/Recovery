@@ -35,6 +35,11 @@
 					<action function="ftls">ps -eo 'comm' | grep adbd &amp;&amp; twrp xset fox_adb=1</action>
 					<action function="page">sideload</action>
 				</listitem>
+				<listitem name="{@wlan_menu}">
+					<condition var1="tw_enable_network" var2="1"/>
+					<icon res="wlan"/>
+					<action function="page">wlan</action>
+				</listitem>
 				<listitem name="{@reboot_btn}">
 					<icon res="restart"/>
 					<action function="set">tw_back=advanced</action>

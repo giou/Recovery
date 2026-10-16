@@ -1,7 +1,8 @@
 # Fox RPC v1
 
 Scope: the modern `fox` command engine in `fox_fifo/`. It is always built and is
-the common application protocol for local FIFO/WebUSB/USB video streaming clients.
+the common application protocol for local FIFO/WebUSB-style clients, direct USB
+screen streaming clients, and the WLAN HTTP job API.
 
 The **op/args field contract** (which op accepts which JSON fields) is the single
 shared schema in [`fox-rpc-schema.md`](fox-rpc-schema.md) — change both ends and
@@ -15,6 +16,9 @@ FIFO paths are defined in `orscmd/orscmd.h`:
 - `FOX_OUTPUT_FILE` = `/system/bin/foxout`
 - `FOX_CANCEL_FILE` = `/system/bin/foxcancel`
 - `FOX_SCREEN_STREAM_FILE` = `/system/bin/foxscreenout`
+
+`screenstream` start/stop/status uses the JSON request and NDJSON event FIFOs;
+the frame data itself uses `foxscreenout` as base64-encoded PNG lines, not NDJSON.
 
 One request is written to `foxin` as a UTF-8 JSON object, then the writer closes
 the FIFO:
@@ -32,6 +36,8 @@ the FIFO:
 {"event":"result","code":0}
 ```
 
+The WLAN webserver accepts the same request object on `/api/cmd` and stores the
+same NDJSON event stream as job output.
 
 ## Request
 
@@ -75,10 +81,22 @@ to the console when GUI-invoked). Current named payloads:
 Every status/list handler now emits a `data` event — there are no more
 `FOX_*_BEGIN/END` text blocks. Object payloads (one `data` event each):
 
+- `webserver`, `http`, `https` — `{ running, [address, port, url, redirect,
+  fingerprint, cert, auth|token] }`
+- `ttyd` — `{ running, port, url, shell }`
+- `control` — `{ control, input_ready }`
+- `web` — `{ password_set, webserver, ttyd, [address, port] }`
+- `password` — `{ password_set, [password] }`
+- `redirect` — `{ redirect, https_port }`
+- `cors` — `{ mode, allow|override }`
+- `adbd` — `{ mode, wlan_connected, ip, secure_enabled, …, [connect, pair] }`
 - `mtp` — `{ enabled }`
+- `ota` — the `fox_update_*` fields
 - `screenstream` — `{ running, path, fps, [format] }`
 
 Array payloads use `{ "items": [...] }`: `list` (partition/storage/addon
+listings), `adb_devices` (`{fingerprint, name, last_seen}`), and
+`wlan_passwords` (`{ssid, encryption, password}`).
 
 Booleans are real JSON booleans; the `auth` field is either `"remote-password"`
 or a `token` field carries the random per-boot token (a configured password is
@@ -103,4 +121,6 @@ where appropriate, but they use the same request and event framing.
 
 ## Related
 
+- `docs/remote-control.md` - dashboard, screen mirror, and input paths.
+- `docs/wlan.md` - WLAN operation behavior.
 - `gui/AGENTS.md` - the `foxcmd` GUI action.

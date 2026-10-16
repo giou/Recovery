@@ -57,6 +57,8 @@ private:
 	static int Cmd_Sideload(const Json::Value& args);
 	static int Cmd_Status(const Json::Value& args);
 	static int Cmd_Reboot(const Json::Value& args);
+	static int Cmd_Wlan(const Json::Value& args);
+	static int Cmd_Adbd(const Json::Value& args);
 	static int Cmd_Internal(const Json::Value& args);
 	static int Cmd_Ors(const Json::Value& args);
 	static int Cmd_OrsCmd(const Json::Value& args);
@@ -68,6 +70,27 @@ private:
 	static int Cmd_Partition(const Json::Value& args);
 	static int Cmd_Addons(const Json::Value& args);
 	static int Cmd_Storages(const Json::Value& args);
+	// ota: built-in updater. action ∈ {status|init|check|download|install|
+	//   refresh}; optional fox_id, type (stable,beta,alpha).
+	static int Cmd_Ota(const Json::Value& args);
+	// webserver: the HTTP server umbrella. action selects the lifecycle verb
+	// (start|stop|status|terminal) or a transport/policy group (http|https|
+	// redirect|cert|cors); subaction + values carry the nested verb/arguments.
+	static int Cmd_Webserver(const Json::Value& args);
+	// control: the HTTP remote-control plane (screen + input), toggled
+	// independently of the server. action ∈ {start|stop|status|enable|disable}.
+	static int Cmd_Control(const Json::Value& args);
+	// web: umbrella for the networked access surface. action ∈ {enable|disable|
+	//   status|password}; `enable` brings up the HTTP server, ttyd and network
+	// adbd at once (refused unless a password is set).
+	static int Cmd_Web(const Json::Value& args);
+	// Transports and policy under the `webserver` group. Called only from
+	// Cmd_Webserver with the already-extracted nested verb + values + port.
+	static int Cmd_Http(const std::string& verb, const std::string& port_s);
+	static int Cmd_Https(const std::string& verb, const std::vector<std::string>& values,
+	                     const std::string& port_s);
+	static int Cmd_HttpRedirect(const std::string& verb);
+	static int Cmd_Cors(const std::string& verb, const std::vector<std::string>& values);
 	// input {tap|swipe|key|down|move|up}: inject touch/keys via uinput.
 	static int Cmd_Input(const Json::Value& args);
 	// screencap [path]: write the framebuffer to a PNG for ADB sync/pull.

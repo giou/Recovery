@@ -46,6 +46,7 @@
 #include <mutex>
 #include <vector>
 #include <functional>
+#include <thread>
 
 
 #include <ziparchive/zip_archive.h>
@@ -487,6 +488,14 @@ bool Page::ProcessNode(xml_node<>* page, std::vector<xml_node<>*> *templates, in
 			mObjects.push_back(element);
 			mRenders.push_back(element);
 		}
+#ifdef OF_ENABLE_WLAN
+		else if (type == "wlan")
+		{
+			GUIWlan* element = new GUIWlan(child);
+			mObjects.push_back(element);
+			mRenders.push_back(element);
+		}	
+#endif
 		else if (type == "image")
 		{
 			GUIImage* element = new GUIImage(child);
@@ -851,6 +860,9 @@ bool Page::ProcessNode(xml_node<>* page, std::vector<xml_node<>*> *templates, in
 		}
 		else
 		{
+#ifndef OF_ENABLE_WLAN
+			if (type != "wlan")
+#endif
 			LOGERR("Unknown object type: %s.\n", type.c_str());
 		}
 
@@ -2178,18 +2190,33 @@ void PageManager::LoadCursorData(xml_node<>* node)
 	mMouseCursor->LoadData(node);
 }
 
-// Deferred work marshalled onto the GUI thread via gui_run_on_main(). Drained at
-// the top of PageManager::Update(); the producer side (which may be any thread)
-// only touches the mutex-guarded queue, never page state.
+// Worker-thread calls to gui_run_on_main() are drained at the top of
+// PageManager::Update(); producers only touch the mutex-guarded queue, never
+// page state.
 static std::mutex g_deferred_mutex;
 static std::vector<std::function<void()>> g_deferred_actions;
+static std::thread::id g_gui_thread;
+
+void gui_set_main_thread(void)
+{
+	std::lock_guard<std::mutex> lk(g_deferred_mutex);
+	g_gui_thread = std::this_thread::get_id();
+}
 
 void gui_run_on_main(std::function<void()> fn)
 {
 	if (!fn)
 		return;
-	std::lock_guard<std::mutex> lk(g_deferred_mutex);
-	g_deferred_actions.push_back(std::move(fn));
+
+	{
+		std::lock_guard<std::mutex> lk(g_deferred_mutex);
+		if (g_gui_thread != std::this_thread::get_id()) {
+			g_deferred_actions.push_back(std::move(fn));
+			return;
+		}
+	}
+
+	fn();
 }
 
 void PageManager::RunDeferredActions(void)
@@ -2251,7 +2278,7 @@ void gui_toast(const std::string& text, int frames)
 int PageManager::Update(void)
 {
 	// Run any work marshalled from other threads first, on the GUI thread, so it
-	// can safely mutate page/overlay state.
+	// can safely mutate page/overlay state (e.g. WLAN worker page refresh/toast).
 	RunDeferredActions();
 
 	if (blankTimer.isScreenOff())
@@ -2595,5 +2622,10 @@ extern "C" void gui_notifyVarChange(const char *name, const char* value)
 	if (!gGuiRunning)
 		return;
 
-	PageManager::NotifyVarChange(name, value);
+	const std::string varName = name;
+	const std::string varValue = value;
+	gui_run_on_main([varName, varValue]() {
+		if (gGuiRunning)
+			PageManager::NotifyVarChange(varName, varValue);
+	});
 }

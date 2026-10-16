@@ -371,5 +371,9 @@
 			<charging img="bolt" x="-20" y="5"/>
 		</style>
 
+		<style name="wlan_status">
+			<connected img="wlan_connected"/>
+			<font resource="status"/>
+		</style>
 	</styles>
 </recovery>

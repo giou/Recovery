@@ -17,6 +17,9 @@
 #include "fox_screen_service.hpp"
 #include "fox_screen_stream.hpp"
 #include "../data.hpp"
+#ifdef OF_ENABLE_WLAN
+#include "../fox_webserver/fox_jobs.hpp"
+#endif
 #include "../gui/gui.h"
 #include "../gui/gui.hpp"
 #include "../gui/objects.hpp"
@@ -78,6 +81,13 @@ public:
 		CloseLog();  // flush trailing log output before the result event
 		Fox_Protocol::WriteResultEvent(transport_, id_, code);
 		Close();
+#ifdef OF_ENABLE_WLAN
+		if (!was_fifo) {
+			Fox_Jobs::NotifyExit(code);
+			Fox_Jobs::FinishActive();
+			return;
+		}
+#endif
 		Fox_Channel::RearmInput();
 	}
 
@@ -277,6 +287,9 @@ void Fox_Command_Dispatcher::CommandDone(int code)
 	if (g_output.transport())
 		Fox_Protocol::WriteResultEvent(g_output.transport(), g_output.id(), code);
 	g_output.Close();
+#ifdef OF_ENABLE_WLAN
+	Fox_Jobs::FinishActive();
+#endif
 
 	if (DataManager::GetIntValue("tw_page_done") == 0)
 		Fox_Channel::RearmInput();

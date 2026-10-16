@@ -33,6 +33,9 @@ func fox_globalFlags(ctx android.BaseContext) []string {
 		foxflags = append(foxflags, "-DOF_ENABLE_LAB=1")
 	}
 
+	if getMakeVars(ctx, "OF_ENABLE_WLAN") == "1" {
+		foxflags = append(foxflags, "-DOF_ENABLE_WLAN")
+	}
 
 	if getMakeVars(ctx, "OF_SUPPORT_OZIP_DECRYPTION") == "1" {
 		foxflags = append(foxflags, "-DOF_SUPPORT_OZIP_DECRYPTION=1")
@@ -58,10 +61,6 @@ func fox_globalFlags(ctx android.BaseContext) []string {
 
 	if getMakeVars(ctx, "OF_USE_MEIZU_TOUCH_MAPPING") == "1" {
 		foxflags = append(foxflags, "-DOF_USE_MEIZU_TOUCH_MAPPING=1")
-	}
-
-	if ctx.AConfig().Getenv("FOX_NO_BLANK_DT2W") != "" {
-		foxflags = append(foxflags, "-DFOX_NO_BLANK_DT2W="+"\""+ctx.AConfig().Getenv("FOX_NO_BLANK_DT2W")+"\"")
 	}
 
 	if ctx.AConfig().Getenv("FOX_NO_BLANK_DT2W") != "" {

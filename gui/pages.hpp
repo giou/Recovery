@@ -71,9 +71,10 @@ int gui_forceRender(void);
 // (~30/sec), auto-dismissing. Requires a <page name="toast"> in the theme.
 void gui_toast(const std::string& text, int frames);
 
-// Marshal a callable onto the GUI thread: it runs at the top of the next
-// PageManager::Update(), so the body may safely touch PageManager/page state.
-// Safe to call from any thread. Fire-and-forget.
+// Run a callable on the GUI thread so it may safely touch PageManager/page
+// state. Calls from other threads are deferred to the next PageManager::Update().
+// Safe to call from any thread (e.g. the WLAN worker).
+void gui_set_main_thread(void);
 void gui_run_on_main(std::function<void()> fn);
 
 int gui_changePage(std::string newPage);

@@ -617,6 +617,24 @@ protected:
 	int terminalcommand(std::string arg);
 	int killterminal(std::string arg);
 	
+	// OrangeFox WLAN
+	int wlan_enable(std::string arg);
+	int wlan_disable(std::string arg);
+	int wlan_autostart(std::string arg);
+	int wlan_scan(std::string arg);
+	int wlan_connect(std::string arg);
+	int wlan_connect_saved(std::string arg);
+	int wlan_info(std::string arg);
+	int wlan_saved_refresh(std::string arg);
+	int wlan_forget_saved(std::string arg);
+	int wlan_test_connection(std::string arg);
+	
+	// OrangeFox NAS
+	int nas_mount(std::string arg);
+	int nas_unmount(std::string arg);
+	int nas_select(std::string arg);
+	int nas_info(std::string arg);
+	
 	int reinjecttwrp(std::string arg);
 	int checkbackupname(std::string arg);
 	int checkbackupfolder(std::string arg);
@@ -641,6 +659,10 @@ protected:
 	int togglebacklight(std::string arg);
 	int twcmd(std::string arg);
 	int foxcmd(std::string arg);
+	// foxweb: bring the remote web access surface (HTTP server + ttyd + network
+	// adbd) up or down from the GUI. Delegates to the fox "web" command so the
+	// GUI toggle and `fox web` FIFO verb stay in sync.
+	int foxweb(std::string arg);
 	int setbootslot(std::string arg);
 	int flashlight(std::string arg) { return GUIAction::flashlightImpl(arg); }
 	int fileextension(std::string arg);
@@ -1681,6 +1703,23 @@ protected:
 	std::string mPassVar;
 	GUIAction *mAction;
 	int mUpdate;
+};
+
+class GUIWlan : public GUIObject, public RenderObject
+{
+public:
+	GUIWlan(xml_node<>* node);
+
+public:
+	virtual int Render(void);
+	virtual int Update(void);
+
+protected:
+	ImageResource* mConnectedImg;
+	FontResource* mFont;
+	int mRenderX, mRenderY, mRenderW, mRenderH;
+	int mBatteryGap;
+	bool mFollowBattery;
 };
 
 

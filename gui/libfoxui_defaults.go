@@ -288,6 +288,9 @@ func globalSrcs(ctx android.BaseContext) []string {
 	} else {
 		srcs = append(srcs, "hardwarekeyboard.cpp")
 	}
+	if getMakeVars(ctx, "OF_ENABLE_WLAN") == "1" {
+		srcs = append(srcs, "wlan.cpp")
+	}
 	return srcs
 }
 

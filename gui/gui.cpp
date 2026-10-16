@@ -58,6 +58,9 @@ extern "C"
 #include "../fox_fifo/fox_remote_state.hpp"
 #include "../fox_fifo/fox_screen_service.hpp"
 #include "../fox_fifo/fox_screen_stream.hpp"
+#ifdef OF_ENABLE_WLAN
+#include "../fox_webserver/fox_job_dispatcher.hpp"
+#endif
 #include "blanktimer.hpp"
 #include "tw_atomic.hpp"
 
@@ -745,12 +748,15 @@ static void loopTimer(int input_timeout_ms)
 
 static int runPages(const char *page_name, const int stop_on_page_done)
 {
+	gui_set_main_thread();
+
 	DataManager::SetValue("tw_page_done", 0);
 	DataManager::SetValue("tw_gui_done", 0);
 
 	if (page_name) {
 		PageManager::SetStartPage(page_name);
-		gui_changePage(page_name);
+		PageManager::ChangePage(page_name);
+		gForceRender.set_value(1);
 	}
 
 	gGuiRunning = 1;
@@ -812,6 +818,11 @@ static int runPages(const char *page_name, const int stop_on_page_done)
 			}
 #endif
 		}
+		// Drain a queued remote job when the engine is idle.
+#if !defined(TW_OEM_BUILD) && defined(OF_ENABLE_WLAN)
+		if (!orsout)
+			Fox_Job_Dispatcher::Poll();
+#endif
 		if (Fox_Remote_State::ShouldForceRender())
 			gForceRender.set_value(1);
 

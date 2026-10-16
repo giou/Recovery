@@ -35,6 +35,11 @@
 		<variable name="adb_startup" value="1" persist="1"/>
 		<variable name="fox_adv_backup" value="0" persist="1"/>
 
+		<!-- WiFi auto-connect settings -->
+		<variable name="of_wlan_auto_enable" value="0" persist="1"/>
+		<variable name="of_wlan_auto_connect" value="0" persist="1"/>
+		<variable name="of_wlan_last_ssid" value="" persist="1"/>
+		<variable name="of_wlan_autostart_done" value="0"/>
 
 		<!-- Favorites menu -->
 		<variable name="book_1" value="/sdcard/Fox" persist="1"/>
@@ -382,6 +387,11 @@
 
 		<!-- Status Bar -->
 		<variable name="status_right_x" value="1060-%status_indent_right%"/>
+		<variable name="wlan_x" value="830-%status_indent_right%"/>
+		<variable name="wlan_y" value="%status_info_y%+3"/>
+
+		<!-- WLAN -->
+		<variable name="wlan_connect_icon_x" value="%center_x%+40"/>
 
 		<!-- OrangeFox updater -->
 		<variable name="fox_update_allow_beta" value="0" persist="1"/>

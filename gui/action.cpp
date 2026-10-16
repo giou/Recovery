@@ -47,11 +47,20 @@
 #include "../openrecoveryscript.hpp"
 #include "../fox_fifo/fox_command_dispatcher.hpp"
 #include "../fox_fifo/fox_fifo.hpp"
+#ifdef OF_ENABLE_WLAN
+#include "../fox_webserver/fox_jobs.hpp"
+#endif
 #include "../orscmd/orscmd.h"
 
 #include "../data.hpp"
 #include "../gui.hpp"
 #include "gui.h"
+#ifdef OF_ENABLE_WLAN
+#include "../wlan.hpp"
+#include "../wlan_worker.hpp"
+#include "../nas/NasManager.hpp"
+#include "../fox_updater.hpp"
+#endif
 
 #include "twinstall/adb_install.h"
 
@@ -269,6 +278,21 @@ GUIAction::GUIAction(xml_node <> *node):GUIObject(node)
       ADD_ACTION(setpassword);
       ADD_ACTION(passwordcheck);
 
+      // OrangeFox WLAN: the toggle + status actions dispatch to the WlanWorker
+      // background thread (or are fast file/secret ops) and return immediately,
+      // so they run in the caller thread. Keeping them off the shared
+      // ActionThread is what stops the wlan page's status refresh from being
+      // rejected with "Another threaded action is already running" while the
+      // (formerly blocking) enable was in flight. Scan/connect/test stay
+      // threaded — see their registration in the threaded section below.
+      #ifdef OF_ENABLE_WLAN
+      ADD_ACTION(wlan_enable);
+      ADD_ACTION(wlan_disable);
+      ADD_ACTION(wlan_autostart);
+      ADD_ACTION(wlan_info);
+      ADD_ACTION(wlan_saved_refresh);
+      ADD_ACTION(wlan_forget_saved);
+      #endif
 
       // remember actions that run in the caller thread
       for (mapFunc::const_iterator it = mf.begin(); it != mf.end(); ++it)
@@ -292,6 +316,23 @@ GUIAction::GUIAction(xml_node <> *node):GUIObject(node)
       ADD_ACTION(installsu);
       ADD_ACTION(fixsu);
 
+      // OrangeFox WLAN: modal operations stay threaded so their overlay opens,
+      // blocks on the work, then closes within one batch (enable/disable/info
+      // are caller-thread, registered above).
+      #ifdef OF_ENABLE_WLAN
+      ADD_ACTION(wlan_scan);
+      ADD_ACTION(wlan_connect);
+      ADD_ACTION(wlan_connect_saved);
+      ADD_ACTION(wlan_test_connection);
+      #endif
+
+      // OrangeFox NAS (still threaded: these block on real mount I/O)
+      #ifdef OF_ENABLE_WLAN
+      ADD_ACTION(nas_info);
+      ADD_ACTION(nas_mount);
+      ADD_ACTION(nas_unmount);
+      ADD_ACTION(nas_select);
+      #endif
 
       ADD_ACTION(decrypt_backup);
       ADD_ACTION(repair);
@@ -300,6 +341,7 @@ GUIAction::GUIAction(xml_node <> *node):GUIObject(node)
       ADD_ACTION(flashimage);
       ADD_ACTION(twcmd);
       ADD_ACTION(foxcmd);
+      ADD_ACTION(foxweb);
       ADD_ACTION(setbootslot);
       ADD_ACTION(repackimage);
       ADD_ACTION(reflashtwrp);
@@ -648,6 +690,38 @@ int GUIAction::doAction(Action action)
   if (funcitr != mf.end())
     return (this->*funcitr->second) (arg);
 
+  // OrangeFox built-in updater actions
+#ifdef OF_ENABLE_WLAN
+  if (function == "fox_update_refresh")
+    return FoxUpdater::Refresh();
+
+  if (function == "fox_update_init")
+    return FoxUpdater::Init();
+
+  if (function == "fox_update_check")
+    return FoxUpdater::Check();
+
+  if (function == "fox_update_variant_prev")
+    return FoxUpdater::VariantPrev();
+
+  if (function == "fox_update_variant_next")
+    return FoxUpdater::VariantNext();
+
+  if (function == "fox_update_select_variant")
+    return FoxUpdater::SelectVariant();
+
+  if (function == "fox_update_prepare_available")
+    return FoxUpdater::PrepareAvailableReleases();
+
+  if (function == "fox_update_select_available")
+    return FoxUpdater::SelectAvailableRelease();
+
+  if (function == "fox_update_download")
+    return FoxUpdater::Download();
+
+  if (function == "fox_update_install")
+    return FoxUpdater::Install();
+#endif
   if (!Hide_Reboot_Kludge_Fix(function))
     LOGERR("Unknown action '%s'\n", function.c_str());
 
@@ -2456,11 +2530,37 @@ int GUIAction::foxcmd(std::string arg __unused)
     code = Fox_Fifo::Run_Command();
   // Record the exit code for the active remote job, if any (no-op for the FIFO
   // path). Done before the output FILE is flushed and closed.
+#ifdef OF_ENABLE_WLAN
+  Fox_Jobs::NotifyExit(code);
+#endif
   Fox_Command_Dispatcher::CommandDone(code);
   operation_end(0);
   return 0;
 }
 
+// foxweb enable|disable: GUI backing for the "Remote Web Access" toggle. It
+// delegates to the fox "web" command so the toggle and `fox web` share one
+// code path (same start/stop order, same password-required guard). Status
+// output from Cmd_Web is surfaced on the GUI console via gui_print.
+int GUIAction::foxweb(std::string arg)
+{
+  operation_start("FOX Web Access");
+  if (simulate) {
+    simulate_progress_bar();
+    operation_end(0);
+    return 0;
+  }
+  // Drive the engine through its public entry point so the toggle and the `web`
+  // op share one dispatch path. A missing arg falls through to "status",
+  // matching a `web` request with no action.
+  Json::Value args(Json::objectValue);
+  if (!arg.empty())
+    args["action"] = arg;
+  Fox_Fifo::Set_Request("web", args);
+  Fox_Fifo::Run_Command();
+  operation_end(0);
+  return 0;
+}
 
 int GUIAction::getKeyByName(std::string key)
 {
@@ -3149,4 +3249,148 @@ int GUIAction::setvaluebyfile(std::string arg) {
   return 0;
 }
 
+#ifdef OF_ENABLE_WLAN
+// Enable/disable/info are the toggle + status path that used to block the GUI
+// for ~10-20s. They are dispatched to the WlanWorker background thread and
+// return immediately, so they run in the caller thread without ever stalling it
+// or colliding with the shared ActionThread. Progress is published through the
+// wlan_state DataManager variable (see wlan_worker.cpp) and the UI reacts to it.
+int GUIAction::wlan_enable(std::string arg) {
+    WlanWorker::Post(WlanWorker::CMD_ENABLE);
+    return 0;
+}
+
+int GUIAction::wlan_disable(std::string arg) {
+    WlanWorker::Post(WlanWorker::CMD_DISABLE);
+    return 0;
+}
+
+int GUIAction::wlan_autostart(std::string arg) {
+    // Boot hook: the worker brings WiFi up and re-joins the last network if the
+    // of_wlan_auto_* settings are on (it no-ops otherwise). Fire-and-forget.
+    WlanWorker::Post(WlanWorker::CMD_AUTOSTART);
+    return 0;
+}
+
+int GUIAction::wlan_info(std::string arg) {
+    // Cheap async status refresh; the cached DataManager vars are read by the
+    // reactive UI, so this never blocks the caller thread.
+    WlanWorker::Post(WlanWorker::CMD_INFO);
+    return 0;
+}
+
+// Scan / connect / connect_saved / test stay synchronous and run on the shared
+// ActionThread: their modal overlays open, block on the operation, then close
+// within the same action batch while the render thread animates the spinner.
+// Making them async would flash the overlay shut before the work finished.
+int GUIAction::wlan_scan(std::string arg) {
+    return Wlan::Scan() ? 0 : -1;
+}
+
+int GUIAction::wlan_connect(std::string arg) {
+    return Wlan::Connect() ? 0 : -1;
+}
+
+int GUIAction::wlan_connect_saved(std::string arg) {
+    return Wlan::ConnectSaved() ? 0 : -1;
+}
+
+int GUIAction::wlan_test_connection(std::string arg) {
+    return Wlan::TestConnection() ? 0 : -1;
+}
+
+// RefreshSaved / ForgetSaved are fast secret-store + file operations and stay
+// synchronous so they remain correctly ordered with the UI refresh that
+// immediately follows them in the same action batch.
+int GUIAction::wlan_saved_refresh(std::string arg) {
+    return Wlan::RefreshSaved() ? 0 : -1;
+}
+
+int GUIAction::wlan_forget_saved(std::string arg) {
+    return Wlan::ForgetSaved() ? 0 : -1;
+}
+
+int GUIAction::nas_mount(std::string arg __unused) {
+    operation_start("Mount NAS");
+
+    int op_status = 1;
+
+    if (simulate) {
+        simulate_progress_bar();
+        op_status = 0;
+    } else if (NasManager::Mount()) {
+        DataManager::SetValue(TW_NAS_MOUNTED, 1);
+        PartitionManager.Update_System_Details();
+        gui_msg("nas_mounted=NAS mounted successfully.");
+        op_status = 0;
+    } else {
+        DataManager::SetValue(TW_NAS_MOUNTED, 0);
+        gui_msg(Msg(msg::kError, "nas_mount_failed=Failed to mount NAS: {1}")(NasManager::GetLastError()));
+    }
+
+    operation_end(op_status);
+    return op_status == 0 ? 0 : -1;
+}
+
+int GUIAction::nas_unmount(std::string arg __unused) {
+    operation_start("Unmount NAS");
+
+    int op_status = 1;
+
+    if (simulate) {
+        simulate_progress_bar();
+        op_status = 0;
+    } else {
+        std::string current_storage = DataManager::GetCurrentStoragePath();
+
+        if (current_storage == TW_NAS_MOUNT_POINT) {
+            TWPartition* def = PartitionManager.Get_Default_Storage_Partition();
+
+            if (def && def->Storage_Path != TW_NAS_MOUNT_POINT) {
+                DataManager::SetValue("tw_storage_path", def->Storage_Path);
+                DataManager::SetValue(TW_ZIP_LOCATION_VAR, def->Storage_Path);
+            }
+
+            DataManager::SetValue(TW_NAS_USE_AS_STORAGE, 0);
+        }
+
+        if (NasManager::Unmount()) {
+            DataManager::SetValue(TW_NAS_MOUNTED, 0);
+            PartitionManager.Update_System_Details();
+            gui_msg("nas_unmounted=NAS unmounted.");
+            op_status = 0;
+        } else {
+            gui_msg(Msg(msg::kError, "nas_unmount_failed=Failed to unmount NAS: {1}")(NasManager::GetLastError()));
+        }
+    }
+
+    operation_end(op_status);
+    return op_status == 0 ? 0 : -1;
+}
+
+int GUIAction::nas_select(std::string arg __unused) {
+    operation_start("Select NAS Storage");
+
+    int op_status = 1;
+
+    if (simulate) {
+        simulate_progress_bar();
+        op_status = 0;
+    } else if (NasManager::SelectAsStorage()) {
+        PartitionManager.Update_System_Details();
+        gui_msg("nas_selected=NAS selected as current storage.");
+        op_status = 0;
+    } else {
+        gui_msg(Msg(msg::kError, "nas_select_failed=Failed to select NAS storage: {1}")(NasManager::GetLastError()));
+    }
+
+    operation_end(op_status);
+    return op_status == 0 ? 0 : -1;
+}
+
+int GUIAction::nas_info(std::string arg __unused) {
+    NasManager::RefreshStatus();
+    return 0;
+}
+#endif // OF_ENABLE_WLAN
 //

@@ -20,7 +20,8 @@ engine's entry points through the branded `FoxUiEngine::` aliases in
 the theme overrides (`themes/style.xml`, `font.xml`, `accent.xml`, `navbar.xml`),
 the **resources** (`resources/vars.xml`, `images.xml`, `styles.xml`), the
 **templates** (`pages/templates/*.xml`), then every **page** (`pages/main.xml`,
-`pages/advanced.xml`, ...). At build time `gui/libfoxui_defaults.go` copies the
+`pages/wlan.xml`, `pages/advanced.xml`, ...). At build time
+`gui/libfoxui_defaults.go` copies the
 selected theme folder into the ramdisk as `/twres` (the `TWRES="/twres/"` cflag),
 and the page loader reads everything from there.
 
@@ -39,14 +40,16 @@ Everything is referenced by name. Define these once, use them everywhere:
   existing row/col vars** rather than hard-coding pixel numbers — they already fold
   in the camera cutout (`%cutout_w%`) and scale across the notch. Colors are vars too
   (`%accent%`, `%text%`, `%background%`, `%transparent%`, `%text_fail%`).
-- **Images** — `resources/images.xml`:
+- **Images** — `themes/style.xml` and theme variants under `themes/styles/`:
+  - `<image name="wlan" filename="SVG/Icons/wlan.svg" retainaspect="1" scale="3.25" tint="#413327"/>`
   - `<image name="partitions" filename="SVG/Icons/partitions.svg" retainaspect="1" scale="3.25" tint="#413327"/>`
-    — raster or SVG (SVG is rasterized via nanosvg at load).
+    — raster or SVG (SVG is rasterized via nanosvg at load). Shapes and animations
+    are defined in `resources/images.xml`:
   - `<shape name="btn_raised" w="%btn_w%" h="%btn_h%" radius="-1" color="%neutral_light%"/>`
     — a drawn rounded rectangle (radius `-1` = sharp corners). Use shapes for cards,
     pills, button backgrounds so they theme correctly.
   - `<animation name="progress" filename="Light/Progress/indeterminate"/>` — frame strip.
-  Reference via `resource="partitions"` / `<image resource="btn_raised"/>`.
+  Reference via `resource="wlan"` / `resource="partitions"` / `<image resource="btn_raised"/>`.
 - **Styles** — `resources/styles.xml`: a named bundle of child nodes an object
   inherits. `<style name="text_ab_title"><font resource="Secondary-title" color="%actbar_color%"/></style>`.
   Apply with `<text style="text_ab_title">…</text>`. The node lookup is by child name
@@ -56,8 +59,8 @@ Everything is referenced by name. Define these once, use them everywhere:
   the font resources, etc.) — pick values from the vars, never hard-code a hex that
   should change with the theme.
 - **Strings** — `common/languages/en.xml` (+ translations in sibling files and
-  `extra-languages/`): `<string name="install_btn">Install</string>`. Strings
-  can themselves embed `%var%` and `{@other_string}`. Reference as `{@install_btn}`
+  `extra-languages/`): `<string name="wlan_encryption">Encryption</string>`. Strings
+  can themselves embed `%var%` and `{@other_string}`. Reference as `{@wlan_encryption}`
   (preferred, with optional default `{@id=default text}`) or `%@id%`.
 
 ## Text expansion rules (`gui_parse_text`, `gui/gui.cpp:855`)
@@ -67,13 +70,13 @@ In any text/attribute value, two substitution passes run:
 2. `%token%` → if token starts with `@`, string resource `token[1:]`; else the
    `DataManager` value named `token`. `%%` is a literal `%`.
 
-So `<text>{@decrypt_data_enter_pass}</text>`, `<text>%tw_zip_location%</text>`
-are all valid.
+So `<text>{@decrypt_data_enter_pass}</text>`, `<text>%wlanselectedid%</text>`, and
+`<text>{@wlan_encryption} %wlanencryption%</text>` (literal + var) are all valid.
 
 ## Page structure
 
 A page is a `<page name="…">` containing an ordered list of nodes, drawn top-to-bottom
-(later = on top). Typical skeleton:
+(later = on top). Typical skeleton (see `pages/wlan.xml`):
 
 ```xml
 <page name="myfeature">
@@ -112,7 +115,7 @@ A page is a `<page name="…">` containing an ordered list of nodes, drawn top-t
 `slidervalue→GUISliderValue`, `listbox→GUIListBox`, `fileselector→GUIFileSelector`,
 `partitionlist→GUIPartitionList`, `input→GUIInput`, `keyboard→GUIKeyboard`,
 `animation→GUIAnimation`, `progressbar→GUIProgressBar`, `spinningimage→GUISpinningImage`,
-`patternpassword→GUIPatternPassword`, `battery→GUIBattery`,
+`patternpassword→GUIPatternPassword`, `battery→GUIBattery`, `wlan→GUIWlan`,
 `template→(inline expansion of a named template)`. See each class in `objects.hpp`
 for the exact child nodes it reads (`<placement>`, `<font>`, `<image>`, `<fill>`,
 `<data>`, `<action>`, …).
@@ -201,7 +204,7 @@ stack** (drag + kinetic fling) when the content is taller than the viewport.
 - **Conditions reflow**: hiding a child (or a list item) collapses its space and
   everything below moves up — this is the fix for "group alignment depends on item
   count". Put fixed chrome (action bar, navbar, gestures) *outside* the `<scroll>`.
-- **Live example:** `pages/advanced.xml` (the Log / Fox-addons groups).
+- **Live example:** `pages/advanced.xml` (the WLAN / Log / Fox-addons groups).
 - **Hardware-key nav:** supported — the viewport chains its embedded lists into one
   vol-up/down selection sequence and auto-scrolls the highlighted row into view
   (`of_hw_control_mode`). Touch shows the normal press highlight, and a drag scrolls.
@@ -255,7 +258,7 @@ own `.cpp`.
 
 **Authoring safety / tooling**
 - **Load-time validation:** an explicit `style="X"` that doesn't resolve logs a
-  precise `FoxUiEngine:` error at parse.
+  precise `FoxUiEngine:` informational diagnostic at parse.
 - **Headless linter/preview:** `gui/tools/foxui_lint.py` checks `style=`/`{@string}`
   refs across the theme on the host, and `--svg PAGE` emits a placement-box preview.
 
@@ -271,6 +274,9 @@ action on value change). Two pseudo-`var1` values: `fileexists` (true if `var2` 
 exists) and `mounted` (true if `var2` is mounted). `var2` may itself be a `%var%` or
 `{@string}`. Examples from the tree:
 ```xml
+<condition var1="tw_wlan_enabled" var2="1"/>
+<condition var1="tw_wlan_enabled" op="!=" var2="1"/>
+<condition var1="fileexists" var2="/tmp/wlan/list.txt"/>
 <condition var1="tw_is_encrypted" var2="1"/>
 <condition var1="tw_is_decrypted" op="!=" var2="1"/>
 <condition var1="tw_file_location1" op="modified"/>
@@ -284,14 +290,19 @@ Handlers are registered in the `GUIAction` ctor (`gui/action.cpp` ~line 217) via
 several `<action>`s run in order. Built-ins you will use constantly:
 
 - `set` — write a DataManager value: `<action function="set">tw_back=advanced</action>`
-- `page` — navigate: `<action function="page">advanced</action>`
+- `page` — navigate: `<action function="page">wlan</action>`
 - `overlay` / `overlay` with arg — show/dismiss a popup page
 - `key` — simulate a key: `<action function="key">back</action>`
 - `mount`/`unmount`, `flash`, `wipe`, `decrypt`, `fileexists`, `screenshot`, …
+- `reboot` — set `tw_reboot_arg` and exit the GUI; the Reboot Recovery buttons
+  in `pages/universal.xml` and `pages/wipe.xml` set `tw_action_param=recovery`
+  and navigate to `rebootcheck`, gated by `tw_reboot_recovery`.
 
 For new behavior, add `int GUIAction::myfeature_refresh(std::string arg)` in
 `action.cpp`, register it with `ADD_ACTION(myfeature_refresh)`, then call it from XML.
-Handlers are thin wrappers over recovery functions (`PartitionManager.Mount()`, …).
+WLAN/NAS handlers are the model to copy — each is a thin wrapper over a static class
+(`Wlan::Scan()`, `NasManager::Mount()`, …). Gate WLAN/NAS ones with
+`#ifdef OF_ENABLE_WLAN` around **both** the `ADD_ACTION` line and the handler.
 
 Long-running handlers use `operation_start("Title")` / `operation_end(status)` and
 report via `gui_msg("id=Human readable text with {1} slots")` (the string id is
@@ -321,8 +332,10 @@ for any feature is:
 
 Many values are seeded from `vars.xml` (which sets defaults + persistence: a
 `<variable … persist="1"/>` is saved across reboots in Fox settings). Existing
-conventions: feature flags are `tw_<feature>` or `<feature>_<field>`.
-`gui_changePage("name")` from C++ reloads the page and re-reads all vars.
+conventions: feature flags are `tw_<feature>` or `<feature>_<field>`; see the WLAN
+vars (`tw_wlan_enabled`, `tw_wlan_connected`, `wlanlistdisplay`, `wlanselectedid`,
+`wlanencryption`, `wlan_password`, `wlan_info_ssid`, `wlan_info_ip`, …) for the
+pattern. `gui_changePage("name")` from C++ reloads the page and re-reads all vars.
 
 ## Adding a new UI feature — checklist
 
@@ -341,9 +354,10 @@ conventions: feature flags are `tw_<feature>` or `<feature>_<field>`.
 ## When you need C++ (not pure XML)
 
 Most UI is pure XML. Reach for C++ only when:
-- You need a **custom drawn widget** (e.g. the battery statusbar icon) → subclass
+- You need a **custom drawn widget** (e.g. the battery/wlan statusbar icon) → subclass
   `GUIObject` in `objects.hpp` + a `.cpp`, add the class to `ProcessNode`'s node map in
-  `pages.cpp`, and add the `.cpp` to `gui/Android.bp` `srcs`.
+  `pages.cpp`, and add the `.cpp` to `gui/Android.bp` `srcs` (or
+  `libfoxui_defaults.go` if it's conditional, like `gui/wlan.cpp` under WLAN).
 - You need **logic behind a button** → a `GUIAction` handler (above).
 
 ## Threading (matters when calling the engine from a GUIAction)
@@ -358,16 +372,21 @@ by `tw_busy`. The `foxcmd`/`twcmd` actions invoke the fox engine from the GUI:
 ## Build/test notes
 
 - FoxUiEngine is the static lib `libfoxui` (`gui/Android.bp`); conditional GUI sources
-  (custom keyboards) are added in `gui/libfoxui_defaults.go`, which reads `TWRP_CUSTOM_KEYBOARD`.
+  (`gui/wlan.cpp`, custom keyboards) are added in `gui/libfoxui_defaults.go`, which
+  reads `OF_ENABLE_WLAN` / `TWRP_CUSTOM_KEYBOARD`.
+- With `FOX_NO_BLANK_DT2W`, `InputHandler` handles two short stationary taps
+  (80–450 ms apart) while the dimmed display is off to wake it without passing
+  those touch events to the active page.
 - Theme selection: `TW_THEME` (or `TW_CUSTOM_THEME`, or auto from screen size) in the
   device tree. The chosen `gui/theme/<theme>/` is what ships.
 - XML is parsed by rapidxml at page load; errors go to `LOGERR`/`LOGINFO` in the
   recovery kernel log (view via the console page or `adb shell dmesg`/log). A malformed
   page usually shows as a blank/missing page rather than a crash.
-- There is no headless XML preview — you test by building the recovery image and
-  booting it.
+- `gui/tools/foxui_lint.py --svg PAGE` gives a headless placement preview;
+  building and booting recovery is still necessary to verify rendered interaction.
 
 ## Related docs
 
 - `../AGENTS.md` — project orientation, build, layout.
 - `../docs/fox-protocol.md` — the `fox` engine that `foxcmd` invokes.
+- `../docs/wlan.md` — the WLAN GUI actions and vars.

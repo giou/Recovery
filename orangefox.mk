@@ -20,7 +20,8 @@
 
 LOCAL_CFLAGS += -Wno-unused-parameter -Wno-unused-function -Wno-unused-variable
 
-# libvterm backs the in-UI terminal (gui/terminal.cpp) and is ALWAYS required.
+# libvterm backs the in-UI terminal (gui/terminal.cpp) and is ALWAYS required
+# (the terminal page is part of the always-built GUI, independent of OF_ENABLE_WLAN).
 # It is built from sources (external/libvterm, Soong cc_library_static "libvterm");
 # the pre-generated encoding tables ship in-tree so no codegen step is needed.
 ifeq ($(wildcard external/libvterm/Android.bp),)
@@ -887,6 +888,120 @@ ifneq ($(FOX_DELETE_INITD_ADDON),0)
     LOCAL_CFLAGS += -DFOX_DELETE_INITD_ADDON
 endif
 
+# enable WLAN
+ifeq ($(OF_ENABLE_WLAN),1)
+    ifeq ($(wildcard external/wpa_supplicant_8/Android.bp),)
+        $(warning wpa_supplicant_8 sources not found! You need to clone the sources.)
+        $(warning Please run: "git clone --depth=1 https://android.googlesource.com/platform/external/wpa_supplicant_8 -b android16-s2-release external/wpa_supplicant_8")
+        $(error wpa_supplicant_8 sources not present; exiting.)
+    endif
+
+    # ttyd is built from sources (external/ttyd), not shipped as a prebuilt.
+    # Only the cc_binary (ttyd_src, stem "ttyd" -> /system/bin/ttyd) is required;
+    # the fork's ttyd.rc is deliberately NOT installed, so ttyd stays FIFO-only
+    # (fox terminal / fox web) and is never coupled to an init service.
+    ifeq ($(wildcard external/ttyd/Android.bp),)
+        $(warning ttyd sources not found! You need to clone the sources.)
+        $(warning Please run: "git clone --depth=1 https://github.com/OrangeFox16/android_external_ttyd -b fox_16.0 external/ttyd")
+        $(error ttyd sources not present; exiting.)
+    endif
+
+    TW_ENABLE_NETWORK := true
+    LOCAL_CFLAGS += -DOF_ENABLE_WLAN
+
+    $(warning The wlan features will be enabled. You need to provide (and load and manage) your WiFi drivers in your device tree)
+
+    TWRP_REQUIRED_MODULES += \
+        wpa_supplicant \
+        android.hardware.wifi.supplicant.xml \
+        wpa_cli \
+        dhcpdbg \
+        ttyd_src \
+        rclone_prebuilt \
+        fusermount3
+
+    RECOVERY_BINARY_SOURCE_FILES += $(TARGET_OUT_VENDOR_EXECUTABLES)/hw/wpa_supplicant
+    RECOVERY_BINARY_SOURCE_FILES += $(TARGET_OUT_VENDOR_EXECUTABLES)/wpa_cli
+    # AOSP 16 builds libnetutils/dhcptool.c as the module "dhcpdbg" (in /system/bin),
+    # not "dhcptool" in /vendor/bin. Ship it and expose it under the name wlan.cpp expects.
+    RECOVERY_BINARY_SOURCE_FILES += $(TARGET_OUT_EXECUTABLES)/dhcpdbg
+    BOARD_RECOVERY_IMAGE_PREPARE += ln -sf dhcpdbg $(TARGET_RECOVERY_ROOT_OUT)/system/bin/dhcptool;
+    RECOVERY_BINARY_SOURCE_FILES += $(TARGET_RECOVERY_ROOT_OUT)/system/bin/ttyd
+
+    RECOVERY_LIBRARY_SOURCE_FILES += $(TARGET_OUT_VENDOR_SHARED_LIBRARIES)/libkeystore-engine-wifi-hidl.so
+    RECOVERY_LIBRARY_SOURCE_FILES += $(TARGET_OUT_VENDOR_SHARED_LIBRARIES)/android.system.keystore2-V1-ndk.so
+    RECOVERY_LIBRARY_SOURCE_FILES += $(TARGET_OUT_SHARED_LIBRARIES)/android.hardware.security.keymint-V1-ndk.so
+    RECOVERY_LIBRARY_SOURCE_FILES += $(TARGET_OUT_SHARED_LIBRARIES)/android.hardware.wifi.common-V2-ndk.so
+    RECOVERY_LIBRARY_SOURCE_FILES += $(TARGET_OUT_SHARED_LIBRARIES)/android.hardware.wifi.supplicant-V4-ndk.so
+
+    WIFI_SUPP_VINTF := vendor/etc/vintf/manifest/android.hardware.wifi.supplicant.xml
+
+ifndef OF_WIFI_SUPP_VINTF_RULE_DEFINED
+OF_WIFI_SUPP_VINTF_RULE_DEFINED := true
+
+$(TARGET_RECOVERY_ROOT_OUT)/$(WIFI_SUPP_VINTF): $(TARGET_OUT_VENDOR_ETC)/vintf/manifest/android.hardware.wifi.supplicant.xml
+	@mkdir -p $(dir $@) && cp -f $< $@
+
+ALL_DEFAULT_INSTALLED_MODULES += $(TARGET_RECOVERY_ROOT_OUT)/$(WIFI_SUPP_VINTF)
+endif
+
+    # WiFi hotspot / SoftAP support.
+    #
+    # Brings up wpa_supplicant in AP mode (mode=2) and hands out leases with
+    # dnsmasq, so the recovery can create a hotspot (e.g. for clients to reach
+    # the remote dashboard). Requires an AP-capable WiFi driver in the device
+    # tree. dnsmasq is the only extra dependency; it is the DHCP/DNS server.
+    ifeq ($(OF_WLAN_AP),1)
+        # AOSP keeps the dnsmasq Soong module under src/ (cc_binary "dnsmasq").
+        ifeq ($(wildcard external/dnsmasq/src/Android.bp)$(wildcard external/dnsmasq/Android.bp)$(wildcard external/dnsmasq/Android.mk),)
+            $(warning dnsmasq sources not found! WiFi AP (OF_WLAN_AP=1) needs a DHCP server.)
+            $(warning Please run: "git clone --depth=1 https://android.googlesource.com/platform/external/dnsmasq external/dnsmasq")
+            $(error dnsmasq sources not present; exiting.)
+        endif
+
+        LOCAL_CFLAGS += -DOF_WLAN_AP
+        $(warning OF_WLAN_AP enabled: WiFi hotspot/AP support will be built (requires an AP-capable WiFi driver).)
+
+        TWRP_REQUIRED_MODULES += dnsmasq
+        RECOVERY_BINARY_SOURCE_FILES += $(TARGET_OUT_EXECUTABLES)/dnsmasq
+    endif
+
+endif
+
+# Remote-control dashboard (optional static web UI).
+#
+# The USB/FIFO remote-control engine is always built (see Android.mk), so
+# WebUSB screen capture and input stay available without WLAN. The HTTP API
+# server, ttyd bridge, NAS, WLAN UI actions, and updater are built only when
+# OF_ENABLE_WLAN=1. When WLAN is enabled, the server is API-only by default;
+# this block additionally packs a prebuilt web bundle onto the ramdisk so the
+# server can serve a dashboard at "/".
+#
+#   FOX_REMOTE_DASHBOARD := 1       enable packing the dashboard bundle
+#   FOX_DASHBOARD_DIR    := <path>  source web dir to pack (defaults to the
+#                                   bundled dashboard under fox_webserver/dashboard;
+#                                   point this at a built React dist/ instead)
+ifeq ($(FOX_REMOTE_DASHBOARD),1)
+    ifeq ($(OF_ENABLE_WLAN),1)
+    FOX_DASHBOARD_DIR ?= $(commands_TWRP_local_path)/fox_webserver/dashboard
+    FOX_DASHBOARD_OUT := $(TARGET_RECOVERY_ROOT_OUT)/system/etc/fox/dashboard
+    FOX_DASHBOARD_STAMP := $(TARGET_RECOVERY_ROOT_OUT)/system/etc/fox/.dashboard.stamp
+
+ifndef OF_DASHBOARD_RULE_DEFINED
+OF_DASHBOARD_RULE_DEFINED := true
+
+# Track a stamp FILE (not the directory) as the build output; kati/ninja reject
+# directory outputs. The dashboard bundle is populated as a side effect.
+$(FOX_DASHBOARD_STAMP): $(FOX_DASHBOARD_DIR)
+	@echo "Packing OrangeFox remote dashboard from $<"
+	@rm -rf $(FOX_DASHBOARD_OUT) && mkdir -p $(FOX_DASHBOARD_OUT) && cp -a $</. $(FOX_DASHBOARD_OUT)/ && touch $@
+
+ALL_DEFAULT_INSTALLED_MODULES += $(FOX_DASHBOARD_STAMP)
+endif
+    else
+        $(warning FOX_REMOTE_DASHBOARD is enabled without OF_ENABLE_WLAN; skipping packaged dashboard because the HTTP server is not built.)
+    endif
+endif
 # whether to skip substituting some permissions
 ifeq ($(OF_DONT_SUBSTITUTE_PERMISSIONS),1)
     LOCAL_CFLAGS += -DOF_DONT_SUBSTITUTE_PERMISSIONS

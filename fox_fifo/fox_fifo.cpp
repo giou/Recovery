@@ -39,6 +39,19 @@
 #include "gui/pages.hpp"
 #include "twinstall.h"
 
+#ifdef OF_ENABLE_WLAN
+#include "wlan.hpp"
+#include "fox_updater.hpp"
+#include "../fox_adbd.hpp"
+#endif
+
+#ifdef OF_ENABLE_WLAN
+#include "../fox_webserver/fox_httpd.hpp"
+#include "../fox_webserver/fox_httpsd.hpp"
+#include "../fox_webserver/fox_tls_cert.hpp"
+#include "../fox_webserver/fox_ttyd.hpp"
+#include "../fox_secrets/fox_secrets.hpp"
+#endif
 #include "fox_remote_input.hpp"
 #include "fox_command_dispatcher.hpp"
 #include "minuitwrp/minui.h"
@@ -626,6 +639,247 @@ int Fox_Fifo::Cmd_Reboot(const Json::Value& args) {
 	return OpenRecoveryScript::Run_ORS_Line("reboot " + target);
 }
 
+int Fox_Fifo::Cmd_Wlan(const Json::Value& args) {
+#ifndef OF_ENABLE_WLAN
+	(void)args;
+	gui_print("fox: WLAN support is not enabled in this build\n");
+	return 1;
+#else
+	std::string sub = arg_action(args);
+	std::string ssid = arg_str(args, "ssid");
+	// `ap` manages its own radio bring-up (and `ap ssid|password` only touch the
+	// secret store), so it is exempt from the "enable WLAN first" guard.
+	if (!Wlan::IsEnabled() && sub != "enable" && sub != "ap") {
+		gui_print("fox: WLAN is not enabled (enable it first)\n");
+		return 1;
+	}
+	if (sub.empty()) {
+		gui_print("fox: wlan requires a subcommand (enable|disable|list|connect|saved|connect-saved|forget|info|test|ap)\n");
+		return 2;
+	}
+	if (sub == "enable")
+		return Wlan::Enable() ? 0 : 1;
+	if (sub == "disable")
+		return Wlan::Disable() ? 0 : 1;
+	if (sub == "list") {
+		if (!Wlan::Scan())
+			return 1;
+		std::string list = read_text_file("/tmp/wlan/list.txt");
+		gui_print("%s\n", list.c_str());
+		return 0;
+	}
+	if (sub == "connect") {
+		if (ssid.empty()) {
+			gui_print("fox: wlan connect requires an SSID\n");
+			return 2;
+		}
+		// Populate scan metadata so Connect() can resolve the encryption type.
+		Wlan::Scan();
+		DataManager::SetValue("wlanselectedid", ssid);
+		DataManager::SetValue("wlan_password", arg_str(args, "password"));
+		return Wlan::Connect() ? 0 : 1;
+	}
+	if (sub == "saved") {
+		if (!Wlan::RefreshSaved())
+			return 1;
+		std::string list = read_text_file("/tmp/wlan/saved.txt");
+		gui_print("%s\n", list.c_str());
+		return 0;
+	}
+	if (sub == "password_list") {
+		// Saved networks with their decrypted passwords.
+		std::vector<std::string> ssids;
+		Fox_Secrets::ListWlanNetworks(ssids);
+		Json::Value items(Json::arrayValue);
+		for (const std::string& ssid : ssids) {
+			std::string password, encryption;
+			if (!Fox_Secrets::GetWlanNetwork(ssid, password, encryption))
+				continue;
+			Json::Value item(Json::objectValue);
+			item["ssid"] = ssid;
+			item["encryption"] = encryption;
+			item["password"] = password;
+			items.append(item);
+		}
+		Json::Value payload(Json::objectValue);
+		payload["items"] = items;
+		Fox_Command_Dispatcher::EmitData("wlan_passwords", payload);
+		return 0;
+	}
+	if (sub == "connect-saved") {
+		if (ssid.empty()) {
+			gui_print("fox: wlan connect-saved requires an SSID\n");
+			return 2;
+		}
+		DataManager::SetValue("wlanselectedid", ssid);
+		return Wlan::ConnectSaved() ? 0 : 1;
+	}
+	if (sub == "forget") {
+		if (ssid.empty()) {
+			gui_print("fox: wlan forget requires an SSID\n");
+			return 2;
+		}
+		DataManager::SetValue("wlanselectedid", ssid);
+		return Wlan::ForgetSaved() ? 0 : 1;
+	}
+	if (sub == "info") {
+		if (!Wlan::Info())
+			return 1;
+		std::string info = read_text_file("/tmp/wlan/info.txt");
+		gui_print("%s\n", info.c_str());
+		return 0;
+	}
+	if (sub == "test") {
+		if (!Wlan::TestConnection())
+			return 1;
+		for (int i = 1; i <= 5; i++) {
+			std::string line = DataManager::GetStrValue("wlan_test_line" + std::to_string(i));
+			if (!line.empty())
+				gui_print("%s\n", line.c_str());
+		}
+		return 0;
+	}
+	if (sub == "ap") {
+#ifndef OF_WLAN_AP
+		gui_print("fox: WLAN hotspot (AP) support is not enabled in this build (set OF_WLAN_AP=1)\n");
+		return 1;
+#else
+		std::string verb = arg_str(args, "subaction");
+		const Json::Value& values = args["values"];
+		auto value0 = [&]() -> std::string {
+			if (values.isArray() && values.size() > 0 && values[0].isString())
+				return values[0].asString();
+			return "";
+		};
+
+		if (verb.empty() || verb == "status") {
+			std::string ap_ssid, ap_pass;
+			Wlan::ApGetConfig(ap_ssid, ap_pass);
+
+			std::vector<Wlan::ApClient> clients;
+			Wlan::ApListClients(clients);
+
+			bool enabled = Wlan::ApIsEnabled();
+			std::string ip = DataManager::GetStrValue("tw_wlan_ap_ip");
+
+			// Human-readable lines (captured + pretty-printed by the CLI).
+			gui_print("Hotspot: %s\n", enabled ? "enabled" : "disabled");
+			gui_print("SSID: %s\n", ap_ssid.c_str());
+			gui_print("Security: %s\n", ap_pass.empty() ? "open" : "WPA2-PSK");
+			if (enabled) {
+				gui_print("IP: %s\n", ip.c_str());
+				gui_print("Clients: %d\n", (int)clients.size());
+			}
+
+			// Structured payload for WebUSB/JSON callers.
+			Json::Value payload(Json::objectValue);
+			payload["enabled"] = enabled;
+			payload["ssid"] = ap_ssid;
+			payload["secured"] = !ap_pass.empty();
+			payload["ip"] = ip;
+			payload["clients"] = (Json::UInt)clients.size();
+			Fox_Command_Dispatcher::EmitData("wlan_ap_status", payload);
+			return 0;
+		}
+		if (verb == "enable")
+			return Wlan::ApEnable() ? 0 : 1;
+		if (verb == "disable")
+			return Wlan::ApDisable() ? 0 : 1;
+		if (verb == "ssid") {
+			if (value0().empty()) {
+				gui_print("fox: wlan ap ssid requires a value\n");
+				return 2;
+			}
+			return Wlan::ApSetSsid(value0()) ? 0 : 1;
+		}
+		if (verb == "password") {
+			// "clear" (or no value) configures an open hotspot.
+			std::string pw = value0();
+			if (pw == "clear")
+				pw.clear();
+			return Wlan::ApSetPassword(pw) ? 0 : 1;
+		}
+		if (verb == "list") {
+			std::vector<Wlan::ApClient> clients;
+			Wlan::ApListClients(clients);
+
+			if (clients.empty()) {
+				gui_print("No devices connected to the hotspot\n");
+			} else {
+				for (const Wlan::ApClient& c : clients)
+					gui_print("%s\t%s\t%s\n", c.ip.c_str(), c.mac.c_str(),
+					          c.hostname.empty() ? "-" : c.hostname.c_str());
+			}
+
+			Json::Value items(Json::arrayValue);
+			for (const Wlan::ApClient& c : clients) {
+				Json::Value item(Json::objectValue);
+				item["ip"] = c.ip;
+				item["mac"] = c.mac;
+				item["hostname"] = c.hostname;
+				items.append(item);
+			}
+			Json::Value payload(Json::objectValue);
+			payload["items"] = items;
+			Fox_Command_Dispatcher::EmitData("wlan_ap_clients", payload);
+			return 0;
+		}
+
+		gui_print("fox: unknown wlan ap verb '%s' (enable|disable|status|ssid|password|list)\n", verb.c_str());
+		return 2;
+#endif // OF_WLAN_AP
+	}
+	gui_print("fox: unknown wlan subcommand '%s'\n", sub.c_str());
+	return 2;
+#endif // OF_ENABLE_WLAN
+}
+
+int Fox_Fifo::Cmd_Adbd(const Json::Value& args) {
+#ifndef OF_ENABLE_WLAN
+	(void)args;
+	gui_print("fox: network ADB is not enabled in this build (OF_ENABLE_WLAN=0)\n");
+	return 1;
+#else
+	bool no_auth = arg_bool(args, "no_auth");
+	std::string action = arg_action(args);
+	if (action.empty())
+		action = "status";
+	int port = (int)arg_int(args, "port", 5555);
+	int timeout = (int)arg_int(args, "timeout", 60);
+
+	if (action == "status") {
+		Fox_Adbd::PrintStatus();
+		return 0;
+	}
+	if (action == "start" || action == "enable") {
+		if (no_auth)
+			return Fox_Adbd::StartNoAuth(port) ? 0 : 1;
+		return Fox_Adbd::StartSecure(port) ? 0 : 1;
+	}
+	if (action == "pair")
+		return Fox_Adbd::StartPairing(timeout) ? 0 : 1;
+	if (action == "stop-pair")
+		return Fox_Adbd::StopPairing() ? 0 : 1;
+	if (action == "stop" || action == "disable")
+		return Fox_Adbd::StopAll() ? 0 : 1;
+	if (action == "list") {
+		Fox_Adbd::PrintDevices();
+		return 0;
+	}
+	if (action == "forget") {
+		// The device id rides in `subaction` (the generic action mapping); also
+		// accept an explicit `device` field.
+		std::string id = arg_str(args, "device");
+		if (id.empty())
+			id = arg_str(args, "subaction");
+		return Fox_Adbd::ForgetDevice(id) ? 0 : 1;
+	}
+
+	gui_print("fox: unknown adbd subcommand '%s' "
+	          "(start|pair|stop-pair|stop|status|list|forget)\n", action.c_str());
+	return 2;
+#endif
+}
 
 int Fox_Fifo::Cmd_Internal(const Json::Value& args) {
 	std::string sub = arg_action(args);
@@ -970,6 +1224,570 @@ int Fox_Fifo::Cmd_Input(const Json::Value& args) {
 	return code;
 }
 
+#ifdef OF_ENABLE_WLAN
+namespace {
+// Print the auth line without ever echoing a user-configured password.
+void print_auth_line() {
+	if (Fox_Httpd::AuthIsPassword())
+		gui_print("auth=remote-password\n");
+	else
+		gui_print("token=%s\n", Fox_Httpd::Token().c_str());
+}
+
+// Add the auth descriptor to a status payload without leaking a configured
+// password: either auth="remote-password" or the random per-boot token.
+void auth_into(Json::Value& obj) {
+	if (Fox_Httpd::AuthIsPassword())
+		obj["auth"] = "remote-password";
+	else
+		obj["token"] = Fox_Httpd::Token();
+}
+
+// "http://<addr>:<port>/" — the dashboard-facing URL for a status payload.
+std::string http_url(int port) {
+	return "http://" + Fox_Httpd::LocalAddress() + ":" + std::to_string(port) + "/";
+}
+} // namespace
+#endif
+
+// webserver: the HTTP server umbrella.
+//   webserver {start [--port N]|stop|status|terminal ...}  — plaintext server
+//   webserver http {enable|disable|status} [--port N]      — plaintext listener
+//   webserver https {enable|disable|status|cert ...} [--port N]  — TLS listener
+//   webserver redirect {enable|disable|status}             — plaintext->HTTPS
+//   webserver cert {regen|status}                          — TLS cert (alias)
+//   webserver cors {set <origin>|reset|status}             — CORS allow-list
+// The remote-control plane (screen + input) is governed separately by `control`.
+int Fox_Fifo::Cmd_Webserver(const Json::Value& args) {
+#ifndef OF_ENABLE_WLAN
+	(void)args;
+	gui_print("fox: webserver is not available in this build (OF_ENABLE_WLAN=0)\n");
+	gui_print("fox: direct WebUSB remains available via screencap/input/screenstream requests\n");
+	return 1;
+#else
+	std::string sub = arg_action(args);
+	if (sub.empty())
+		sub = "status";
+	std::string subaction = arg_str(args, "subaction");
+	std::vector<std::string> values = arg_array(args, "values");
+	std::string port_s = arg_str(args, "port");
+
+	// Nested transport/policy groups: the group is `action`, its verb is
+	// `subaction`, and any further tokens ride in `values`.
+	if (sub == "http")
+		return Cmd_Http(subaction, port_s);
+	if (sub == "https")
+		return Cmd_Https(subaction, values, port_s);
+	if (sub == "redirect" || sub == "http_redirect")
+		return Cmd_HttpRedirect(subaction);
+	if (sub == "cors")
+		return Cmd_Cors(subaction, values);
+	// `webserver cert {regen|status}` — convenience alias for the TLS cert
+	// actions (forwarded to the shared cert handler), so the certificate can be
+	// (re)generated without first going through `webserver https`.
+	if (sub == "cert")
+		return Cmd_Https("cert", { subaction }, port_s);
+
+	if (sub == "start" || sub == "enable") {
+		int port = port_s.empty() ? 80 : atoi(port_s.c_str());
+		if (Fox_Httpd::IsRunning()) {
+			gui_print("Web server already running on %s:%d\n",
+			          Fox_Httpd::LocalAddress().c_str(), Fox_Httpd::Port());
+			print_auth_line();
+			return 0;
+		}
+		if (!Fox_Httpd::Start(port)) {
+			gui_print("fox: failed to start web server\n");
+			return 1;
+		}
+		gui_print("Web server started\n");
+		gui_print("url=http://%s:%d/\n", Fox_Httpd::LocalAddress().c_str(), Fox_Httpd::Port());
+		gui_print("port=%d\n", Fox_Httpd::Port());
+		print_auth_line();
+		gui_print("control=%d\n", Fox_Httpd::ControlEnabled() ? 1 : 0);
+		return 0;
+	}
+	if (sub == "stop" || sub == "disable") {
+		Fox_Ttyd::Stop();
+		Fox_Httpd::Stop();
+		gui_print("Web server stopped\n");
+		return 0;
+	}
+	if (sub == "status") {
+		Json::Value s(Json::objectValue);
+		s["running"] = Fox_Httpd::IsRunning();
+		s["control"] = Fox_Httpd::ControlEnabled();
+		if (Fox_Httpd::IsRunning()) {
+			s["address"] = Fox_Httpd::LocalAddress();
+			s["port"] = Fox_Httpd::Port();
+			s["url"] = http_url(Fox_Httpd::Port());
+			auth_into(s);
+		}
+		Fox_Command_Dispatcher::EmitData("webserver", s);
+		return 0;
+	}
+	if (sub == "terminal" || sub == "ttyd") {
+		std::string action = subaction.empty() ? "status" : subaction;
+		if (action == "start") {
+			int port = port_s.empty() ? 7681 : atoi(port_s.c_str());
+			if (!Fox_Ttyd::Start(port)) {
+				gui_print("fox: failed to start ttyd\n");
+				if (!Fox_Ttyd::LastError().empty())
+					gui_print("%s\n", Fox_Ttyd::LastError().c_str());
+				return 1;
+			}
+			gui_print("ttyd started\n");
+			gui_print("port=%d\n", Fox_Ttyd::Port());
+			gui_print("url=http://%s:%d/\n", Fox_Httpd::LocalAddress().c_str(), Fox_Ttyd::Port());
+			gui_print("shell=%s\n", Fox_Ttyd::Shell().c_str());
+			return 0;
+		}
+		if (action == "stop") {
+			Fox_Ttyd::Stop();
+			gui_print("ttyd stopped\n");
+			return 0;
+		}
+		if (action == "status") {
+			Json::Value s(Json::objectValue);
+			s["running"] = Fox_Ttyd::IsRunning();
+			s["port"] = Fox_Ttyd::Port();
+			s["url"] = http_url(Fox_Ttyd::Port());
+			s["shell"] = Fox_Ttyd::Shell();
+			Fox_Command_Dispatcher::EmitData("ttyd", s);
+			return 0;
+		}
+		gui_print("fox: unknown webserver terminal subcommand '%s' (start|stop|status)\n", action.c_str());
+		return 2;
+	}
+	gui_print("fox: unknown webserver subcommand '%s' "
+	          "(start|stop|status|terminal|http|https|redirect|cert|cors)\n", sub.c_str());
+	return 2;
+#endif
+}
+
+// control {start|stop|status}: toggle the remote-control plane (screen
+// mirroring + input injection) exposed over the HTTP server, independently of
+// whether the server is running. Direct `input`/`screencap` RPC commands do
+// not depend on this toggle.
+int Fox_Fifo::Cmd_Control(const Json::Value& args) {
+#ifndef OF_ENABLE_WLAN
+	(void)args;
+	gui_print("fox: HTTP control plane is not available in this build (OF_ENABLE_WLAN=0)\n");
+	gui_print("fox: direct WebUSB remains available via input/screencap/screenstream requests\n");
+	return 1;
+#else
+	std::string sub = arg_action(args);
+	if (sub.empty())
+		sub = "status";
+
+	if (sub == "start" || sub == "enable" || sub == "on") {
+		Fox_Httpd::SetControlEnabled(true);
+		gui_print("Remote control enabled\n");
+		return 0;
+	}
+	if (sub == "stop" || sub == "disable" || sub == "off") {
+		Fox_Httpd::SetControlEnabled(false);
+		gui_print("Remote control disabled\n");
+		return 0;
+	}
+	if (sub == "status") {
+		Json::Value s(Json::objectValue);
+		s["control"] = Fox_Httpd::ControlEnabled();
+		s["input_ready"] = Fox_Remote_Input::IsReady();
+		Fox_Command_Dispatcher::EmitData("control", s);
+		return 0;
+	}
+	gui_print("fox: unknown control subcommand '%s' (start|stop|status)\n", sub.c_str());
+	return 2;
+#endif
+}
+
+// web {enable|disable|status|password ...}: umbrella control for the
+// networked access surface. The same password authenticates the ttyd terminal
+// (HTTP basic-auth) and the REST/remote HTTP API (token).
+int Fox_Fifo::Cmd_Web(const Json::Value& args) {
+#ifndef OF_ENABLE_WLAN
+	(void)args;
+	gui_print("fox: web access is not available in this build (OF_ENABLE_WLAN=0)\n");
+	return 1;
+#else
+	std::string sub = arg_action(args);
+	if (sub.empty())
+		sub = "status";
+
+	if (sub == "status") {
+		Json::Value s(Json::objectValue);
+		s["password_set"] = Fox_Secrets::HasRemotePassword();
+		s["webserver"] = Fox_Httpd::IsRunning();
+		s["ttyd"] = Fox_Ttyd::IsRunning();
+		if (Fox_Httpd::IsRunning()) {
+			s["address"] = Fox_Httpd::LocalAddress();
+			s["port"] = Fox_Httpd::Port();
+		}
+		Fox_Command_Dispatcher::EmitData("web", s);
+		return 0;
+	}
+
+	if (sub == "enable" || sub == "start" || sub == "on") {
+		// Secure by default: never expose the network surface without a password.
+		if (!Fox_Secrets::HasRemotePassword()) {
+			gui_print("fox: refusing to enable web access without a password\n");
+			gui_print("fox: set one first: web password <password>\n");
+			return 1;
+		}
+
+		std::string port_s = arg_str(args, "port");
+		int port = port_s.empty() ? 80 : atoi(port_s.c_str());
+
+		int rc = 0;
+		if (!Fox_Httpd::IsRunning() && !Fox_Httpd::Start(port)) {
+			gui_print("fox: failed to start web server\n");
+			rc = 1;
+		} else {
+			gui_print("Web server: http://%s:%d/\n",
+			          Fox_Httpd::LocalAddress().c_str(), Fox_Httpd::Port());
+		}
+		if (!Fox_Ttyd::IsRunning() && !Fox_Ttyd::Start()) {
+			gui_print("fox: failed to start ttyd\n");
+			if (!Fox_Ttyd::LastError().empty())
+				gui_print("%s\n", Fox_Ttyd::LastError().c_str());
+			rc = 1;
+		} else {
+			gui_print("Terminal: http://%s:%d/\n",
+			          Fox_Httpd::LocalAddress().c_str(), Fox_Ttyd::Port());
+		}
+		if (!Fox_Adbd::StartSecure(5555)) {
+			gui_print("fox: failed to start network adbd\n");
+			rc = 1;
+		} else {
+			gui_print("Network adbd started on %s:5555\n", Fox_Adbd::WlanIp().c_str());
+		}
+		return rc;
+	}
+
+	if (sub == "disable" || sub == "stop" || sub == "off") {
+		Fox_Ttyd::Stop();
+		Fox_Httpd::Stop();
+		Fox_Adbd::StopAll();
+		gui_print("Web access disabled\n");
+		return 0;
+	}
+
+	if (sub == "password") {
+		bool generate = arg_bool(args, "generate");
+		std::string value = arg_str(args, "subaction");
+		std::vector<std::string> extra = arg_array(args, "values");
+
+		// `web password` with no value and no --generate: show the currently
+		// configured password (the caller explicitly asked to see it).
+		if (!generate && value.empty() && extra.empty()) {
+			std::string current;
+			Json::Value s(Json::objectValue);
+			if (Fox_Secrets::GetRemotePassword(current) && !current.empty()) {
+				s["password_set"] = true;
+				s["password"] = current;
+			} else {
+				s["password_set"] = false;
+			}
+			Fox_Command_Dispatcher::EmitData("password", s);
+			return 0;
+		}
+
+		bool ok;
+		if (value == "clear") {
+			ok = Fox_Secrets::ClearRemotePassword();
+			if (!ok) {
+				gui_print("fox: failed to clear web password\n");
+				return 1;
+			}
+			gui_print("Web password cleared\n");
+		} else {
+			std::string password;
+			if (generate) {
+				password = generate_password();
+			} else {
+				// Join the password value and any trailing tokens (a password
+				// may contain spaces and arrive split across value + values[]).
+				password = value;
+				for (const auto& tok : extra) {
+					if (!password.empty())
+						password += " ";
+					password += tok;
+				}
+			}
+			ok = Fox_Secrets::SetRemotePassword(password);
+			if (!ok) {
+				gui_print("fox: failed to save web password\n");
+				return 1;
+			}
+			if (generate) {
+				// We minted the secret on the caller's behalf, so return it once.
+				gui_print("Web password generated\n");
+				gui_print("password=%s\n", password.c_str());
+			} else {
+				// Never echo a user-supplied password back.
+				gui_print("Web password set\n");
+			}
+		}
+
+		// Re-apply to any live services so the new credential is used at once.
+		if (Fox_Httpd::IsRunning()) {
+			int port = Fox_Httpd::Port();
+			Fox_Httpd::Stop();
+			Fox_Httpd::Start(port);
+		}
+		if (Fox_Ttyd::IsRunning()) {
+			int port = Fox_Ttyd::Port();
+			Fox_Ttyd::Stop();
+			// After a clear, ttyd will refuse to restart (no password) by design.
+			Fox_Ttyd::Start(port);
+		}
+		return 0;
+	}
+
+	gui_print("fox: unknown web subcommand '%s' (enable|disable|status|password)\n", sub.c_str());
+	return 2;
+#endif
+}
+
+// webserver http {enable|disable|status} [--port N]: the plaintext HTTP
+// listener on its own, independent of the HTTPS listener and the `web` umbrella.
+// When redirect mode is enabled, this listener serves only 301s to HTTPS.
+int Fox_Fifo::Cmd_Http(const std::string& verb, const std::string& port_s) {
+#ifndef OF_ENABLE_WLAN
+	(void)verb;
+	(void)port_s;
+	gui_print("fox: http server is not available in this build (OF_ENABLE_WLAN=0)\n");
+	return 1;
+#else
+	std::string sub = verb.empty() ? "status" : verb;
+
+	if (sub == "enable" || sub == "start" || sub == "on") {
+		int port = port_s.empty() ? 80 : atoi(port_s.c_str());
+		if (Fox_Httpd::IsRunning()) {
+			gui_print("HTTP server already running on %s:%d\n",
+			          Fox_Httpd::LocalAddress().c_str(), Fox_Httpd::Port());
+			gui_print("redirect=%d\n", Fox_Httpd::RedirectEnabled() ? 1 : 0);
+			return 0;
+		}
+		if (!Fox_Httpd::Start(port)) {
+			gui_print("fox: failed to start HTTP server\n");
+			return 1;
+		}
+		gui_print("HTTP server started\n");
+		gui_print("url=http://%s:%d/\n", Fox_Httpd::LocalAddress().c_str(), Fox_Httpd::Port());
+		gui_print("port=%d\n", Fox_Httpd::Port());
+		print_auth_line();
+		gui_print("redirect=%d\n", Fox_Httpd::RedirectEnabled() ? 1 : 0);
+		return 0;
+	}
+	if (sub == "disable" || sub == "stop" || sub == "off") {
+		Fox_Httpd::Stop();
+		gui_print("HTTP server stopped\n");
+		return 0;
+	}
+	if (sub == "status") {
+		Json::Value s(Json::objectValue);
+		s["running"] = Fox_Httpd::IsRunning();
+		s["redirect"] = Fox_Httpd::RedirectEnabled();
+		if (Fox_Httpd::IsRunning()) {
+			s["address"] = Fox_Httpd::LocalAddress();
+			s["port"] = Fox_Httpd::Port();
+			s["url"] = http_url(Fox_Httpd::Port());
+			auth_into(s);
+		}
+		Fox_Command_Dispatcher::EmitData("http", s);
+		return 0;
+	}
+	gui_print("fox: unknown http subcommand '%s' (enable|disable|status)\n", sub.c_str());
+	return 2;
+#endif
+}
+
+// webserver https {enable|disable|status|cert} [--port N]: the TLS listener
+// with a persistent self-signed cert. `cert regen` forces a fresh keypair+cert.
+int Fox_Fifo::Cmd_Https(const std::string& verb, const std::vector<std::string>& values,
+                        const std::string& port_s) {
+#ifndef OF_ENABLE_WLAN
+	(void)verb;
+	(void)values;
+	(void)port_s;
+	gui_print("fox: https server is not available in this build (OF_ENABLE_WLAN=0)\n");
+	return 1;
+#else
+	std::string sub = verb.empty() ? "status" : verb;
+
+	if (sub == "enable" || sub == "start" || sub == "on") {
+		int port = port_s.empty() ? Fox_Httpsd::DefaultPort() : atoi(port_s.c_str());
+
+		// Ensure the cert exists first; a failure here means TLS can't come up.
+		std::string cp, kp, err;
+		if (!Fox_Tls_Cert::EnsureCert(cp, kp, err)) {
+			gui_print("fox: failed to prepare TLS cert: %s\n", err.c_str());
+			return 1;
+		}
+
+		if (Fox_Httpsd::IsRunning())
+			Fox_Httpsd::Stop();
+		if (!Fox_Httpsd::Start(port)) {
+			gui_print("fox: failed to start HTTPS server\n");
+			return 1;
+		}
+		// Record the live HTTPS port so plaintext redirects target it.
+		Fox_Httpd::SetHttpsPortForRedirect(Fox_Httpsd::Port());
+
+		gui_print("HTTPS server started\n");
+		gui_print("url=https://%s:%d/\n", Fox_Httpd::LocalAddress().c_str(), Fox_Httpsd::Port());
+		gui_print("port=%d\n", Fox_Httpsd::Port());
+		std::string fp = Fox_Tls_Cert::Fingerprint();
+		if (!fp.empty())
+			gui_print("fingerprint=%s\n", fp.c_str());
+		gui_print("cert=%s\n", Fox_Tls_Cert::CertPath());
+		print_auth_line();
+		gui_print("note=self-signed certificate; browsers will warn until it is trusted/pinned\n");
+		return 0;
+	}
+	if (sub == "disable" || sub == "stop" || sub == "off") {
+		Fox_Httpsd::Stop();
+		gui_print("HTTPS server stopped\n");
+		return 0;
+	}
+	if (sub == "status") {
+		Json::Value s(Json::objectValue);
+		s["running"] = Fox_Httpsd::IsRunning();
+		if (Fox_Httpsd::IsRunning()) {
+			s["address"] = Fox_Httpd::LocalAddress();
+			s["port"] = Fox_Httpsd::Port();
+			s["url"] = "https://" + Fox_Httpd::LocalAddress() + ":" +
+			           std::to_string(Fox_Httpsd::Port()) + "/";
+			auth_into(s);
+		}
+		std::string fp = Fox_Tls_Cert::Fingerprint();
+		if (!fp.empty()) {
+			s["fingerprint"] = fp;
+			s["cert"] = Fox_Tls_Cert::CertPath();
+		}
+		Fox_Command_Dispatcher::EmitData("https", s);
+		return 0;
+	}
+	if (sub == "cert") {
+		std::string action = values.empty() ? "status" : values[0];
+		if (action == "regen") {
+			std::string err;
+			if (!Fox_Tls_Cert::RegenCert(err)) {
+				gui_print("fox: cert regen failed: %s\n", err.c_str());
+				return 1;
+			}
+			// Reload into a running listener, if any.
+			if (Fox_Httpsd::IsRunning()) {
+				int p = Fox_Httpsd::Port();
+				Fox_Httpsd::Stop();
+				Fox_Httpsd::Start(p);
+				gui_print("HTTPS server reloaded with new cert\n");
+			}
+			gui_print("fingerprint=%s\n", Fox_Tls_Cert::Fingerprint().c_str());
+			return 0;
+		}
+		if (action == "status") {
+			std::string fp = Fox_Tls_Cert::Fingerprint();
+			if (fp.empty()) {
+				gui_print("cert=none\n");
+			} else {
+				gui_print("cert=%s\n", Fox_Tls_Cert::CertPath());
+				gui_print("fingerprint=%s\n", fp.c_str());
+			}
+			return 0;
+		}
+		gui_print("Usage: webserver https cert {regen|status}\n");
+		return 2;
+	}
+	gui_print("fox: unknown https subcommand '%s' (enable|disable|status|cert ...)\n", sub.c_str());
+	return 2;
+#endif
+}
+
+// webserver redirect {enable|disable|status}: toggle the plaintext listener's
+// redirect-to-https mode. Persists across reboots. A redirect-mode listener
+// answers plaintext requests with a 301 to HTTPS and serves nothing else.
+int Fox_Fifo::Cmd_HttpRedirect(const std::string& verb) {
+#ifndef OF_ENABLE_WLAN
+	(void)verb;
+	gui_print("fox: http server is not available in this build (OF_ENABLE_WLAN=0)\n");
+	return 1;
+#else
+	std::string sub = verb.empty() ? "status" : verb;
+
+	if (sub == "enable" || sub == "on") {
+		Fox_Httpd::SetRedirectEnabled(true);
+		gui_print("HTTP redirect mode enabled (plaintext -> https)\n");
+		if (!Fox_Httpsd::IsRunning())
+			gui_print("note: HTTPS listener is not running; start it with `webserver https enable`\n");
+		if (!Fox_Httpd::IsRunning())
+			gui_print("note: HTTP listener is not running; start it with `webserver http enable`\n");
+		return 0;
+	}
+	if (sub == "disable" || sub == "off") {
+		Fox_Httpd::SetRedirectEnabled(false);
+		gui_print("HTTP redirect mode disabled\n");
+		return 0;
+	}
+	if (sub == "status") {
+		Json::Value s(Json::objectValue);
+		s["redirect"] = Fox_Httpd::RedirectEnabled();
+		s["https_port"] = Fox_Httpd::HttpsPortForRedirect();
+		Fox_Command_Dispatcher::EmitData("redirect", s);
+		return 0;
+	}
+	gui_print("fox: unknown redirect subcommand '%s' (enable|disable|status)\n", sub.c_str());
+	return 2;
+#endif
+}
+
+// webserver cors {set <origin>|reset|status}: inspect or override the HTTP
+// cross-origin allow-list. By default only the device-local origins and the
+// official orangefox.tech / orangefox.download domains are accepted; `set "*"`
+// (or a specific origin) is a developer escape hatch. The override is in-memory
+// only and resets on reboot.
+int Fox_Fifo::Cmd_Cors(const std::string& verb, const std::vector<std::string>& values) {
+#ifndef OF_ENABLE_WLAN
+	(void)verb;
+	(void)values;
+	gui_print("fox: http server is not available in this build (OF_ENABLE_WLAN=0)\n");
+	return 1;
+#else
+	std::string sub = verb.empty() ? "status" : verb;
+
+	if (sub == "set") {
+		if (values.empty()) {
+			gui_print("fox: cors set requires an origin (or \"*\")\n");
+			return 2;
+		}
+		Fox_Httpd::SetCorsOverride(values[0]);
+		gui_print("CORS override set\n");
+		gui_print("cors=%s\n", values[0].c_str());
+		return 0;
+	}
+	if (sub == "reset" || sub == "clear" || sub == "default") {
+		Fox_Httpd::SetCorsOverride("");
+		gui_print("CORS override cleared (default allow-list restored)\n");
+		return 0;
+	}
+	if (sub == "status") {
+		std::string override_origin = Fox_Httpd::CorsOverride();
+		Json::Value s(Json::objectValue);
+		s["mode"] = override_origin.empty() ? "default" : "override";
+		if (override_origin.empty())
+			s["allow"] = "localhost," + Fox_Httpd::LocalAddress() +
+			             ",*.orangefox.tech,*.orangefox.download";
+		else
+			s["override"] = override_origin;
+		Fox_Command_Dispatcher::EmitData("cors", s);
+		return 0;
+	}
+	gui_print("fox: unknown cors subcommand '%s' (set|reset|status)\n", sub.c_str());
+	return 2;
+#endif
+}
 int Fox_Fifo::Cmd_Storages(const Json::Value& /*args*/) {
 	PartitionManager.Mount_All_Storage();
 	std::vector<PartitionList> storage_list;
@@ -991,6 +1809,63 @@ int Fox_Fifo::Cmd_Storages(const Json::Value& /*args*/) {
 	return 0;
 }
 
+int Fox_Fifo::Cmd_Ota(const Json::Value& args) {
+#ifndef OF_ENABLE_WLAN
+	(void)args;
+	gui_print("fox: OTA support is not enabled in this build\n");
+	return 1;
+#else
+	std::string fox_id = arg_str(args, "fox_id");
+	std::string type_filter = arg_str(args, "type");
+	std::string action = arg_action(args);
+	if (action.empty())
+		action = "status";
+
+	int opt_ret = FoxUpdater::SetTestOptions(fox_id, type_filter);
+	if (opt_ret != 0)
+		return opt_ret;
+
+	if (action == "status") {
+		FoxUpdater::Refresh();
+		Json::Value s(Json::objectValue);
+		s["status"] = DataManager::GetStrValue("fox_update_status");
+		s["available"] = DataManager::GetStrValue("fox_update_available");
+		s["downloaded"] = DataManager::GetStrValue("fox_update_downloaded");
+		s["need_variant"] = DataManager::GetStrValue("fox_update_need_variant");
+		s["current_build_id"] = DataManager::GetStrValue("fox_update_current_build_id");
+		s["fox_id_override"] = DataManager::GetStrValue("fox_update_current_build_id_override");
+		s["current_type"] = DataManager::GetStrValue("fox_update_current_type");
+		s["current_version"] = DataManager::GetStrValue("fox_update_current_version");
+		s["device_id"] = DataManager::GetStrValue("fox_update_device_id");
+		s["device_name"] = DataManager::GetStrValue("fox_update_device_name");
+		s["device_codename"] = DataManager::GetStrValue("fox_update_device_codename");
+		s["latest_build_id"] = DataManager::GetStrValue("fox_update_latest_build_id");
+		s["latest_type"] = DataManager::GetStrValue("fox_update_latest_type");
+		s["latest_version"] = DataManager::GetStrValue("fox_update_latest_version");
+		s["latest_filename"] = DataManager::GetStrValue("fox_update_latest_filename");
+		s["latest_md5"] = DataManager::GetStrValue("fox_update_latest_md5");
+		s["latest_size"] = DataManager::GetStrValue("fox_update_latest_size");
+		s["latest_variant"] = DataManager::GetStrValue("fox_update_latest_variant");
+		s["zip_path"] = DataManager::GetStrValue("fox_update_zip_path");
+		s["type_filter"] = DataManager::GetStrValue("fox_update_type_filter");
+		Fox_Command_Dispatcher::EmitData("ota", s);
+		return 0;
+	}
+	if (action == "refresh")
+		return FoxUpdater::Refresh();
+	if (action == "init")
+		return FoxUpdater::Init();
+	if (action == "check")
+		return FoxUpdater::Check();
+	if (action == "download")
+		return FoxUpdater::Download();
+	if (action == "install")
+		return FoxUpdater::Install();
+
+	gui_print("fox: unknown ota subcommand '%s' (status|init|check|download|install|refresh)\n", action.c_str());
+	return 2;
+#endif
+}
 
 int Fox_Fifo::Run_Command() {
 	if (op.empty()) {
@@ -1020,6 +1895,10 @@ int Fox_Fifo::Run_Command() {
 		return Cmd_Status(a);
 	if (op == "reboot")
 		return Cmd_Reboot(a);
+	if (op == "wlan" || op == "wifi")  // `wifi` is an alias for `wlan`
+		return Cmd_Wlan(a);
+	if (op == "adbd")
+		return Cmd_Adbd(a);
 	if (op == "internal")
 		return Cmd_Internal(a);
 	if (op == "wipe")
@@ -1038,6 +1917,14 @@ int Fox_Fifo::Run_Command() {
 		return Cmd_Addons(a);
 	if (op == "storages")
 		return Cmd_Storages(a);
+	if (op == "ota")
+		return Cmd_Ota(a);
+	if (op == "webserver")
+		return Cmd_Webserver(a);
+	if (op == "control")
+		return Cmd_Control(a);
+	if (op == "web")
+		return Cmd_Web(a);
 	if (op == "input")
 		return Cmd_Input(a);
 	if (op == "screencap")
