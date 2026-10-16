@@ -12,6 +12,7 @@
 
 #include "data.hpp"
 #include "wlan.hpp"
+#include "fox_adbd.hpp"
 #include "gui/pages.hpp"  // gui_toast
 
 /*
@@ -139,6 +140,17 @@ void Handle(WlanWorker::Cmd cmd) {
 				Wlan::ConnectSaved();
 				SetState(SettledState());
 				Wlan::RefreshWlanPageIfShown();
+			}
+		}
+		// Hands-off sessions: with of_adbd_auto the network ADB comes up with
+		// the WLAN at boot, so a cable-less recovery (e.g. HDD on OTG) is
+		// reachable without touching the UI. Authorized devices persist in
+		// Fox_Secrets, so no re-pairing is needed after the first time.
+		if (DataManager::GetIntValue("of_adbd_auto") == 1) {
+			if (!IsConnectedNow()) {
+				gui_run_on_main([]() { gui_toast("[error]Network ADB needs a WLAN connection", 150); });
+			} else if (!Fox_Adbd::StartSecure(5555)) {
+				gui_run_on_main([]() { gui_toast("[error]Failed to start network ADB", 150); });
 			}
 		}
 		break;
