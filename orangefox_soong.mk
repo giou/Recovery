@@ -20,5 +20,6 @@
 
 # additional soong variables
 EXPORT_TO_SOONG += \
-   OF_LANDSCAPE_MODE
+   OF_LANDSCAPE_MODE \
+   TW_USE_FSCRYPT_POLICY
 #
