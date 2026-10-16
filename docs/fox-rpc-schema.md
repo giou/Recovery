@@ -20,8 +20,8 @@ NDJSON event stream (`log`/`progress`/`data`/`error`, terminated by `result`).
 | `status`, `sideload`, `reflash`, `log`, `storages` | — |
 | `mount`, `unmount` (`umount`) | `paths`: string[] |
 | `flash` (`install`) | `zips`: string[]; `verify`: bool?; `reflash`: bool?; `unmount_system`: bool; `unmount_vendor`: bool |
-| `backup` | `parts`: string[]; `name`; `path`; `storage`; `compress`: bool; `digest`: bool (default true) |
-| `restore` | `parts`: string[]; `name`; `path`; `digest_check`: bool (default true) |
+| `backup` | `parts`: string[]; `name`; `path`; `storage`; `compress`: bool; `digest`: bool (default true); `encrypt`: bool; `password`: string? |
+| `restore` | `parts`: string[]; `name`; `path`; `digest_check`: bool (default true); `password`: string? |
 | `decrypt` | `password`; `user`: int |
 | `wipe` | `parts`: string[] |
 | `format_data` | `confirm`: bool |

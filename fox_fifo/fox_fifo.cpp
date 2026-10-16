@@ -345,6 +345,14 @@ int Fox_Fifo::Cmd_Backup(const Json::Value& args) {
 	bool compress = arg_bool(args, "compress");
 	// digest generation is on by default; an explicit digest:false disables it.
 	bool no_digest = arg_has(args, "digest") && !arg_bool(args, "digest", true);
+	// Backup encryption is explicit: a password argument enables it, and no
+	// password means no encryption (never inherit a leftover GUI toggle).
+	bool encrypt = arg_bool(args, "encrypt");
+	std::string password = arg_str(args, "password");
+	if (encrypt && password.empty()) {
+		gui_print("fox: encrypt requires a password\n");
+		return 1;
+	}
 
 	if (a.empty()) {
 		// No partitions: show what can be backed up.
@@ -411,6 +419,9 @@ int Fox_Fifo::Cmd_Backup(const Json::Value& args) {
 		// against the localized gui_lookup("auto_generate") string.
 		TWFunc::Auto_Generate_Backup_Name();
 	DataManager::SetValue("tw_backup_list", backup_list);
+	DataManager::SetValue("tw_encrypt_backup", password.empty() ? 0 : 1);
+	if (!password.empty())
+		DataManager::SetValue("tw_backup_password", password);
 
 	if (!PartitionManager.Run_Backup(false)) {
 		// Distinguish a user cancellation (via the fox cancel channel or the GUI)
@@ -481,10 +492,13 @@ int Fox_Fifo::Cmd_Restore(const Json::Value& args) {
 
 	int is_encrypted = 0;
 	DataManager::GetValue("tw_restore_encrypted", is_encrypted);
-	if (is_encrypted) {
-		gui_print("fox: cannot restore an encrypted backup from the CLI\n");
+	std::string password = arg_str(args, "password");
+	if (is_encrypted && password.empty()) {
+		gui_print("fox: encrypted backup; pass a 'password' arg to restore it\n");
 		return 1;
 	}
+	if (!password.empty())
+		DataManager::SetValue("tw_restore_password", password);
 
 	std::string available;
 	DataManager::GetValue("tw_restore_list", available);
