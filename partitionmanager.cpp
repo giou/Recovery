@@ -1294,6 +1294,20 @@ int TWPartitionManager::Run_Backup(bool adbbackup) {
 	part_settings.adbbackup = adbbackup;
 	time(&total_start);
 
+	// Resolve the backup name BEFORE anything that can touch the DataManager:
+	// Update_System_Details() reads build props and its read-failure fallback
+	// silently overwrites tw_backup_name with the current date, so a name from
+	// the fox CLI (or a user-typed name) was lost and the backup landed in a
+	// date-named folder (seen on device 2026-10-16).
+	DataManager::GetValue(TW_BACKUPS_FOLDER_VAR, part_settings.Backup_Folder);
+	DataManager::GetValue(TW_BACKUP_NAME, Backup_Name);
+	if (Backup_Name == gui_lookup("curr_date", "(Current Date)")) {
+		Backup_Name = TWFunc::Get_Current_Date();
+	} else if (Backup_Name == gui_lookup("auto_generate", "(Auto Generate)") || Backup_Name == "0" || Backup_Name.empty()) {
+		TWFunc::Auto_Generate_Backup_Name();
+		DataManager::GetValue(TW_BACKUP_NAME, Backup_Name);
+	}
+
 	Update_System_Details();
 
 	if (!Mount_Current_Storage(true))
@@ -1304,15 +1318,6 @@ int TWPartitionManager::Run_Backup(bool adbbackup) {
 		part_settings.generate_digest = true;
 	else
 		part_settings.generate_digest = false;
-
-	DataManager::GetValue(TW_BACKUPS_FOLDER_VAR, part_settings.Backup_Folder);
-	DataManager::GetValue(TW_BACKUP_NAME, Backup_Name);
-	if (Backup_Name == gui_lookup("curr_date", "(Current Date)")) {
-		Backup_Name = TWFunc::Get_Current_Date();
-	} else if (Backup_Name == gui_lookup("auto_generate", "(Auto Generate)") || Backup_Name == "0" || Backup_Name.empty()) {
-		TWFunc::Auto_Generate_Backup_Name();
-		DataManager::GetValue(TW_BACKUP_NAME, Backup_Name);
-	}
 
 	LOGINFO("Backup Name is: '%s'\n", Backup_Name.c_str());
 	part_settings.Backup_Folder = part_settings.Backup_Folder + "/" + Backup_Name;
@@ -2421,7 +2426,19 @@ int TWPartitionManager::Decrypt_Device(string Password, int user_id) {
 		while (!TWFunc::Path_Exists("/data/system/users/gatekeeper.password.key") && --retry_count)
 			usleep(2000); // A small sleep is needed after mounting /data to ensure reliable decrypt...maybe because of DE?
 		gui_msg(Msg("decrypting_user_fbe=Attempting to decrypt FBE for user {1}...")(user_id));
-		if (android::keystore::Decrypt_User(user_id, Password)) {
+		// The gatekeeper HAL occasionally returns a transient error instead of
+		// OK/reject ("GateKeeper response error" right after "using secdis to
+		// decrypt spblob") and an immediate re-verify succeeds - seen in four
+		// sessions 2026-10-15/16, predating any restore damage. Retry exactly
+		// once: a genuinely wrong password fails both times, so at most one
+		// extra failed attempt is ever spent.
+		bool decrypted = android::keystore::Decrypt_User(user_id, Password);
+		if (!decrypted) {
+			LOGINFO("Decrypt_User failed, retrying once\n");
+			usleep(300000);
+			decrypted = android::keystore::Decrypt_User(user_id, Password);
+		}
+		if (decrypted) {
 			gui_msg(Msg("decrypt_user_success_fbe=User {1} Decrypted Successfully")(user_id));
 			Mark_User_Decrypted(user_id);
 			if (user_id == 0) {
