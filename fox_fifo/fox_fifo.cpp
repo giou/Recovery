@@ -908,7 +908,7 @@ int Fox_Fifo::Cmd_Internal(const Json::Value& args) {
 		// decryption): without this a CLI-set autostart flag/preference only
 		// lived in memory and was lost on reboot (seen 2026-10-17: the wlan
 		// autostart vars never reached /persist, so a cold boot saw defaults).
-		DataManager::SaveValues();
+		DataManager::Flush();
 		return 0;
 	}
 	if (sub == "go") {
