@@ -777,16 +777,30 @@ bool NasManager::IsFuseAvailable() {
 	return true;
 }
 
-bool NasManager::IsMounted() {
+// A FUSE mount whose daemon died stays listed in /proc/mounts but answers
+// nothing (every operation fails with ENOTCONN).
+static bool Mount_Point_Is_Listed() {
 	std::ifstream mounts("/proc/mounts");
 	std::string line;
 
 	while (std::getline(mounts, line)) {
-		if (line.find(" " + Mount_Point + " ") != std::string::npos)
+		if (line.find(" " + NasManager::Mount_Point + " ") != std::string::npos)
 			return true;
 	}
 
 	return false;
+}
+
+bool NasManager::IsMounted() {
+	if (!Mount_Point_Is_Listed())
+		return false;
+
+	// Listed is not enough: require the mount to actually answer. A dead
+	// entry must read as "not mounted" or a retry says "already mounted"
+	// while every write fails.
+	struct statvfs st;
+
+	return statvfs(Mount_Point.c_str(), &st) == 0;
 }
 
 std::string NasManager::GetRemoteSpec() {
@@ -913,6 +927,16 @@ bool NasManager::Mount() {
 	if (!EnsureDirectory(Mount_Point, 0777))
 		return false;
 
+	// After a crashed session a dead FUSE mount or leftover files can sit on
+	// the mount point; rclone then refuses with "is not empty". The mount
+	// point is private to the NAS feature, so clearing it is safe.
+	if (Mount_Point_Is_Listed()) {
+		LOGINFO("NAS: clearing stale mount entry at %s\n", Mount_Point.c_str());
+		RunAndWait({"/system/bin/fusermount3", "-uz", Mount_Point}, nullptr);
+	}
+
+	RemoveTreeContents(Mount_Point);
+
 	std::string cache_mode = GetConfiguredCacheMode();
 
 	LOGINFO("NAS: selected cache mode: %s\n", cache_mode.c_str());
@@ -1037,6 +1061,13 @@ bool NasManager::Unmount() {
 	if (!IsMounted()) {
 		DataManager::SetValue(TW_NAS_MOUNTED, 0);
 		DataManager::SetValue(TW_NAS_STATUS_TEXT, "NAS is not mounted");
+
+		// A dead entry may still be listed; clear it so the next Mount()
+		// starts from a clean mount point.
+		if (Mount_Point_Is_Listed()) {
+			LOGINFO("NAS: clearing stale mount entry at %s\n", Mount_Point.c_str());
+			RunAndWait({"/system/bin/fusermount3", "-uz", Mount_Point}, nullptr);
+		}
 
 		LOGINFO("NAS: cleaning rclone tmp cache: %s\n", Cache_Dir.c_str());
 		RemoveTreeContents(Cache_Dir);
