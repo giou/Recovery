@@ -53,6 +53,7 @@ uniform:
 | `web` | generic group + `generate` (password value rides in `subaction`/`values`) |
 | `webserver` | generic group (`action`=group, `subaction`=verb, `values`=rest) |
 | `adbd` | generic group; `device` accepted as an alias for the forget id |
+| `nas` | `action`: `mount` \| `unmount` \| `status` (uses the persisted `tw_nas_*` settings) |
 | `control` | `action` |
 | `input` | `action`; `key`; `code`: int; `x`,`y`,`x2`,`y2`,`duration`: int |
 | `screencap` | `path`; `base64`: bool |

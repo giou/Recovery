@@ -59,6 +59,7 @@ private:
 	static int Cmd_Reboot(const Json::Value& args);
 	static int Cmd_Wlan(const Json::Value& args);
 	static int Cmd_Adbd(const Json::Value& args);
+	static int Cmd_Nas(const Json::Value& args);
 	static int Cmd_Internal(const Json::Value& args);
 	static int Cmd_Ors(const Json::Value& args);
 	static int Cmd_OrsCmd(const Json::Value& args);
