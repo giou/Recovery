@@ -20,6 +20,7 @@
 #include <fcntl.h>
 #include <string>
 #include <unistd.h>
+#include <vector>
 #include "data.hpp"
 #include "partitions.hpp"
 #include "set_metadata.h"
@@ -103,22 +104,42 @@ bool twrpDigestDriver::Check_File_Digest(const string& Filename) {
 	return false;
 }
 
-bool twrpDigestDriver::Check_Digest(string Full_Filename) {
-	char split_filename[512];
-	int index = 0;
+// Chunks of a split backup are named <base><thread><archive> using the same
+// "%i%02i" scheme that tarList() writes and extractMulti()/get_size() read:
+// data.f2fs.win000 = thread 0 archive 0, data.f2fs.win100 = thread 1 archive
+// 0, data.f2fs.win101 = thread 1 archive 1. Threads are 0..8 (core_count is
+// capped at 8; thread 0 is the unencrypted app/dalvik segment) and archives
+// run 0..MAX_ARCHIVE_COUNT per thread, contiguously - so a missing index ends
+// that thread's series. The digest code used to walk a single flat "%03i"
+// sequence and stop at the FIRST gap, so every chunk written by threads 1..8
+// (win100+) was silently never digested or digest-checked (apollon OTG
+// backups, 2026-10-17: 6 of 14 chunks covered).
+static std::vector<string> Split_Archive_Chunks(const string& base) {
+	std::vector<string> chunks;
+	char name[512];
 
+	for (int thread = 0; thread <= 8; thread++) {
+		for (int archive = 0; archive <= MAX_ARCHIVE_COUNT; archive++) {
+			sprintf(name, "%s%i%02i", base.c_str(), thread, archive);
+			if (!TWFunc::Path_Exists(name))
+				break;
+			chunks.push_back(name);
+		}
+	}
+	return chunks;
+}
+
+bool twrpDigestDriver::Check_Digest(string Full_Filename) {
 	sync();
 	if (!TWFunc::Path_Exists(Full_Filename)) {
-		// This is a split archive, we presume
-		memset(split_filename, 0, sizeof(split_filename));
-		while (index < 1000) {
-			sprintf(split_filename, "%s%03i", Full_Filename.c_str(), index);
-			if (!TWFunc::Path_Exists(split_filename))
-				break;
-				LOGINFO("split_filename: %s\n", split_filename);
-				if (!Check_File_Digest(split_filename))
-					return false;
-				index++;
+		// Split archive: check every chunk that exists. Chunks without a
+		// digest file warn and pass (Check_File_Digest), so backups made by
+		// the old generator still restore.
+		std::vector<string> chunks = Split_Archive_Chunks(Full_Filename);
+		for (size_t i = 0; i < chunks.size(); i++) {
+			LOGINFO("split_filename: %s\n", chunks[i].c_str());
+			if (!Check_File_Digest(chunks[i]))
+				return false;
 		}
 		return true;
 	}
@@ -192,25 +213,17 @@ bool twrpDigestDriver::Make_Digest(string Full_Filename) {
 		if (!Write_Digest(Full_Filename))
 			return false;
 	} else {
-		char filename[512];
-		int index = 0;
-		sprintf(filename, "%s%03i", Full_Filename.c_str(), index);
-		while (index < 1000) {
-			string digest_src(filename);
-			if (TWFunc::Path_Exists(filename)) {
-				if (!Write_Digest(filename))
-					return false;
-				}
-				else
-					break;
-				index++;
-				sprintf(filename, "%s%03i", Full_Filename.c_str(), index);
-			}
-			if (index == 0) {
-				LOGERR("Backup file: '%s' not found!\n", filename);
-					return false;
-			}
-			gui_msg("digest_created= * Digest Created.");
+		// Split archive: digest every chunk (see Split_Archive_Chunks).
+		std::vector<string> chunks = Split_Archive_Chunks(Full_Filename);
+		if (chunks.empty()) {
+			LOGERR("Backup file: '%s' not found!\n", Full_Filename.c_str());
+			return false;
+		}
+		for (size_t i = 0; i < chunks.size(); i++) {
+			if (!Write_Digest(chunks[i]))
+				return false;
+		}
+		gui_msg("digest_created= * Digest Created.");
 	}
 	return true;
 }
