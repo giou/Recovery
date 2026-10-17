@@ -190,6 +190,11 @@ void Fox_Channel::HandleInput()
 
 	Fox_Command_Dispatcher::Result result = Fox_Command_Dispatcher::DispatchFifo(out, request);
 	if (result == Fox_Command_Dispatcher::FAILED) {
+		// Never leave the client without a reply: a dispatch that cannot start
+		// (transient active state, fopen/Reset failure) must close the stream
+		// with an explicit error + result, or the client blocks forever.
+		Fox_Protocol::WriteErrorEvent(out, request.id, "busy", "operation in progress");
+		Fox_Protocol::WriteResultEvent(out, request.id, 1);
 		fclose(out);
 		RearmInput();
 	}

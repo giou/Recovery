@@ -149,6 +149,20 @@ ControlResult dispatch_control(const Fox_Rpc_Request& request)
 
 void start_action(const Fox_Rpc_Request& request, bool progress)
 {
+	// The previous action's thread clears tw_action_thread_running only after
+	// its doAction returns; during that window the GUI would refuse the
+	// singleaction we are about to fire, foxcmd would never run, and this
+	// dispatcher would stay ACTIVE forever (later clients hang and the input
+	// FIFO stays gated - seen 2026-10-17: a command landing right after
+	// another command's operation_end wedged the whole engine). Wait for the
+	// slot before submitting.
+	for (int waited = 0;
+	     waited < 300 && DataManager::GetIntValue("tw_action_thread_running") != 0;
+	     waited++) {
+		if (waited == 100)
+			LOGINFO("fox: waiting for the previous action to wind down...\n");
+		usleep(100 * 1000);
+	}
 	Fox_Fifo::Set_Request(request.op, request.args);
 	gui_set_FILE(g_output.log());
 	if (progress)
