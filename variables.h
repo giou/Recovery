@@ -44,6 +44,7 @@
 #define TW_NAS_PATH                 "tw_nas_path"
 #define TW_NAS_USER                 "tw_nas_user"
 #define TW_NAS_PASS                 "tw_nas_pass"
+#define TW_NAS_KEY                  "tw_nas_key"       // sftp private key file (passwordless accounts)
 #define TW_NAS_DOMAIN               "tw_nas_domain"
 #define TW_NAS_CACHE_MODE           "tw_nas_cache_mode"
 #define TW_NAS_STATUS_TEXT          "tw_nas_status_text"

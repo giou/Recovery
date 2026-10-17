@@ -836,6 +836,7 @@ bool NasManager::BuildRcloneConfig() {
 
 	std::string user = GetValue(TW_NAS_USER, "");
 	std::string pass = GetValue(TW_NAS_PASS, "");
+	std::string key_file = GetValue(TW_NAS_KEY, "");
 	std::string obscure_pass;
 
 	if (!pass.empty() && !RcloneObscure(pass, obscure_pass))
@@ -855,6 +856,10 @@ bool NasManager::BuildRcloneConfig() {
 
 		if (!obscure_pass.empty())
 			cfg << "pass = " << obscure_pass << "\n";
+
+		// Passwordless accounts (e.g. Windows) authenticate via a key file.
+		if (!key_file.empty())
+			cfg << "key_file = " << key_file << "\n";
 
 		cfg << "shell_type = unix\n";
 	} else {
