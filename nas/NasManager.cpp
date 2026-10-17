@@ -414,12 +414,39 @@ static bool RcloneRCResetStatsLocal() {
 	return RcloneRCPost("/core/stats-reset", response);
 }
 
+struct RcloneVfsStats {
+	int uploads_in_progress;
+	int uploads_queued;
+	int errored_files;
+	bool out_of_space;
+
+	RcloneVfsStats() : uploads_in_progress(0), uploads_queued(0), errored_files(0), out_of_space(false) {}
+};
+
+// rclone's live disk-cache state (current write-backs/uploads only). Unlike
+// core/stats' error fields, these are not cumulative for the mount lifetime.
+static bool RcloneRCGetVfsStats(RcloneVfsStats& stats) {
+	std::string response;
+	if (!RcloneRCPost("/vfs/stats", response))
+		return false;
+
+	double value = 0;
+
+	stats.uploads_in_progress = JsonNumberLocal(response, "uploadsInProgress", value) ? static_cast<int>(value) : 0;
+	stats.uploads_queued = JsonNumberLocal(response, "uploadsQueued", value) ? static_cast<int>(value) : 0;
+	stats.errored_files = JsonNumberLocal(response, "erroredFiles", value) ? static_cast<int>(value) : 0;
+	JsonBoolLocal(response, "outOfSpace", stats.out_of_space);
+
+	return true;
+}
+
 static bool WaitForCacheToDrain(const std::string& path, int max_seconds, bool update_progress, uint64_t expected_upload_bytes) {
 	if (path.empty())
 		return true;
 
 	uint64_t initial_cache_bytes = GetDirectoryBytes(path);
 	bool have_rc_stats = false;
+	int clean_hits = 0;
 
 	if (update_progress) {
 		DataManager::SetValue("tw_partition", "NAS upload");
@@ -492,12 +519,23 @@ static bool WaitForCacheToDrain(const std::string& path, int max_seconds, bool u
 
 		LOGINFO("NAS: %s\n", status.str().c_str());
 
-		if (have_rc_stats) {
-			if (stats.errors > 0 || stats.fatal_error || stats.retry_error)
-				return false;
+		RcloneVfsStats vfs_stats;
+		bool have_vfs_stats = RcloneRCGetVfsStats(vfs_stats);
 
-			if (stats.active_transfers == 0 && stats.checks == 0 &&
-				(expected_upload_bytes == 0 || stats.bytes >= expected_upload_bytes)) {
+		bool idle = have_rc_stats && have_vfs_stats &&
+			    stats.active_transfers == 0 && stats.checks == 0 &&
+			    vfs_stats.uploads_in_progress == 0 && vfs_stats.uploads_queued == 0;
+		bool clean = idle && !stats.fatal_error && !vfs_stats.out_of_space &&
+			     vfs_stats.errored_files == 0;
+
+		// One clean reading can be premature (a file closed within the
+		// write-back delay is not queued yet), so confirm it twice. Fail
+		// only when the queue is idle AND something is wrong: core/stats'
+		// error/retry flags live for the whole mount lifetime, so a retried
+		// upload from long before this wait must not kill a finished one
+		// (seen live 2026-10-17: 21 GB fully uploaded, wait failed anyway).
+		if (clean) {
+			if (++clean_hits >= 2) {
 				if (update_progress) {
 					DataManager::SetValue("tw_size_progress", "NAS upload complete");
 					DataManager::SetProgress(1.0f);
@@ -505,6 +543,12 @@ static bool WaitForCacheToDrain(const std::string& path, int max_seconds, bool u
 
 				return true;
 			}
+		} else {
+			clean_hits = 0;
+
+			if (idle && (stats.fatal_error || vfs_stats.out_of_space ||
+				     vfs_stats.errored_files > 0))
+				return false;
 		}
 
 		sleep(1);
