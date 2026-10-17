@@ -30,6 +30,7 @@ NDJSON event stream (`log`/`progress`/`data`/`error`, terminated by `result`).
 | `addons` | `action`; `names`: string[] |
 | `internal` | `action`; `name`; `value`; `page` |
 | `mtp` | `action` |
+| `nas` | `action`: `mount` \| `unmount` \| `status` (uses the persisted `tw_nas_*` settings) |
 | `input` | `action`; `key`; `code`: int; `x`,`y`,`x2`,`y2`,`duration`: int |
 | `screencap` | `path`; `base64`: bool |
 | `screenstream` | `action`; `fps`: int |

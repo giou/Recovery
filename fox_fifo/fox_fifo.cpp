@@ -39,6 +39,10 @@
 #include "gui/pages.hpp"
 #include "twinstall.h"
 
+#ifdef OF_ENABLE_WLAN
+// NAS op: guard keeps mainline (no nas sources) compiling; wlan gates it in.
+#include "../nas/NasManager.hpp"
+#endif
 #include "fox_remote_input.hpp"
 #include "fox_command_dispatcher.hpp"
 #include "minuitwrp/minui.h"
@@ -783,6 +787,44 @@ int Fox_Fifo::Cmd_Mtp(const Json::Value& args) {
 	return 2;
 }
 
+int Fox_Fifo::Cmd_Nas(const Json::Value& args) {
+#ifndef OF_ENABLE_WLAN
+	(void)args;
+	gui_print("fox: NAS support is not enabled in this build (OF_ENABLE_WLAN=0)\n");
+	return 1;
+#else
+	std::string sub = arg_action(args);
+	if (sub.empty())
+		sub = "status";
+	if (sub == "status") {
+		if (NasManager::IsMounted()) {
+			gui_print("NAS mounted at %s\n", NasManager::Mount_Point.c_str());
+			return 0;
+		}
+		gui_print("NAS not mounted\n");
+		return 1;
+	}
+	if (sub == "mount") {
+		if (!NasManager::Mount()) {
+			gui_print("fox: failed to mount NAS: %s\n", NasManager::GetLastError().c_str());
+			return 1;
+		}
+		gui_print("NAS mounted at %s\n", NasManager::Mount_Point.c_str());
+		return 0;
+	}
+	if (sub == "unmount") {
+		if (!NasManager::Unmount()) {
+			gui_print("fox: failed to unmount NAS: %s\n", NasManager::GetLastError().c_str());
+			return 1;
+		}
+		gui_print("NAS unmounted\n");
+		return 0;
+	}
+	gui_print("fox: unknown nas subcommand '%s' (mount|unmount|status)\n", sub.c_str());
+	return 2;
+#endif
+}
+
 int Fox_Fifo::Cmd_Log(const Json::Value& /*args*/) {
 	// Mirror the OrangeFox log export: copy the recovery log into the Fox logs
 	// folder and compress it (pigz produces <name>.zip), as in Run_Before_Reboot.
@@ -1025,6 +1067,8 @@ int Fox_Fifo::Run_Command() {
 		return Cmd_Status(a);
 	if (op == "reboot")
 		return Cmd_Reboot(a);
+	if (op == "nas")
+		return Cmd_Nas(a);
 	if (op == "internal")
 		return Cmd_Internal(a);
 	if (op == "wipe")
