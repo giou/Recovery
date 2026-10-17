@@ -2463,7 +2463,13 @@ int TWPartitionManager::Decrypt_Device(string Password, int user_id) {
 				}
 				Post_Decrypt("");
 			}
-
+#ifdef OF_ENABLE_WLAN
+			// The boot-time autostart ran pre-decrypt, when the settings and
+			// the saved WLAN credentials were still unreadable. Re-post it now
+			// that they are available; this FBE path returns before the vold
+			// tail below, so it needs its own post.
+			WlanWorker::Post(WlanWorker::CMD_AUTOSTART);
+#endif
 			return 0;
 		} else {
 			gui_msg(Msg(msg::kError, "decrypt_user_fail_fbe=Failed to decrypt user {1}")(user_id));
