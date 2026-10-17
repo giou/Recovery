@@ -904,6 +904,11 @@ int Fox_Fifo::Cmd_Internal(const Json::Value& args) {
 			return 2;
 		}
 		DataManager::SetValue(name, arg_str(args, "value"));
+		// Persist immediately (settings file + the /persist mirror read before
+		// decryption): without this a CLI-set autostart flag/preference only
+		// lived in memory and was lost on reboot (seen 2026-10-17: the wlan
+		// autostart vars never reached /persist, so a cold boot saw defaults).
+		DataManager::SaveValues();
 		return 0;
 	}
 	if (sub == "go") {

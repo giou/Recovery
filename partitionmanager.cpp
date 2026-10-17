@@ -27,6 +27,9 @@
 #include <unistd.h>
 #include <map>
 #include <vector>
+#ifdef OF_ENABLE_WLAN
+#include "wlan_worker.hpp"
+#endif
 #include <dirent.h>
 #include <time.h>
 #include <errno.h>
@@ -2623,6 +2626,12 @@ int TWPartitionManager::Decrypt_Device(string Password, int user_id) {
     {
       Post_Decrypt(crypto_blkdev);
     }
+#ifdef OF_ENABLE_WLAN
+  // The boot autostart runs before /data is readable (settings + saved WLAN
+  // credentials are encrypted), so it cannot connect pre-decrypt. Post it
+  // again now that everything is available; the worker is idempotent.
+  WlanWorker::Post(WlanWorker::CMD_AUTOSTART);
+#endif
   return 0;
 #else
   gui_err
