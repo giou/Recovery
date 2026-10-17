@@ -752,6 +752,32 @@ int TWFunc::Try_Decrypting_File(string fn, string password)
 	  return 2;		// Tar
 	}
     }
+  // A tar archive with no members is still a valid tar: it is nothing but
+  // the EOF marker (zero blocks), which carries no "ustar" magic. The backup
+  // writer produces these for split threads that were assigned no files
+  // (seen on a small /cache backup: threads 1..7 each got a 1024-byte empty
+  // tar -> 1056 bytes with the OAES frame overhead). Treat an all-zero
+  // payload as tar format so extraction succeeds with nothing to do instead
+  // of failing the whole restore.
+  if (out_len >= 512)
+    {
+      bool all_zero = true;
+      for (size_t z = 0; z < out_len; z++)
+	{
+	  if (buffer_out[z] != 0)
+	    {
+	      all_zero = false;
+	      break;
+	    }
+	}
+      if (all_zero)
+	{
+	  LOGINFO("Decrypted '%s' is an empty tar archive (EOF blocks only).\n",
+		  fn.c_str());
+	  free(buffer_out);
+	  return 2;		// Tar
+	}
+    }
   free(buffer_out);
   LOGINFO("No errors decrypting '%s' but no known file format.\n",
 	  fn.c_str());
