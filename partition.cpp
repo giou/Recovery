@@ -2951,6 +2951,16 @@ bool TWPartition::Backup_Tar(PartitionSettings *part_settings, pid_t *tar_fork_p
 		}
 	}
 	tar.part_settings = part_settings;
+	// The NAS write-back cache and the on-device SFTP key must never be part
+	// of a backup: the cache churns while a backup runs (its tree mirrors the
+	// remote path, so the storage walk would archive the backup's own pending
+	// chunks - "Error adding file ... error 255", seen live 2026-10-18), and
+	// the key is a secret. Both path forms are listed because the storage
+	// walk sees /storage and the data walk /data/media/0.
+	backup_exclusions.add_absolute_dir("/data/media/0/Fox/NASCache");
+	backup_exclusions.add_absolute_dir("/storage/Fox/NASCache");
+	backup_exclusions.add_absolute_dir("/data/media/0/Fox/.of-nas");
+	backup_exclusions.add_absolute_dir("/storage/Fox/.of-nas");
 	tar.backup_exclusions = &backup_exclusions;
 	tar.setdir(Backup_Path);
 	tar.setfn(Full_FileName);
