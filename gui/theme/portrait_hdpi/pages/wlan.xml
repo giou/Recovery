@@ -318,12 +318,15 @@
 			</text>
 
 			<listbox style="settingslist_group">
-				<placement x="0" y="%row2_2a_y%" w="%screen_w%" h="%lb_group_l2%"/>
+				<placement x="0" y="%row2_2a_y%" w="%screen_w%" h="%lb_group_l3%"/>
 				<listitem name="Enable WiFi automatically">
 					<data variable="of_wlan_auto_enable"/>
 				</listitem>
 				<listitem name="Connect to last WiFi automatically">
 					<data variable="of_wlan_auto_connect"/>
+				</listitem>
+				<listitem name="Network ADB automatically">
+					<data variable="of_adbd_auto"/>
 				</listitem>
 			</listbox>
 

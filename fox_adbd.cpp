@@ -37,6 +37,12 @@ constexpr int kMaxPairTimeout = 300;
 constexpr const char* kTlsEnableProp = "persist.adb.tls_server.enable";
 constexpr const char* kTlsPortProp = "service.adb.tls.port";
 constexpr const char* kTlsRequestedPortProp = "service.adb.tls.port.requested";
+// The AOSP daemon binds the TLS server on port 0 (random) unless patched to
+// read this property (the CI applies a one-line patch to adb_wifi.cpp:
+// TlsServer(GetIntProperty("service.adb.tls_server.port", 0))). With the
+// patch, the requested port is honored; without it the daemon falls back to
+// a random port and the actual one is still published via kTlsPortProp.
+constexpr const char* kTlsPortRequestProp = "service.adb.tls_server.port";
 constexpr const char* kTcpPortProp = "service.adb.tcp.port";
 
 std::mutex g_pair_mutex;
@@ -343,6 +349,7 @@ bool Fox_Adbd::StartSecure(int port)
 
 	SetProp(kTcpPortProp, "0");
 	SetProp(kTlsRequestedPortProp, std::to_string(port));
+	SetProp(kTlsPortRequestProp, std::to_string(port));
 	SetProp("ctl.start", "adbd");
 	if (!SetProp(kTlsEnableProp, "1")) {
 		gui_print("fox: failed to enable paired ADB\n");
@@ -374,6 +381,7 @@ bool Fox_Adbd::StartNoAuth(int port)
 	SetProp(kTlsEnableProp, "0");
 	SetProp(kTlsPortProp, "");
 	SetProp(kTlsRequestedPortProp, "");
+	SetProp(kTlsPortRequestProp, "");
 	SetProp(kTcpPortProp, std::to_string(port));
 	SetProp("ctl.restart", "adbd");
 	SetProp("ctl.start", "adbd");
@@ -446,6 +454,7 @@ bool Fox_Adbd::StopAll()
 	SetProp(kTlsEnableProp, "0");
 	SetProp(kTlsPortProp, "");
 	SetProp(kTlsRequestedPortProp, "");
+	SetProp(kTlsPortRequestProp, "");
 	SetProp(kTcpPortProp, "0");
 	SetProp("ctl.restart", "adbd");
 	return true;
@@ -458,6 +467,7 @@ void Fox_Adbd::PrintStatus()
 	std::string tls_enabled = GetProp(kTlsEnableProp);
 	std::string tls_port = GetProp(kTlsPortProp);
 	std::string requested = GetProp(kTlsRequestedPortProp);
+	std::string tls_port_requested = GetProp(kTlsPortRequestProp);
 	std::string tcp_port = GetProp(kTcpPortProp);
 
 	std::lock_guard<std::mutex> lock(g_pair_mutex);
@@ -477,6 +487,7 @@ void Fox_Adbd::PrintStatus()
 	s["secure_enabled"] = tls_enabled == "1";
 	s["connect_port"] = tls_port.empty() ? requested : tls_port;
 	s["no_auth_port"] = tcp_port;
+	s["secure_requested_port"] = tls_port_requested;
 	s["pairing_active"] = pairing;
 	s["pairing_port"] = g_pairing_port;
 	s["pairing_code"] = g_pairing_code;
