@@ -649,6 +649,8 @@ endif
 ifneq ($(TW_EXCLUDE_ENCRYPTED_BACKUPS),)
     TWRP_REQUIRED_MODULES += openaes openaes_license
 endif
+# CA store for TLS clients (FoxUpdater / any https fetch from the recovery).
+TWRP_REQUIRED_MODULES += cacerts
 ifeq ($(TW_INCLUDE_FB2PNG), true)
     TWRP_REQUIRED_MODULES += fb2png
 endif
