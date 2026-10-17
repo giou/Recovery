@@ -550,7 +550,23 @@ int DataManager::SetValue(const string & varName, const string & value,
 
   if (persist)
     {
-      mPersist.SetValue(varName, value);
+      if (persist == 2)
+	{
+	  // Write only when the variable is not set yet. The theme loader uses
+	  // this for vars.xml defaults so they never overwrite a value already
+	  // loaded from the /persist mirror (which is read before the GUI runs,
+	  // in the still-encrypted window): with an unconditional write every
+	  // persisted setting read as its default (seen 2026-10-17: the WLAN
+	  // autostart vars stored as 1 came back 0 on every boot).
+	  if (mPersist.GetValue(varName, test) != 0)
+	    {
+	      mPersist.SetValue(varName, value);
+	    }
+	}
+      else
+	{
+	  mPersist.SetValue(varName, value);
+	}
     }
   else
     {

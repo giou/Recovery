@@ -1576,6 +1576,12 @@ int PageSet::LoadVariables(xml_node<>* vars)
 				continue;
 			}
 			p = persist ? atoi(persist->value()) : 0;
+			// A theme default must not clobber a persisted value: the
+			// /persist mirror is loaded before the GUI, and an unconditional
+			// persist write here made every saved setting read as its default
+			// pre-decrypt (2026-10-17). Persist mode 2 = write-if-absent.
+			if (p == 1)
+				p = 2;
 			string temp = value->value();
 			string valstr = gui_parse_text(temp);
 
