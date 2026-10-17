@@ -1944,7 +1944,7 @@ bool Wlan::StartInitSupplicantService() {
      * still wait on init.svc.wpa_supplicant below. */
     property_set(WLAN_SUPP_PREP_PROP, "1");
 
-    if (!WaitForProperty(WLAN_SUPP_SVC_PROP, "running", 20000)) {
+    if (!WaitForProperty(WLAN_SUPP_SVC_PROP, "running", 120000)) {
         LOGERR("WLAN: init service %s failed to enter running state\n", WLAN_SUPP_SERVICE);
         return false;
     }
