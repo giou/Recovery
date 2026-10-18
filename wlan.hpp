@@ -107,6 +107,9 @@ private:
 
     static std::string Trim(const std::string& s);
     static std::string GetIface();
+    // Generate-once locally-administered MAC (of_wlan_fixed_mac), applied on
+    // every enable. Fail-open: any failure keeps the driver MAC.
+    static bool EnsureFixedMac();
     static std::string GetCtrlDir();
     static std::string GetSupplicantConf();
     static std::string EscapeDoubleQuotes(const std::string& s);

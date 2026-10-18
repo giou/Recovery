@@ -138,10 +138,6 @@ bool Wlan::Init() {
     return EnsureTmpLayout();
 }
 
-// Generate-once locally-administered MAC, persisted in of_wlan_fixed_mac
-// and applied on every enable (defined after Enable).
-static bool EnsureFixedMac();
-
 bool Wlan::Enable() {
     std::lock_guard<std::recursive_mutex> op(g_wlan_op_mutex);
     EnsureTmpLayout();
@@ -166,7 +162,7 @@ bool Wlan::Enable() {
 
 // Generate-once locally-administered MAC, persisted in of_wlan_fixed_mac
 // and applied on every enable. Fail-open: any failure keeps the driver MAC.
-static bool EnsureFixedMac() {
+bool Wlan::EnsureFixedMac() {
     std::string mac = DataManager::GetStrValue("of_wlan_fixed_mac");
     if (mac.empty()) {
         unsigned char bytes[6];
