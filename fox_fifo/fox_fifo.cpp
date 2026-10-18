@@ -37,6 +37,7 @@
 #include "gui/gui.hpp"
 #include "gui/gui.h"
 #include "gui/pages.hpp"
+#include "gui/blanktimer.hpp"
 #include "twinstall.h"
 
 #ifdef OF_ENABLE_WLAN
@@ -919,6 +920,15 @@ int Fox_Fifo::Cmd_Internal(const Json::Value& args) {
 			return 2;
 		}
 		gui_changePage(page);
+		return 0;
+	}
+	if (sub == "unlock") {
+		// Dismiss the screen-off lock overlay and restore the backlight, the
+		// same pair the theme's swipe/slider/button unlock performs. The lock
+		// is an overlay (blanktimer: ChangeOverlay("lock") on blank), so a
+		// page change cannot clear it - headless sessions need this verb.
+		gui_changeOverlay("");
+		blankTimer.resetTimerAndUnblank();
 		return 0;
 	}
 	gui_print("fox: unknown internal subcommand '%s'\n", sub.c_str());
