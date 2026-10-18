@@ -684,16 +684,22 @@ int Fox_Fifo::Cmd_Internal(const Json::Value& args) {
 		DataManager::GetValue("fox_pass_true", stored);
 		if (!stored.empty()) {
 			std::string given = arg_str(args, "password");
-			char sum[129];
 			unsigned char hash[SHA512_DIGEST_LENGTH];
 			SHA512_CTX ctx;
 			SHA512_Init(&ctx);
 			SHA512_Update(&ctx, given.c_str(), given.length());
 			SHA512_Final(hash, &ctx);
+			char full[129];
 			for (int i = 0; i < SHA512_DIGEST_LENGTH; i++)
-				sprintf(sum + (i * 2), "%02x", hash[i]);
-			sum[64] = 0;
-			if (given.empty() || stored != sum) {
+				sprintf(full + (i * 2), "%02x", hash[i]);
+			full[128] = 0;
+			std::string full_hex(full);
+			// The theme stores two shapes: the shipped default (vars.xml,
+			// the hash of "qwerty\n") is the full 128-char hash, while the
+			// setpassword action writes only the first 64 chars (its
+			// sha512sum NULs the buffer at offset 64). Accept either.
+			std::string short_hex = full_hex.substr(0, 64);
+			if (given.empty() || (stored != full_hex && stored != short_hex)) {
 				gui_print("fox: internal unlock requires the lockscreen password\n");
 				return 1;
 			}
