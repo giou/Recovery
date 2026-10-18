@@ -932,13 +932,6 @@ int twrpTar::createTar() {
 			gui_err("backup_error=Error creating backup.");
 			return -1;
 		}
-		output_fd = open(tarfn.c_str(), O_CLOEXEC | O_WRONLY | O_CREAT | O_EXCL | O_LARGEFILE, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
-		if (output_fd < 0) {
-			gui_msg(Msg(msg::kError, "error_opening_strerr=Error opening: '{1}' ({2})")(tarfn)(strerror(errno)));
-			for (i = 0; i < 4; i++)
-				close(pipes[i]); // close all
-			return -1;
-		}
 		pigz_pid = fork();
 
 		if (pigz_pid < 0) {
@@ -959,6 +952,22 @@ int twrpTar::createTar() {
 			}
 		} else {
 			// Parent
+			// The archive is opened here, after the pigz fork, and without
+			// O_CLOEXEC: a fork child that closes this fd (at exec or exit)
+			// makes FUSE emit FLUSH while the file is still empty, and a
+			// cache-less rclone mount treats that as "finalize and upload
+			// now" - 0-byte file, EBADF on every later write. Opened here,
+			// only openaes holds it, and its exit is the single close that
+			// finalizes the finished file.
+			output_fd = open(tarfn.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_LARGEFILE, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
+			if (output_fd < 0) {
+				gui_msg(Msg(msg::kError, "error_opening_strerr=Error opening: '{1}' ({2})")(tarfn)(strerror(errno)));
+				for (i = 0; i < 4; i++)
+					close(pipes[i]); // close all - pigz sees EOF and exits
+				int pstatus;
+				TWFunc::Wait_For_Child(pigz_pid, &pstatus, "pigz");
+				return -1;
+			}
 			oaes_pid = fork();
 
 			if (oaes_pid < 0) {
@@ -1004,7 +1013,11 @@ int twrpTar::createTar() {
 			output_fd = open(TW_ADB_BACKUP, O_WRONLY);
 		}
 		else {
-			output_fd = open(tarfn.c_str(), O_CLOEXEC | O_WRONLY | O_CREAT | O_EXCL | O_LARGEFILE, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
+			// No O_CLOEXEC: the pigz child inherits this fd as its stdout and
+			// must keep it until exit - an exec-time close makes FUSE FLUSH
+			// the still-empty file, which rclone's cache-less mount treats as
+			// "finalize and upload now" (0-byte file, EBADF on later writes).
+			output_fd = open(tarfn.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_LARGEFILE, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
 		}
 		if (output_fd < 0) {
 			gui_msg(Msg(msg::kError, "error_opening_strerr=Error opening: '{1}' ({2})")(tarfn)(strerror(errno)));
@@ -1053,7 +1066,11 @@ int twrpTar::createTar() {
 		current_archive_type = ENCRYPTED;
 		LOGINFO("Using encryption...\n");
 		int oaesfd[2];
-		output_fd = open(tarfn.c_str(), O_CLOEXEC | O_WRONLY | O_CREAT | O_EXCL | O_LARGEFILE, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
+		// No O_CLOEXEC: the openaes child inherits this fd as its stdout and
+		// must keep it until exit - an exec-time close makes FUSE FLUSH the
+		// still-empty file, which rclone's cache-less mount treats as
+		// "finalize and upload now" (0-byte file, EBADF on later writes).
+		output_fd = open(tarfn.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_LARGEFILE, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
 		if (output_fd < 0) {
 			gui_msg(Msg(msg::kError, "error_opening_strerr=Error opening: '{1}' ({2})")(tarfn)(strerror(errno)));
 			return -1;
