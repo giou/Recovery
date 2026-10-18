@@ -39,6 +39,7 @@
 		<variable name="of_wlan_auto_enable" value="0" persist="1"/>
 		<variable name="of_wlan_auto_connect" value="0" persist="1"/>
 		<variable name="of_wlan_last_ssid" value="" persist="1"/>
+		<variable name="of_wlan_last_psk" value="" persist="1"/>
 		<variable name="of_adbd_auto" value="0" persist="1"/>
 		<variable name="of_wlan_autostart_done" value="0"/>
 

@@ -14,6 +14,12 @@ public:
 	static void PrintStatus();
 	static std::string WlanIp();
 
+	// Pre-decrypt wireless ADB: seed /adb_keys from the /persist mirror
+	// written at pair time (the daemon only trusts /adb_keys plus /data/...,
+	// which is unreadable before decrypt). Called by StartSecure; no-op when
+	// nothing is persisted.
+	static void RestorePersistedAdbKeys();
+
 	// Authorized-device registry (backed by Fox_Secrets). PrintDevices emits a
 	// FOX_ADB_DEVICES_BEGIN/END block; ForgetDevice revokes by fingerprint or
 	// name, removing the key from both the registry and the adb_keys files.

@@ -15,6 +15,10 @@ public:
     static bool Scan();
     static bool Connect();
     static bool ConnectSaved();
+    // Pre-decrypt auto-join: same association sequence, but the credentials
+    // come as arguments (persisted of_wlan_last_* reads) instead of the
+    // scan metadata / Fox_Secrets / UI vars the other two paths need.
+    static bool ConnectInline(const std::string& ssid, const std::string& pass);
     static bool ForgetSaved();
     static bool Info();
     // Background status refresh that yields instead of blocking when another WLAN

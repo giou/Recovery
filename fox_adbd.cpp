@@ -179,6 +179,41 @@ bool IsMountPoint(const std::string& mount_point)
 	return found;
 }
 
+// Pre-decrypt wireless ADB (gated by of_adbd_auto): the daemon only trusts
+// /adb_keys (+ /data/..., unreadable before decrypt), so paired hosts are
+// mirrored here at pair time and restored into /adb_keys before StartSecure.
+// Plaintext on /persist is the price of pre-decrypt auto-join (same tradeoff
+// as the persisted Wi-Fi PSK).
+static const char* kPersistKeysPath = "/persist/adb_keys";
+
+bool AppendAdbKey(const std::string& key);
+
+// Mirror one paired host key into /persist (dedupe on the base64 token,
+// same rule as AppendAdbKey).
+void MirrorAdbKeyToPersist(const std::string& key)
+{
+	if (key.empty() || !IsMountPoint("/persist"))
+		return;
+	std::string existing;
+	android::base::ReadFileToString(kPersistKeysPath, &existing, false);
+	const std::string token = key.substr(0, key.find(' '));
+	std::istringstream lines(existing);
+	std::string line;
+	while (std::getline(lines, line)) {
+		if (line.substr(0, line.find(' ')) == token)
+			return;
+	}
+	FILE* f = fopen(kPersistKeysPath, "a");
+	if (!f)
+		return;
+	if (!existing.empty() && existing.back() != '\n')
+		fputc('\n', f);
+	fputs(key.c_str(), f);
+	fputc('\n', f);
+	fclose(f);
+	chmod(kPersistKeysPath, 0600);
+}
+
 bool AppendAdbKey(const std::string& key)
 {
 	if (key.empty())
@@ -309,6 +344,7 @@ void PairingResultCallback(const PeerInfo* peer_info, void*)
 		std::string key_str(key, strnlen(key, sizeof(peer_info->data)));
 		if (AppendAdbKey(key_str)) {
 			LOGINFO("ADB WiFi pairing: stored host key\n");
+			MirrorAdbKeyToPersist(key_str);
 			// Record the paired host in the registry so `web adb list/forget`
 			// can present and revoke it later.
 			Fox_Secrets::AddAdbDevice(key_str);
@@ -330,6 +366,29 @@ void PairingResultCallback(const PeerInfo* peer_info, void*)
 
 } // namespace
 
+void Fox_Adbd::RestorePersistedAdbKeys()
+{
+	static const char* kPersistKeys = "/persist/adb_keys";
+	static const char* kAdbKeys = "/adb_keys";
+	std::string persisted;
+	if (!android::base::ReadFileToString(kPersistKeys, &persisted, false) || persisted.empty())
+		return;
+	// /persist unreadable (or nothing paired yet) -> nothing to do. A
+	// non-empty /adb_keys means something already seeded it; don't duplicate.
+	std::string existing;
+	android::base::ReadFileToString(kAdbKeys, &existing, false);
+	if (!existing.empty())
+		return;
+	FILE* f = fopen(kAdbKeys, "a");
+	if (!f)
+		return;
+	fputs(persisted.c_str(), f);
+	if (persisted.back() != '\n')
+		fputc('\n', f);
+	fclose(f);
+	chmod(kAdbKeys, 0600);
+}
+
 std::string Fox_Adbd::WlanIp()
 {
 	Wlan::Info();
@@ -340,6 +399,10 @@ bool Fox_Adbd::StartSecure(int port)
 {
 	if (!ValidPort(port))
 		port = kDefaultPort;
+
+	// Pre-decrypt sessions have no /data keys; seed from the /persist mirror
+	// written at pair time so already-paired hosts stay authorized.
+	Fox_Adbd::RestorePersistedAdbKeys();
 
 	std::string ip;
 	if (!EnsureWlanConnected(ip)) {

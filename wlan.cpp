@@ -559,6 +559,9 @@ bool Wlan::Connect() {
     // Remember the last network we connected to so "connect automatically" can
     // re-join it on the next boot (persisted via the of_* variable).
     DataManager::SetValue("of_wlan_last_ssid", ssid);
+    // Same for the PSK: the pre-decrypt auto-join (of_adbd_auto) cannot read
+    // Fox_Secrets, so it uses this persisted copy.
+    DataManager::SetValue("of_wlan_last_psk", pass);
 
     /*
      * Show the check icon and "Connected" text in the overlay before it closes.
@@ -859,6 +862,7 @@ bool Wlan::ConnectSaved() {
     DataManager::SetValue("tw_wlan_connected", 1);
     DataManager::SetValue("wlan_connected_name", ssid);
     DataManager::SetValue("of_wlan_last_ssid", ssid);
+    DataManager::SetValue("of_wlan_last_psk", saved_pass);
 
     /*
      * Show the check icon and "Connected" text in the overlay before it closes.
@@ -871,6 +875,118 @@ bool Wlan::ConnectSaved() {
     gui_print("IP address: %s\n", ip_addr.c_str());
     gui_print("WLAN: saved network connected successfully!\n");
 
+    return true;
+}
+
+// Pre-decrypt auto-join for "Network ADB automatically" (of_adbd_auto): the
+// saved credentials live on encrypted /data, so this takes ssid+psk as
+// arguments (persisted of_wlan_last_* reads) and skips the scan metadata,
+// Fox_Secrets and UI vars the other two paths need. WPA-PSK covers the home
+// networks this is meant for (shortcut: no WPA3/SAE here; extend with a
+// persisted enc var if needed).
+bool Wlan::ConnectInline(const std::string& ssid, const std::string& pass) {
+    std::lock_guard<std::recursive_mutex> op(g_wlan_op_mutex);
+
+    if (ssid.empty() || pass.empty()) {
+        DataManager::SetValue("tw_wlan_connected", 0);
+        return false;
+    }
+
+    if (!IsEnabled() && !Enable()) {
+        DataManager::SetValue("tw_wlan_connected", 0);
+        return false;
+    }
+
+    std::string esc_ssid = EscapeDoubleQuotes(ssid);
+    std::string esc_pass = EscapeDoubleQuotes(pass);
+
+    gui_print("WLAN: inline connect to %s (pre-decrypt auto-join)\n", ssid.c_str());
+    if (!SuppCmd("ADD_NETWORK")
+        || !SuppCmd("SET_NETWORK 0 ssid \"" + esc_ssid + "\"")
+        || !SuppCmd("SET_NETWORK 0 key_mgmt WPA-PSK")
+        || !SuppCmd("SET_NETWORK 0 psk \"" + esc_pass + "\"")
+        || !SuppCmd("ENABLE_NETWORK 0")
+        || !SuppCmd("SELECT_NETWORK 0")
+        || !SuppCmd("RECONNECT")) {
+        gui_print("WLAN: inline network setup failed\n");
+        DataManager::SetValue("tw_wlan_connected", 0);
+        return false;
+    }
+
+    bool completed = false;
+    for (int tries = 0; tries < 12 && !completed; ++tries) {
+        std::string ev;
+        bool got_event = SuppWaitEvent({"CTRL-EVENT-CONNECTED", "CTRL-EVENT-DISCONNECTED",
+                                        "CTRL-EVENT-ASSOC-REJECT", "CTRL-EVENT-AUTH-REJECT"},
+                                       1500, ev);
+
+        std::string status;
+        if (SuppCmd("STATUS", status)) {
+            std::istringstream iss(status);
+            std::string line;
+            std::string wpa_state;
+            std::string current_ssid;
+
+            while (std::getline(iss, line)) {
+                if (line.rfind("wpa_state=", 0) == 0)
+                    wpa_state = line.substr(10);
+                else if (line.rfind("ssid=", 0) == 0)
+                    current_ssid = line.substr(5);
+            }
+
+            if (wpa_state == "COMPLETED" && current_ssid == ssid) {
+                completed = true;
+                break;
+            }
+        }
+
+        if (!got_event)
+            usleep(500 * 1000);
+    }
+
+    if (!completed) {
+        gui_print("WLAN: inline association failed\n");
+        DataManager::SetValue("tw_wlan_connected", 0);
+        UpdateConnectedName();
+        return false;
+    }
+
+    if (!StartDhcp()) {
+        gui_print("WLAN: inline DHCP failed\n");
+        DataManager::SetValue("tw_wlan_connected", 0);
+        UpdateConnectedName();
+        return false;
+    }
+
+    std::string ip_addr;
+    std::string connected_ssid;
+
+    for (int i = 0; i < 5; ++i) {
+        usleep(1000 * 1000);
+
+        std::string status;
+        if (SuppCmd("STATUS", status)) {
+            std::string wpa_state;
+            ParseSupplicantStatus(status, wpa_state, connected_ssid, ip_addr);
+
+            if (!ip_addr.empty() && !connected_ssid.empty())
+                break;
+        }
+    }
+
+    UpdateConnectedName();
+
+    if (ip_addr.empty()) {
+        gui_print("WLAN: inline connect got no IP address\n");
+        DataManager::SetValue("tw_wlan_connected", 0);
+        return false;
+    }
+
+    gui_print("WLAN: inline connected to %s (%s)\n", connected_ssid.c_str(), ip_addr.c_str());
+    DataManager::SetValue("tw_wlan_connected", 1);
+    DataManager::SetValue("wlan_connected_name", ssid);
+    DataManager::SetValue("of_wlan_last_ssid", ssid);
+    DataManager::SetValue("of_wlan_last_psk", pass);
     return true;
 }
 

@@ -74,6 +74,18 @@
 				<action function="wlan_autostart"/>
 			</action>
 
+			<!-- Pre-decrypt bring-up for "Network ADB automatically": same worker,
+			     but gated on of_adbd_auto alone, so wireless adb comes up even
+			     when the saved credentials on encrypted /data are unreadable
+			     (the worker joins with the persisted PSK instead). Fires once. -->
+			<action>
+				<condition var1="first_start" op="!=" var2="1"/>
+				<condition var1="of_adbd_auto" var2="1"/>
+				<condition var1="of_wlan_autostart_done" op="!=" var2="1"/>
+				<action function="set">of_wlan_autostart_done=1</action>
+				<action function="wlan_autostart"/>
+			</action>
+
 			<!-- Go to FM -->
 			<action>
 				<condition var1="first_start" op="!=" var2="1"/>

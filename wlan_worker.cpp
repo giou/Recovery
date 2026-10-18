@@ -117,10 +117,12 @@ void Handle(WlanWorker::Cmd cmd) {
 		break;
 
 	case WlanWorker::CMD_AUTOSTART:
-		// Boot-time auto-connect, gated by the persisted of_wlan_auto_* toggles.
-		// Runs on this worker thread so the (blocking) bring-up + association do
-		// not stall the GUI; the radio state is published as usual.
-		if (DataManager::GetIntValue("of_wlan_auto_enable") != 1)
+		// Boot-time auto-connect. The of_wlan_auto_enable toggle gates the
+		// normal path; of_adbd_auto ("Network ADB automatically") gates the
+		// pre-decrypt path on its own, since saved credentials on encrypted
+		// /data are unreadable when this first runs.
+		if (DataManager::GetIntValue("of_wlan_auto_enable") != 1
+		    && DataManager::GetIntValue("of_adbd_auto") != 1)
 			break;
 		if (!IsEnabledNow()) {
 			SetState("enabling");
@@ -140,6 +142,20 @@ void Handle(WlanWorker::Cmd cmd) {
 				Wlan::ConnectSaved();
 				SetState(SettledState());
 				Wlan::RefreshWlanPageIfShown();
+			}
+		}
+		// Pre-decrypt fallback for of_adbd_auto: ConnectSaved() above needs
+		// Fox_Secrets on encrypted /data, so when there is still no link,
+		// join with the persisted PSK instead. Post-decrypt this is a no-op
+		// (already connected) and the saved path stays authoritative.
+		if (DataManager::GetIntValue("of_adbd_auto") == 1 && !IsConnectedNow()) {
+			std::string ssid = DataManager::GetStrValue("of_wlan_last_ssid");
+			std::string psk = DataManager::GetStrValue("of_wlan_last_psk");
+			if (!ssid.empty() && !psk.empty()) {
+				if (Wlan::ConnectInline(ssid, psk)) {
+					SetState(SettledState());
+					Wlan::RefreshWlanPageIfShown();
+				}
 			}
 		}
 		// Hands-off sessions: with of_adbd_auto the network ADB comes up with
