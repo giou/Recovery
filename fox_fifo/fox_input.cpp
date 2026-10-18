@@ -17,10 +17,14 @@
 */
 
 #include <cstring>
+#include <dirent.h>
 #include <fcntl.h>
+#include <fstream>
+#include <limits.h>
 #include <linux/input.h>
 #include <linux/uinput.h>
 #include <pthread.h>
+#include <string>
 #include <sys/ioctl.h>
 #include <time.h>
 #include <unistd.h>
@@ -42,17 +46,81 @@ long long now_ms() {
 	return (long long)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
 }
 
-// The GUI re-scans /dev/input roughly every 2 s and only then opens the new
-// event node. Events written before that have no reader and are discarded, so
-// the first injection after a fresh device creation must wait (seen live
-// 2026-10-18: the first tap of a session never registered).
+// Path of the event node the kernel created for our uinput device, or "" if
+// it has not appeared yet. The device name is unique in the recovery.
+std::string device_node() {
+	DIR* d = opendir("/sys/class/input");
+	if (!d)
+		return "";
+	std::string node;
+	struct dirent* de;
+	while ((de = readdir(d)) != NULL) {
+		if (strncmp(de->d_name, "event", 5) != 0)
+			continue;
+		std::string namefile = std::string("/sys/class/input/") + de->d_name + "/device/name";
+		std::ifstream f(namefile);
+		std::string name;
+		if (f && std::getline(f, name) && name == "OrangeFox Virtual Touch") {
+			node = std::string("/dev/input/") + de->d_name;
+			break;
+		}
+	}
+	closedir(d);
+	return node;
+}
+
+// True when some process holds the node open - i.e. the GUI's ev_get() has
+// picked it up. Scans /proc/<pid>/fd; the recovery has few processes, so a
+// pass costs tens of milliseconds.
+bool reader_attached(const std::string& node) {
+	DIR* d = opendir("/proc");
+	if (!d)
+		return false;
+	bool found = false;
+	struct dirent* de;
+	while (!found && (de = readdir(d)) != NULL) {
+		if (de->d_name[0] < '0' || de->d_name[0] > '9')
+			continue;
+		std::string fddir = std::string("/proc/") + de->d_name + "/fd";
+		DIR* fds = opendir(fddir.c_str());
+		if (!fds)
+			continue;
+		struct dirent* fdde;
+		while ((fdde = readdir(fds)) != NULL) {
+			char target[PATH_MAX];
+			ssize_t n = readlink((fddir + "/" + fdde->d_name).c_str(), target, sizeof(target) - 1);
+			if (n <= 0)
+				continue;
+			target[n] = 0;
+			if (node == target) {
+				found = true;
+				break;
+			}
+		}
+		closedir(fds);
+	}
+	closedir(d);
+	return found;
+}
+
+// The GUI re-scans /dev/input on a ~2 s timer and only then opens the new
+// event node; events written before that have no reader and are discarded
+// (seen live 2026-10-18: the first tap of a session never registered). Wait
+// for the actual condition - the node opened by the GUI - polling every
+// 50 ms, with the old 2.5 s bound kept as a fallback so a missed detection
+// can never block an injection forever.
 void wait_for_reader() {
 	if (g_created_ms == 0)
 		return;
 
-	long long waited = now_ms() - g_created_ms;
-	if (waited < 2500) {
-		struct timespec ts = { 0, (2500 - waited) * 1000 * 1000 };
+	long long deadline = g_created_ms + 2500;
+	for (;;) {
+		std::string node = device_node();
+		if (!node.empty() && reader_attached(node))
+			break;
+		if (now_ms() >= deadline)
+			break;
+		struct timespec ts = { 0, 50 * 1000 * 1000 };
 		nanosleep(&ts, nullptr);
 	}
 	g_created_ms = 0;
