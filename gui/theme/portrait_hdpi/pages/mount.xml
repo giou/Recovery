@@ -228,6 +228,19 @@
 		</page>
 
 		<page name="decrypt">
+			<!-- Pre-decrypt WLAN/ADB bring-up: while /data is encrypted this
+			     page owns the GUI and the main page (whose hooks carry the
+			     normal autostart) never renders, so the of_adbd_auto hook
+			     must live here. Fires once; the worker no-ops unless the
+			     toggle is on and joins with the persisted PSK. -->
+			<action>
+				<condition var1="first_start" op="!=" var2="1"/>
+				<condition var1="of_adbd_auto" var2="1"/>
+				<condition var1="of_wlan_autostart_done" op="!=" var2="1"/>
+				<action function="set">of_wlan_autostart_done=1</action>
+				<action function="wlan_autostart"/>
+			</action>
+
 			<action>
 				<condition var1="tw_crypto_pwtype" var2="2"/>
 				<action function="page">decrypt_pattern</action>
