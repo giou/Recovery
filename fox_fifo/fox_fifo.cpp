@@ -38,6 +38,7 @@
 #include "gui/gui.h"
 #include "gui/pages.hpp"
 #include "gui/blanktimer.hpp"
+#include "../twrpDigest/twrpSHA.hpp"
 #include "twinstall.h"
 
 #ifdef OF_ENABLE_WLAN
@@ -676,6 +677,27 @@ int Fox_Fifo::Cmd_Internal(const Json::Value& args) {
 		// same pair the theme's swipe/slider/button unlock performs. The lock
 		// is an overlay (blanktimer: ChangeOverlay("lock") on blank), so a
 		// page change cannot clear it - headless sessions need this verb.
+		// When a lockscreen password is set (Security settings; the theme
+		// stores its SHA-512 in fox_pass_true), require it: the UI lock must
+		// not be silently bypassable through this verb.
+		std::string stored;
+		DataManager::GetValue("fox_pass_true", stored);
+		if (!stored.empty()) {
+			std::string given = arg_str(args, "password");
+			char sum[129];
+			unsigned char hash[SHA512_DIGEST_LENGTH];
+			SHA512_CTX ctx;
+			SHA512_Init(&ctx);
+			SHA512_Update(&ctx, given.c_str(), given.length());
+			SHA512_Final(hash, &ctx);
+			for (int i = 0; i < SHA512_DIGEST_LENGTH; i++)
+				sprintf(sum + (i * 2), "%02x", hash[i]);
+			sum[64] = 0;
+			if (given.empty() || stored != sum) {
+				gui_print("fox: internal unlock requires the lockscreen password\n");
+				return 1;
+			}
+		}
 		gui_changeOverlay("");
 		blankTimer.resetTimerAndUnblank();
 		return 0;
