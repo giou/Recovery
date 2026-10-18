@@ -1067,7 +1067,11 @@ bool NasManager::Mount() {
 		return false;
 	}
 
-	for (int i = 0; i < 30; ++i) {
+	// rclone needs a few seconds to bring up the SFTP session and the FUSE
+	// mount; a 3 s window reported failure while the mount was still coming
+	// up (seen live 2026-10-18: mount succeeded, op said failed, status then
+	// said mounted). Wait up to 30 s.
+	for (int i = 0; i < 300; ++i) {
 		if (IsMounted()) {
 			DataManager::SetValue(TW_NAS_MOUNTED, 1);
 
