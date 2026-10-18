@@ -28,6 +28,8 @@ extern "C" {
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <spawn.h>
+#include <unistd.h>
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -176,18 +178,9 @@ int twrpTar::createTarFork(pid_t *tar_fork_pid) {
 			pthread_attr_t tattr;
 			void *thread_return;
 
-			// One thread, deliberately. The per-thread pipelines fork
-			// pigz/openaes; every fork child inherits the SIBLING threads'
-			// open part fds and closes them on exit, firing a premature FUSE
-			// FLUSH that finalizes those parts early on FUSE targets (rclone:
-			// EBADF on every later write, 2026-10-18). The threaded phase also
-			// aborted /data+encryption backups with Scudo heap corruption
-			// (2026-10-17). Both disappear with a single pipeline, and the
-			// target is network/disk-bound anyway (pigz itself still uses all
-			// cores). Arithmetic stays consistent: for /data start=1 and the
-			// list lands in enc[1]; for /storage the decrement below leaves
-			// core_count=0 and everything lands in enc[0].
-			core_count = 1;
+			core_count = sysconf(_SC_NPROCESSORS_CONF);
+			if (core_count > 8)
+				core_count = 8;
 			LOGINFO("   Core Count      : %u\n", core_count);
 			Archive_Current_Size = 0;
 
@@ -921,6 +914,35 @@ int twrpTar::addFilesToExistingTar(vector <string> files, string fn) {
 	return 0;
 }
 
+// Spawn a pipeline child (pigz/openaes) for the archive. The archive file is
+// opened by the CHILD via posix_spawn file actions, never by the parent:
+// every fork in the multi-threaded encrypted phase inherits the process's
+// open fds, so a parent-held archive fd would be copied into every other
+// thread's children - and the first child to exit closes it, which FUSE
+// turns into FLUSH; a cache-less rclone mount treats that as "finalize and
+// upload now" and the real writer gets EBADF from then on (seen live
+// 2026-10-18: the first part of every stream died at 2-5 MB). Opened in the
+// child, the only close is its own exit, after its data is complete.
+// stdin_fd / stdout_fd are dup2'ed into the child (fifos, pipes); when
+// stdout_fd < 0 the child opens out_path as its stdout instead.
+static int SpawnArchiveChild(pid_t* pid, const std::string& exe,
+                             char* const argv[], int stdin_fd,
+                             int stdout_fd, const std::string& out_path) {
+	posix_spawn_file_actions_t fa;
+	posix_spawn_file_actions_init(&fa);
+	if (stdin_fd >= 0)
+		posix_spawn_file_actions_adddup2(&fa, stdin_fd, STDIN_FILENO);
+	if (stdout_fd >= 0)
+		posix_spawn_file_actions_adddup2(&fa, stdout_fd, STDOUT_FILENO);
+	else
+		posix_spawn_file_actions_addopen(&fa, STDOUT_FILENO, out_path.c_str(),
+		                                 O_WRONLY | O_CREAT | O_EXCL | O_LARGEFILE,
+		                                 S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
+	int rc = posix_spawnp(pid, exe.c_str(), &fa, NULL, argv, environ);
+	posix_spawn_file_actions_destroy(&fa);
+	return rc;  // 0, or the errno from the child's setup (open/dup2)
+}
+
 int twrpTar::createTar() {
 	char* charTarFile = (char*) tarfn.c_str();
 	char* charRootDir = (char*) tardir.c_str();
@@ -941,77 +963,55 @@ int twrpTar::createTar() {
 			gui_err("backup_error=Error creating backup.");
 			return -1;
 		}
-		pigz_pid = fork();
-
-		if (pigz_pid < 0) {
-			LOGINFO("pigz fork() failed\n");
-			gui_err("backup_error=Error creating backup.");
-			close(output_fd);
-			for (i = 0; i < 4; i++)
-				close(pipes[i]); // close all
-			return -1;
-		} else if (pigz_pid == 0) {
-			// pigz Child
-			dup2(pipes[0], STDIN_FILENO);
-			dup2(pipes[3], STDOUT_FILENO);
-			if (execlp("pigz", "pigz", "-", NULL) < 0) {
-				LOGINFO("execlp pigz ERROR!\n");
+		// pigz: tar stream in, compressed stream out into the second pipe.
+		{
+			char* const pigz_argv[] = {
+				const_cast<char*>("pigz"), const_cast<char*>("-"), NULL
+			};
+			int rc = SpawnArchiveChild(&pigz_pid, "pigz", pigz_argv,
+			                           pipes[0], pipes[3], std::string());
+			if (rc != 0) {
+				LOGINFO("pigz spawn() failed: %s\n", strerror(rc));
 				gui_err("backup_error=Error creating backup.");
-				_exit(-1);
+				for (i = 0; i < 4; i++)
+					close(pipes[i]); // close all
+				return -1;
 			}
-		} else {
-			// Parent
-			// The archive is opened here, after the pigz fork, and without
-			// O_CLOEXEC: a fork child that closes this fd (at exec or exit)
-			// makes FUSE emit FLUSH while the file is still empty, and a
-			// cache-less rclone mount treats that as "finalize and upload
-			// now" - 0-byte file, EBADF on every later write. Opened here,
-			// only openaes holds it, and its exit is the single close that
-			// finalizes the finished file.
-			output_fd = open(tarfn.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_LARGEFILE, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
-			if (output_fd < 0) {
-				gui_msg(Msg(msg::kError, "error_opening_strerr=Error opening: '{1}' ({2})")(tarfn)(strerror(errno)));
+		}
+		// openaes: compressed stream in, encrypted archive out. The child
+		// opens the archive itself (see SpawnArchiveChild): a parent-held fd
+		// would be inherited by the sibling threads' fork children, whose
+		// exits would close it and finalize this part early on FUSE targets.
+		{
+			char* const oaes_argv[] = {
+				const_cast<char*>("openaes"), const_cast<char*>("enc"),
+				const_cast<char*>("--key"), const_cast<char*>(password.c_str()), NULL
+			};
+			int rc = SpawnArchiveChild(&oaes_pid, "openaes", oaes_argv,
+			                           pipes[2], -1, tarfn);
+			if (rc != 0) {
+				gui_msg(Msg(msg::kError, "error_opening_strerr=Error opening: '{1}' ({2})")(tarfn)(strerror(rc)));
 				for (i = 0; i < 4; i++)
 					close(pipes[i]); // close all - pigz sees EOF and exits
 				int pstatus;
 				TWFunc::Wait_For_Child(pigz_pid, &pstatus, "pigz");
 				return -1;
 			}
-			oaes_pid = fork();
-
-			if (oaes_pid < 0) {
-				LOGINFO("openaes fork() failed\n");
-				gui_err("backup_error=Error creating backup.");
-				close(output_fd);
-				for (i = 0; i < 4; i++)
-					close(pipes[i]); // close all
-				return -1;
-			} else if (oaes_pid == 0) {
-				// openaes Child
-				dup2(pipes[2], STDIN_FILENO);
-				dup2(output_fd, STDOUT_FILENO);
-				if (execlp("openaes", "openaes", "enc", "--key", password.c_str(), NULL) < 0) {
-					LOGINFO("execlp openaes ERROR!\n");
-					gui_err("backup_error=Error creating backup.");
-					_exit(-1);
-				}
-			} else {
-				// Parent
-				close(pipes[0]);
-				close(pipes[2]);
-				close(pipes[3]);
-				fd = pipes[1];
-				init_libtar_no_buffer(progress_pipe_fd);
-				tar_type.writefunc = write_tar_no_buffer;
-				if (tar_fdopen(&t, fd, charRootDir, &tar_type, O_CLOEXEC | O_WRONLY | O_CREAT | O_EXCL | O_LARGEFILE, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH, TWTAR_FLAGS) != 0) {
-					close(fd);
-					LOGINFO("tar_fdopen failed\n");
-					gui_err("backup_error=Error creating backup.");
-					return -1;
-				}
-				return 0;
-			}
 		}
+		// Parent
+		close(pipes[0]);
+		close(pipes[2]);
+		close(pipes[3]);
+		fd = pipes[1];
+		init_libtar_no_buffer(progress_pipe_fd);
+		tar_type.writefunc = write_tar_no_buffer;
+		if (tar_fdopen(&t, fd, charRootDir, &tar_type, O_CLOEXEC | O_WRONLY | O_CREAT | O_EXCL | O_LARGEFILE, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH, TWTAR_FLAGS) != 0) {
+			close(fd);
+			LOGINFO("tar_fdopen failed\n");
+			gui_err("backup_error=Error creating backup.");
+			return -1;
+		}
+		return 0;
 	} else if (use_compression) {
 		// Compressed
 		current_archive_type = COMPRESSED;
@@ -1020,108 +1020,91 @@ int twrpTar::createTar() {
 		if (part_settings->adbbackup) {
 			LOGINFO("opening TW_ADB_BACKUP compressed stream\n");
 			output_fd = open(TW_ADB_BACKUP, O_WRONLY);
-		}
-		else {
-			// No O_CLOEXEC: the pigz child inherits this fd as its stdout and
-			// must keep it until exit - an exec-time close makes FUSE FLUSH
-			// the still-empty file, which rclone's cache-less mount treats as
-			// "finalize and upload now" (0-byte file, EBADF on later writes).
-			output_fd = open(tarfn.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_LARGEFILE, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
-		}
-		if (output_fd < 0) {
-			gui_msg(Msg(msg::kError, "error_opening_strerr=Error opening: '{1}' ({2})")(tarfn)(strerror(errno)));
-			return -1;
+			if (output_fd < 0) {
+				gui_msg(Msg(msg::kError, "error_opening_strerr=Error opening: '{1}' ({2})")(TW_ADB_BACKUP)(strerror(errno)));
+				return -1;
+			}
 		}
 
 		if (pipe2(pigzfd, O_CLOEXEC) < 0) {
 			LOGINFO("Error creating pipe\n");
 			gui_err("backup_error=Error creating backup.");
-			close(output_fd);
+			if (output_fd >= 0)
+				close(output_fd);
 			return -1;
 		}
-		pigz_pid = fork();
-
-		if (pigz_pid < 0) {
-			LOGINFO("fork() failed\n");
-			gui_err("backup_error=Error creating backup.");
-			close(output_fd);
-			close(pigzfd[0]);
-			close(pigzfd[1]);
-			return -1;
-		} else if (pigz_pid == 0) {
-			// Child
-			dup2(pigzfd[0], STDIN_FILENO); // remap stdin
-			dup2(output_fd, STDOUT_FILENO); // remap stdout to output file
-			if (execlp("pigz", "pigz", "-", NULL) < 0) {
-				LOGINFO("execlp pigz ERROR!\n");
-				gui_err("backup_error=Error creating backup.");
-				_exit(-1);
-			}
-		} else {
-			// Parent
-			close(pigzfd[0]); // close parent input
-			fd = pigzfd[1];   // copy parent output
-			init_libtar_no_buffer(progress_pipe_fd);
-			tar_type.writefunc = write_tar_no_buffer;
-			if (tar_fdopen(&t, fd, charRootDir, &tar_type, O_CLOEXEC | O_WRONLY | O_CREAT | O_EXCL | O_LARGEFILE, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH, TWTAR_FLAGS) != 0) {
-				close(fd);
-				LOGINFO("tar_fdopen failed\n");
-				gui_err("backup_error=Error creating backup.");
+		// The pigz child writes the archive: for a file target it opens the
+		// archive itself (see SpawnArchiveChild - the parent must not hold a
+		// part fd, or sibling threads' fork children would close it early on
+		// FUSE targets); for an adb stream it gets the parent's fifo fd.
+		{
+			char* const pigz_argv[] = {
+				const_cast<char*>("pigz"), const_cast<char*>("-"), NULL
+			};
+			int rc = SpawnArchiveChild(&pigz_pid, "pigz", pigz_argv, pigzfd[0],
+			                           part_settings->adbbackup ? output_fd : -1, tarfn);
+			if (rc != 0) {
+				gui_msg(Msg(msg::kError, "error_opening_strerr=Error opening: '{1}' ({2})")(tarfn)(strerror(rc)));
+				if (output_fd >= 0)
+					close(output_fd);
+				close(pigzfd[0]);
+				close(pigzfd[1]);
 				return -1;
 			}
+		}
+		// Parent
+		close(pigzfd[0]); // close parent input
+		if (output_fd >= 0) {
+			// The child holds its own dup of the adb fifo.
+			close(output_fd);
+			output_fd = -1;
+		}
+		fd = pigzfd[1];   // copy parent output
+		init_libtar_no_buffer(progress_pipe_fd);
+		tar_type.writefunc = write_tar_no_buffer;
+		if (tar_fdopen(&t, fd, charRootDir, &tar_type, O_CLOEXEC | O_WRONLY | O_CREAT | O_EXCL | O_LARGEFILE, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH, TWTAR_FLAGS) != 0) {
+			close(fd);
+			LOGINFO("tar_fdopen failed\n");
+			gui_err("backup_error=Error creating backup.");
+			return -1;
 		}
 	} else if (use_encryption) {
 		// Encrypted
 		current_archive_type = ENCRYPTED;
 		LOGINFO("Using encryption...\n");
 		int oaesfd[2];
-		// No O_CLOEXEC: the openaes child inherits this fd as its stdout and
-		// must keep it until exit - an exec-time close makes FUSE FLUSH the
-		// still-empty file, which rclone's cache-less mount treats as
-		// "finalize and upload now" (0-byte file, EBADF on later writes).
-		output_fd = open(tarfn.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_LARGEFILE, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
-		if (output_fd < 0) {
-			gui_msg(Msg(msg::kError, "error_opening_strerr=Error opening: '{1}' ({2})")(tarfn)(strerror(errno)));
-			return -1;
-		}
 		if (pipe2(oaesfd, O_CLOEXEC) < 0) {
 			LOGINFO("Error creating pipe\n");
 			gui_err("backup_error=Error creating backup.");
-			close(output_fd);
 			return -1;
 		}
-		oaes_pid = fork();
-
-		if (oaes_pid < 0) {
-			LOGINFO("fork() failed\n");
-			gui_err("backup_error=Error creating backup.");
-			close(output_fd);
-			close(oaesfd[0]);
-			close(oaesfd[1]);
-			return -1;
-		} else if (oaes_pid == 0) {
-			// Child
-			dup2(oaesfd[0], STDIN_FILENO); // remap stdin
-			dup2(output_fd, STDOUT_FILENO); // remap stdout to output file
-			if (execlp("openaes", "openaes", "enc", "--key", password.c_str(), NULL) < 0) {
-				LOGINFO("execlp openaes ERROR!\n");
-				gui_err("backup_error=Error creating backup.");
-				_exit(-1);
-			}
-		} else {
-			// Parent
-			close(oaesfd[0]); // close parent input
-			fd = oaesfd[1];   // copy parent output
-			init_libtar_no_buffer(progress_pipe_fd);
-			tar_type.writefunc = write_tar_no_buffer;
-			if (tar_fdopen(&t, fd, charRootDir, &tar_type, O_CLOEXEC | O_WRONLY | O_CREAT | O_EXCL | O_LARGEFILE, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH, TWTAR_FLAGS) != 0) {
-				close(fd);
-				LOGINFO("tar_fdopen failed\n");
-				gui_err("backup_error=Error creating backup.");
+		// The openaes child opens the archive itself - see SpawnArchiveChild.
+		{
+			char* const oaes_argv[] = {
+				const_cast<char*>("openaes"), const_cast<char*>("enc"),
+				const_cast<char*>("--key"), const_cast<char*>(password.c_str()), NULL
+			};
+			int rc = SpawnArchiveChild(&oaes_pid, "openaes", oaes_argv,
+			                           oaesfd[0], -1, tarfn);
+			if (rc != 0) {
+				gui_msg(Msg(msg::kError, "error_opening_strerr=Error opening: '{1}' ({2})")(tarfn)(strerror(rc)));
+				close(oaesfd[0]);
+				close(oaesfd[1]);
 				return -1;
 			}
-			return 0;
 		}
+		// Parent
+		close(oaesfd[0]); // close parent input
+		fd = oaesfd[1];   // copy parent output
+		init_libtar_no_buffer(progress_pipe_fd);
+		tar_type.writefunc = write_tar_no_buffer;
+		if (tar_fdopen(&t, fd, charRootDir, &tar_type, O_CLOEXEC | O_WRONLY | O_CREAT | O_EXCL | O_LARGEFILE, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH, TWTAR_FLAGS) != 0) {
+			close(fd);
+			LOGINFO("tar_fdopen failed\n");
+			gui_err("backup_error=Error creating backup.");
+			return -1;
+		}
+		return 0;
 	} else {
 		// Not compressed or encrypted
 		current_archive_type = UNCOMPRESSED;
