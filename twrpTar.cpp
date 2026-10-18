@@ -176,9 +176,18 @@ int twrpTar::createTarFork(pid_t *tar_fork_pid) {
 			pthread_attr_t tattr;
 			void *thread_return;
 
-			core_count = sysconf(_SC_NPROCESSORS_CONF);
-			if (core_count > 8)
-				core_count = 8;
+			// One thread, deliberately. The per-thread pipelines fork
+			// pigz/openaes; every fork child inherits the SIBLING threads'
+			// open part fds and closes them on exit, firing a premature FUSE
+			// FLUSH that finalizes those parts early on FUSE targets (rclone:
+			// EBADF on every later write, 2026-10-18). The threaded phase also
+			// aborted /data+encryption backups with Scudo heap corruption
+			// (2026-10-17). Both disappear with a single pipeline, and the
+			// target is network/disk-bound anyway (pigz itself still uses all
+			// cores). Arithmetic stays consistent: for /data start=1 and the
+			// list lands in enc[1]; for /storage the decrement below leaves
+			// core_count=0 and everything lands in enc[0].
+			core_count = 1;
 			LOGINFO("   Core Count      : %u\n", core_count);
 			Archive_Current_Size = 0;
 
