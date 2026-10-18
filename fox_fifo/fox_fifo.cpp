@@ -677,33 +677,10 @@ int Fox_Fifo::Cmd_Internal(const Json::Value& args) {
 		// same pair the theme's swipe/slider/button unlock performs. The lock
 		// is an overlay (blanktimer: ChangeOverlay("lock") on blank), so a
 		// page change cannot clear it - headless sessions need this verb.
-		// When a lockscreen password is set (Security settings; the theme
-		// stores its SHA-512 in fox_pass_true), require it: the UI lock must
-		// not be silently bypassable through this verb.
-		std::string stored;
-		DataManager::GetValue("fox_pass_true", stored);
-		if (!stored.empty()) {
-			std::string given = arg_str(args, "password");
-			unsigned char hash[SHA512_DIGEST_LENGTH];
-			SHA512_CTX ctx;
-			SHA512_Init(&ctx);
-			SHA512_Update(&ctx, given.c_str(), given.length());
-			SHA512_Final(hash, &ctx);
-			char full[129];
-			for (int i = 0; i < SHA512_DIGEST_LENGTH; i++)
-				sprintf(full + (i * 2), "%02x", hash[i]);
-			full[128] = 0;
-			std::string full_hex(full);
-			// The theme stores two shapes: the shipped default (vars.xml,
-			// the hash of "qwerty\n") is the full 128-char hash, while the
-			// setpassword action writes only the first 64 chars (its
-			// sha512sum NULs the buffer at offset 64). Accept either.
-			std::string short_hex = full_hex.substr(0, 64);
-			if (given.empty() || (stored != full_hex && stored != short_hex)) {
-				gui_print("fox: internal unlock requires the lockscreen password\n");
-				return 1;
-			}
-		}
+		// It deliberately does NOT ask for the recovery access password: that
+		// is a separate page gate (password_enter_num, fox_pass_true) which
+		// this verb cannot and must not touch - the GUI's own swipe unlock
+		// never asks for the password either.
 		gui_changeOverlay("");
 		blankTimer.resetTimerAndUnblank();
 		// The GUI skips rendering while the screen-off state is active, so a
