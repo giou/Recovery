@@ -409,6 +409,7 @@
 		<variable name="tw_nas_path" value="" persist="1"/>
 		<variable name="tw_nas_user" value="" persist="1"/>
 		<variable name="tw_nas_pass" value="" persist="1"/>
+		<variable name="tw_nas_key" value="" persist="1"/>
 		<variable name="tw_nas_domain" value="WORKGROUP" persist="1"/>
 		<variable name="tw_nas_cache_mode" value="off" persist="1"/>
 
