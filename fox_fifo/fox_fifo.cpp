@@ -951,6 +951,11 @@ int Fox_Fifo::Cmd_Internal(const Json::Value& args) {
 		}
 		gui_changeOverlay("");
 		blankTimer.resetTimerAndUnblank();
+		// The GUI skips rendering while the screen-off state is active, so a
+		// cleared overlay alone leaves the lock on the display (seen live
+		// 2026-10-18: 'Set overlay: '' logged, screen still showed the lock
+		// until a page change forced a frame).
+		gui_forceRender();
 		return 0;
 	}
 	gui_print("fox: unknown internal subcommand '%s'\n", sub.c_str());
