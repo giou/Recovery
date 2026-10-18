@@ -7,6 +7,10 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <net/if.h>
+#include <net/if_arp.h>
+#include <sys/ioctl.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -160,6 +164,42 @@ bool Wlan::Enable() {
     return true;
 }
 
+// Set the interface hardware address in-process: the recovery ramdisk has no
+// `ip` binary, so the old "ip link set … address …" form died with ERROR 127
+// and the MAC stayed the (rotating) driver default. Many WiFi drivers refuse
+// the change while the link is up, so bounce the interface around it.
+static bool SetIfaceHwAddr(const std::string& iface, const std::string& mac) {
+    unsigned int b[6];
+    if (sscanf(mac.c_str(), "%x:%x:%x:%x:%x:%x",
+               &b[0], &b[1], &b[2], &b[3], &b[4], &b[5]) != 6)
+        return false;
+    int s = socket(AF_INET, SOCK_DGRAM, 0);
+    if (s < 0)
+        return false;
+
+    struct ifreq ifr;
+    memset(&ifr, 0, sizeof(ifr));
+    strncpy(ifr.ifr_name, iface.c_str(), IFNAMSIZ - 1);
+
+    bool ok = ioctl(s, SIOCGIFFLAGS, &ifr) == 0;
+    if (ok) {
+        struct ifreq down = ifr;
+        down.ifr_flags &= ~IFF_UP;
+        ioctl(s, SIOCSIFFLAGS, &down);
+
+        struct ifreq set = ifr;
+        for (int i = 0; i < 6; i++)
+            set.ifr_hwaddr.sa_data[i] = static_cast<char>(b[i]);
+        set.ifr_hwaddr.sa_family = ARPHRD_ETHER;
+        ok = ioctl(s, SIOCSIFHWADDR, &set) == 0;
+
+        struct ifreq up = ifr;
+        ioctl(s, SIOCSIFFLAGS, &up);
+    }
+    close(s);
+    return ok;
+}
+
 // Generate-once locally-administered MAC, persisted in of_wlan_fixed_mac
 // and applied on every enable. Fail-open: any failure keeps the driver MAC.
 bool Wlan::EnsureFixedMac() {
@@ -184,12 +224,11 @@ bool Wlan::EnsureFixedMac() {
     }
 
     std::string iface = Wlan::GetIface();
-    if (!Wlan::RunCommand("ip link set " + iface + " down"
-                          " && ip link set " + iface + " address " + mac +
-                          " && ip link set " + iface + " up")) {
+    if (!SetIfaceHwAddr(iface, mac)) {
         gui_print("WLAN: could not set fixed MAC, keeping driver MAC\n");
         return false;
     }
+    gui_print("WLAN: fixed MAC %s applied on %s\n", mac.c_str(), iface.c_str());
     return true;
 }
 
