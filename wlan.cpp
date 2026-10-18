@@ -138,6 +138,10 @@ bool Wlan::Init() {
     return EnsureTmpLayout();
 }
 
+// Generate-once locally-administered MAC, persisted in of_wlan_fixed_mac
+// and applied on every enable (defined after Enable).
+static bool EnsureFixedMac();
+
 bool Wlan::Enable() {
     std::lock_guard<std::recursive_mutex> op(g_wlan_op_mutex);
     EnsureTmpLayout();
@@ -150,8 +154,46 @@ bool Wlan::Enable() {
         return false;
     }
 
+    // Fixed-but-random MAC (user decision 2026-10-18): the recovery Wi-Fi
+    // MAC rotated every boot, so no DHCP reservation could stick. Best
+    // effort - a failure keeps the driver MAC and changes nothing.
+    EnsureFixedMac();
+
     DataManager::SetValue("tw_wlan_enabled", 1);
     UpdateConnectedName();
+    return true;
+}
+
+// Generate-once locally-administered MAC, persisted in of_wlan_fixed_mac
+// and applied on every enable. Fail-open: any failure keeps the driver MAC.
+static bool EnsureFixedMac() {
+    std::string mac = DataManager::GetStrValue("of_wlan_fixed_mac");
+    if (mac.empty()) {
+        unsigned char bytes[6];
+        FILE* f = fopen("/dev/urandom", "r");
+        if (!f || fread(bytes, 1, sizeof(bytes), f) != sizeof(bytes)) {
+            if (f)
+                fclose(f);
+            gui_print("WLAN: no entropy for fixed MAC, keeping driver MAC\n");
+            return false;
+        }
+        fclose(f);
+        bytes[0] = (bytes[0] & 0xFE) | 0x02;  // unicast + locally administered
+        char buf[18];
+        snprintf(buf, sizeof(buf), "%02x:%02x:%02x:%02x:%02x:%02x",
+                 bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5]);
+        mac = buf;
+        DataManager::SetValue("of_wlan_fixed_mac", mac);
+        gui_print("WLAN: generated fixed MAC %s\n", mac.c_str());
+    }
+
+    std::string iface = Wlan::GetIface();
+    if (!Wlan::RunCommand("ip link set " + iface + " down"
+                          " && ip link set " + iface + " address " + mac +
+                          " && ip link set " + iface + " up")) {
+        gui_print("WLAN: could not set fixed MAC, keeping driver MAC\n");
+        return false;
+    }
     return true;
 }
 
