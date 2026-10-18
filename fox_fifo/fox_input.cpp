@@ -33,7 +33,30 @@ namespace {
 
 int g_fd = -1;
 int g_tracking_id = 0;
+long long g_created_ms = 0;
 pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
+
+long long now_ms() {
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return (long long)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+}
+
+// The GUI re-scans /dev/input roughly every 2 s and only then opens the new
+// event node. Events written before that have no reader and are discarded, so
+// the first injection after a fresh device creation must wait (seen live
+// 2026-10-18: the first tap of a session never registered).
+void wait_for_reader() {
+	if (g_created_ms == 0)
+		return;
+
+	long long waited = now_ms() - g_created_ms;
+	if (waited < 2500) {
+		struct timespec ts = { 0, (2500 - waited) * 1000 * 1000 };
+		nanosleep(&ts, nullptr);
+	}
+	g_created_ms = 0;
+}
 
 void emit(int type, int code, int value) {
 	if (g_fd < 0)
@@ -126,6 +149,7 @@ bool Fox_Input::Init() {
 	}
 
 	g_fd = fd;
+	g_created_ms = now_ms();
 	pthread_mutex_unlock(&g_lock);
 
 	// Give udev/devtmpfs a moment so the new /dev/input/eventN node appears and
@@ -153,9 +177,17 @@ bool Fox_Input::IsReady() {
 
 void Fox_Input::TouchDown(int x, int y) {
 	pthread_mutex_lock(&g_lock);
+	wait_for_reader();
 	emit(EV_ABS, ABS_MT_SLOT, 0);
 	emit(EV_ABS, ABS_MT_TRACKING_ID, g_tracking_id++ & 0xFFFF);
 	emit(EV_KEY, BTN_TOUCH, 1);
+	// The kernel drops ABS events whose value is unchanged for the device, so
+	// a touch at the same coordinates as the previous one would be invisible
+	// to the GUI (seen live 2026-10-18: repeated taps did nothing while moves
+	// worked). Nudge each axis first - vk_modify only uses the last value of
+	// a frame, so the nudge never reaches the GUI.
+	emit(EV_ABS, ABS_MT_POSITION_X, x == 0 ? 1 : x - 1);
+	emit(EV_ABS, ABS_MT_POSITION_Y, y == 0 ? 1 : y - 1);
 	emit(EV_ABS, ABS_MT_POSITION_X, x);
 	emit(EV_ABS, ABS_MT_POSITION_Y, y);
 	sync_report();
@@ -189,6 +221,7 @@ void Fox_Input::Tap(int x, int y) {
 
 void Fox_Input::Key(int code, bool down) {
 	pthread_mutex_lock(&g_lock);
+	wait_for_reader();
 	emit(EV_KEY, code, down ? 1 : 0);
 	sync_report();
 	pthread_mutex_unlock(&g_lock);
