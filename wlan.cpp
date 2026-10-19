@@ -57,7 +57,6 @@ static const char* WLAN_LIST_DIR       = "/tmp/wlan/list";
 static const char* WLAN_LIST_FILE      = "/tmp/wlan/list.txt";
 static const char* WLAN_SAVED_FILE     = "/tmp/wlan/saved.txt";
 static const char* WLAN_CONNECTED_FILE = "/tmp/wlan/connected_name.txt";
-static const char* WLAN_INFO_FILE      = "/tmp/wlan/info.txt";
 
 static const char* DEFAULT_WLAN_IFACE  = "wlan0";
 static const char* DEFAULT_CTRL_DIR    = "/tmp/recovery/sockets";
@@ -334,7 +333,7 @@ bool Wlan::Disable() {
 	RunCommand("rm -f /tmp/wlan/list_saved.txt");
 	RunCommand("rm -f /tmp/wlan/list_unsaved.txt");
 	RunCommand("rm -f /tmp/wlan/connected_name.txt");
-	RunCommand("rm -f /tmp/wlan/info.txt");
+	property_set("sys.fox.wlan.ip", "");
 
 	EnsureTmpLayout();
 
@@ -1190,6 +1189,8 @@ bool Wlan::InfoLocked()
         DataManager::SetValue("wlan_info_connected", "1");
         DataManager::SetValue("wlan_info_ssid", ssid);
         DataManager::SetValue("wlan_info_ip", ip_addr);
+        // Scripts get a one-liner: getprop sys.fox.wlan.ip
+        property_set("sys.fox.wlan.ip", ip_addr.c_str());
 
         DataManager::SetValue("tw_wlan_connected", 1);
         DataManager::SetValue("wlan_connected_name", ssid);
@@ -1205,6 +1206,7 @@ bool Wlan::InfoLocked()
     DataManager::SetValue("wlan_info_connected", "0");
     DataManager::SetValue("wlan_info_ssid", "");
     DataManager::SetValue("wlan_info_ip", "");
+    property_set("sys.fox.wlan.ip", "");
     DataManager::SetValue("wlan_info_text", "");
 
     DataManager::SetValue("tw_wlan_connected", 0);

@@ -730,8 +730,16 @@ int Fox_Fifo::Cmd_Wlan(const Json::Value& args) {
 	if (sub == "info") {
 		if (!Wlan::Info())
 			return 1;
-		std::string info = read_text_file("/tmp/wlan/info.txt");
-		gui_print("%s\n", info.c_str());
+		// The state vars are the source of truth (InfoLocked fills them);
+		// the old /tmp/wlan/info.txt reader printed nothing - nothing ever
+		// wrote that file.
+		std::string text = DataManager::GetStrValue("wlan_info_text");
+		if (!text.empty()) {
+			gui_print("%s\n", text.c_str());
+		} else {
+			std::string state = DataManager::GetStrValue("wlan_info_state");
+			gui_print("WLAN not connected (state: %s)\n", state.empty() ? "unknown" : state.c_str());
+		}
 		return 0;
 	}
 	if (sub == "test") {
