@@ -274,11 +274,8 @@
 					<action function="wlan_test_connection"/>
 				</listitem>
 
-				<listitem name="OrangeFox Updates">
-					<icon res="overview"/>
-					<action function="page">fox_updates</action>
-				</listitem>
-
+				<!-- OrangeFox Updates entry hidden: the updater only serves official
+				     builds, so on this unofficial tree it is dead UI. Pages kept. -->
 				<listitem name="Remote Web Access">
 					<icon res="rwa"/>
 					<action function="page">remote_web_access_settings</action>
