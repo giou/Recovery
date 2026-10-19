@@ -441,11 +441,6 @@
 				<text>{@encryption_hdr}</text>
 			</text>
 
-			<text style="text_ab_subtitle">
-				<placement x="%col1_x%" y="%row1_2_y%"/>
-				<text>{@backup_encrypt_data_info}</text>
-			</text>
-
 			<text style="caption_hl">
 				<placement x="%col1_x%" y="%row2_1a_y%"/>
 				<text>{@set_password}</text>
@@ -506,11 +501,6 @@
 			<text style="text_ab_title">
 				<placement x="%col1_x%" y="%row1_2_y%" placement="2"/>
 				<text>{@encryption_hdr}</text>
-			</text>
-
-			<text style="text_ab_subtitle">
-				<placement x="%col1_x%" y="%row1_2_y%"/>
-				<text>{@backup_encrypt_data_info}</text>
 			</text>
 
 			<text style="caption_hl">
