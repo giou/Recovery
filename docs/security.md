@@ -84,6 +84,16 @@ so anyone who controls the booted recovery can reproduce the key. This protects
 against casual viewing and against pulling the raw file off the flash; it is NOT
 hardware-backed secrecy against an attacker running this recovery.
 
+## SFTP key (NAS)
+
+The Network Storage SFTP private key lives **only** at
+`/persist/.of-nas/of-nas_ed25519` (mode 0600). Plaintext on `/persist` is the
+inherent price of pre-decrypt availability — the same tradeoff as the
+persisted WiFi PSK and the mirrored adb keys. Any copy under the sdcard
+(`/sdcard/Fox/.of-nas/`) is unused: shred it. Backup-request JSONs carry the
+backup password — single-use, delete every copy (phone `/data/local/tmp`,
+host-side temp dirs) after the run.
+
 ## CRITICAL — do not change this string
 
 The key-material string `"OrangeFox-WLAN-Saved-v1|...|INFINITI-WLAN"` in

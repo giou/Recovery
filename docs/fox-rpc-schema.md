@@ -39,12 +39,12 @@ uniform:
 | `mount`, `unmount` (`umount`) | `paths`: string[] |
 | `flash` (`install`) | `zips`: string[]; `verify`: bool?; `reflash`: bool?; `unmount_system`: bool; `unmount_vendor`: bool |
 | `backup` | `parts`: string[]; `name`; `path`; `storage`; `compress`: bool; `digest`: bool (default true); `encrypt`: bool; `password`: string? |
-| `restore` | `parts`: string[]; `name`; `path`; `digest_check`: bool (default true); `password`: string? |
+| `restore` | `parts`: string[]; `name`; `path`; `digest_check`: bool (default true — the restore verifies every `.sha2` before writing; `false` skips it); `password`: string? |
 | `decrypt` | `password`; `user`: int |
 | `wipe` | `parts`: string[] |
 | `format_data` | `confirm`: bool |
 | `reboot` | `target` |
-| `wlan` (`wifi`) | `action`; `ssid`; `password` |
+| `wlan` (`wifi`) | `action`; `ssid`; `password` (`info` prints the connected ssid+IP from the state vars; the IP is also published as the `sys.fox.wlan.ip` property) |
 | `partition` | `path`; `action`; `fs` |
 | `addons` | `action`; `names`: string[] |
 | `internal` | `action`; `name`; `value`; `page` |
@@ -53,7 +53,7 @@ uniform:
 | `web` | generic group + `generate` (password value rides in `subaction`/`values`) |
 | `webserver` | generic group (`action`=group, `subaction`=verb, `values`=rest) |
 | `adbd` | generic group; `device` accepted as an alias for the forget id |
-| `nas` | `action`: `mount` \| `unmount` \| `status` (uses the persisted `tw_nas_*` settings) |
+| `nas` | `action`: `mount` \| `unmount` \| `status` (uses the persisted `tw_nas_*` settings; the mount self-mounts `/persist` when a key file is configured) |
 | `control` | `action` |
 | `input` | `action`; `key`; `code`: int; `x`,`y`,`x2`,`y2`,`duration`: int |
 | `screencap` | `path`; `base64`: bool |
