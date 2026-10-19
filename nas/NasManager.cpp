@@ -916,8 +916,15 @@ bool NasManager::BuildRcloneConfig() {
 			cfg << "pass = " << obscure_pass << "\n";
 
 		// Passwordless accounts (e.g. Windows) authenticate via a key file.
-		if (!key_file.empty())
+		if (!key_file.empty()) {
+			// The key normally lives on /persist (plaintext, pre-decrypt). A
+			// fresh boot leaves /persist unmounted (the boot-time settings
+			// read unmounts it again), so rclone would fail on an unreadable
+			// key file. Ensure it is mounted - same pattern as
+			// DataManager::SaveValues.
+			PartitionManager.Mount_By_Path("/persist", false);
 			cfg << "key_file = " << key_file << "\n";
+		}
 
 		cfg << "shell_type = unix\n";
 	} else {
