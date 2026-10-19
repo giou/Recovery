@@ -458,7 +458,9 @@ int Fox_Fifo::Cmd_Restore(const Json::Value& args) {
 	}
 
 	PartitionManager.Mount_All_Storage();
-	DataManager::SetValue(TW_SKIP_DIGEST_CHECK_VAR, skip_digest ? 1 : 0);
+	// The var's name is legacy-inverted: partitionmanager.cpp verifies digests
+	// when it is > 0 (same as the GUI's "Enable Digest verification" checkbox).
+	DataManager::SetValue(TW_SKIP_DIGEST_CHECK_VAR, skip_digest ? 0 : 1);
 
 	// Resolve the backup folder: absolute path used directly, otherwise resolved
 	// against the backups folder of each mounted storage (mirrors ORS restore).
