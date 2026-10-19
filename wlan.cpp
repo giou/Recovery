@@ -14,6 +14,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #include <vector>
 #include <regex>
 #include <cutils/properties.h>
@@ -198,6 +200,34 @@ static bool SetIfaceHwAddr(const std::string& iface, const std::string& mac) {
     }
     close(s);
     return ok;
+}
+
+// Read the interface's IPv4 address in-process: the recovery stack runs DHCP
+// via the external dhcptool, which never reports the lease back into
+// supplicant STATUS - so parsing STATUS for ip_address always comes up empty
+// and every connect path declares failure on a working connection (seen live
+// on v18: the interface held its DHCP lease while the engine reported
+// "Failed"). Same in-process ioctl pattern as the fixed-MAC helper above.
+static std::string GetIfaceAddr(const std::string& iface) {
+    int s = socket(AF_INET, SOCK_DGRAM, 0);
+    if (s < 0)
+        return std::string();
+
+    struct ifreq ifr;
+    memset(&ifr, 0, sizeof(ifr));
+    strncpy(ifr.ifr_name, iface.c_str(), IFNAMSIZ - 1);
+
+    std::string out;
+    if (ioctl(s, SIOCGIFADDR, &ifr) == 0) {
+        const struct sockaddr_in* sin =
+            reinterpret_cast<const struct sockaddr_in*>(&ifr.ifr_addr);
+        char buf[INET_ADDRSTRLEN] = {0};
+        if (inet_ntop(AF_INET, &sin->sin_addr, buf, sizeof(buf)) != nullptr)
+            out = buf;
+    }
+
+    close(s);
+    return out;
 }
 
 // Generate-once locally-administered MAC, persisted in of_wlan_fixed_mac
@@ -548,6 +578,8 @@ bool Wlan::Connect() {
         if (SuppCmd("STATUS", status)) {
             std::string wpa_state;
             ParseSupplicantStatus(status, wpa_state, connected_ssid, ip_addr);
+            if (ip_addr.empty())
+                ip_addr = GetIfaceAddr(Wlan::GetIface()); // dhcptool leases never appear in STATUS
 
             if (!ip_addr.empty() && !connected_ssid.empty())
                 break;
@@ -919,6 +951,8 @@ bool Wlan::ConnectSaved() {
         if (SuppCmd("STATUS", status)) {
             std::string wpa_state;
             ParseSupplicantStatus(status, wpa_state, connected_ssid, ip_addr);
+            if (ip_addr.empty())
+                ip_addr = GetIfaceAddr(Wlan::GetIface()); // dhcptool leases never appear in STATUS
 
             if (!ip_addr.empty() && !connected_ssid.empty())
                 break;
@@ -1045,6 +1079,8 @@ bool Wlan::ConnectInline(const std::string& ssid, const std::string& pass) {
         if (SuppCmd("STATUS", status)) {
             std::string wpa_state;
             ParseSupplicantStatus(status, wpa_state, connected_ssid, ip_addr);
+            if (ip_addr.empty())
+                ip_addr = GetIfaceAddr(Wlan::GetIface()); // dhcptool leases never appear in STATUS
 
             if (!ip_addr.empty() && !connected_ssid.empty())
                 break;
@@ -1100,6 +1136,8 @@ bool Wlan::InfoLocked()
     std::string ssid;
     std::string ip_addr;
     ParseSupplicantStatus(status, wpa_state, ssid, ip_addr);
+    if (ip_addr.empty())
+        ip_addr = GetIfaceAddr(Wlan::GetIface()); // dhcptool leases never appear in STATUS
 
     DataManager::SetValue("wlan_info_state", wpa_state);
 
