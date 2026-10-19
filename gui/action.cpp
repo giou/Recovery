@@ -292,6 +292,10 @@ GUIAction::GUIAction(xml_node <> *node):GUIObject(node)
       ADD_ACTION(wlan_info);
       ADD_ACTION(wlan_saved_refresh);
       ADD_ACTION(wlan_forget_saved);
+      // NAS status refresh is likewise fast (mount-table read + statvfs) and
+      // must not be rejected while a backup/flash runs — the NAS page enters
+      // through it (same failure as the wlan_info case above).
+      ADD_ACTION(nas_info);
       #endif
 
       // remember actions that run in the caller thread
@@ -326,9 +330,9 @@ GUIAction::GUIAction(xml_node <> *node):GUIObject(node)
       ADD_ACTION(wlan_test_connection);
       #endif
 
-      // OrangeFox NAS (still threaded: these block on real mount I/O)
+      // OrangeFox NAS (still threaded: these block on real mount I/O;
+      // nas_info is caller-thread, registered above)
       #ifdef OF_ENABLE_WLAN
-      ADD_ACTION(nas_info);
       ADD_ACTION(nas_mount);
       ADD_ACTION(nas_unmount);
       ADD_ACTION(nas_select);
