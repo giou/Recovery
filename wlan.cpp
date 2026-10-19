@@ -12,9 +12,11 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <netinet/in.h>
+#include <netdb.h>
 #include <arpa/inet.h>
 #include <vector>
 #include <regex>
@@ -228,6 +230,49 @@ static std::string GetIfaceAddr(const std::string& iface) {
 
     close(s);
     return out;
+}
+
+// TCP reachability with a bounded timeout: this recovery ships neither
+// busybox nor a ping symlink, and the kernel's ping_group_range blocks ICMP
+// datagram sockets - so the WLAN test uses a real TCP connect instead (the
+// same socket pattern as the NAS rclone-RC probe).
+static bool TcpReachable(const std::string& host, int port, int timeout_sec) {
+    int fd = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
+    if (fd < 0)
+        return false;
+
+    struct timeval tv;
+    tv.tv_sec = timeout_sec;
+    tv.tv_usec = 0;
+    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+
+    bool ok = false;
+    if (inet_pton(AF_INET, host.c_str(), &addr.sin_addr) == 1)
+        ok = connect(fd, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) == 0;
+
+    close(fd);
+    return ok;
+}
+
+// Name resolution through the system resolver. bionic reads /etc/resolv.conf
+// in recovery (no netd); StartDhcp writes it from the DHCP-provided servers.
+static bool ResolveHost(const std::string& host) {
+    struct addrinfo hints;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+
+    struct addrinfo* res = nullptr;
+    bool ok = getaddrinfo(host.c_str(), nullptr, &hints, &res) == 0 && res != nullptr;
+    if (res)
+        freeaddrinfo(res);
+    return ok;
 }
 
 // Generate-once locally-administered MAC, persisted in of_wlan_fixed_mac
@@ -1194,18 +1239,15 @@ bool Wlan::TestConnection()
         return true;
     }
 
-    std::string busybox = GetBusyboxBinary();
-    if (busybox.empty())
-        busybox = "busybox";
+    // Native checks, no external tools: this recovery ships neither busybox
+    // nor a ping symlink, and the kernel's ping_group_range blocks ICMP
+    // datagram sockets (verified live 2026-10-19: the old busybox ping made
+    // the test a guaranteed false negative).
+    bool internet_ok = TcpReachable("1.1.1.1", 443, 4);
+    LOGINFO("WLAN test internet: tcp 1.1.1.1:443 %s\n", internet_ok ? "ok" : "failed");
 
-    std::string internet_output;
-    bool internet_ok = RunCommand(busybox + " ping -c 1 -w 4 1.1.1.1 2>&1", internet_output);
-
-    std::string dns_output;
-    bool dns_ok = RunCommand(busybox + " ping -c 1 -w 4 bing.com 2>&1", dns_output);
-
-    LOGINFO("WLAN test internet output:\n%s\n", internet_output.c_str());
-    LOGINFO("WLAN test DNS output:\n%s\n", dns_output.c_str());
+    bool dns_ok = ResolveHost("bing.com");
+    LOGINFO("WLAN test DNS: resolve bing.com %s\n", dns_ok ? "ok" : "failed");
 
     if (internet_ok && dns_ok) {
         SetWlanTestResult(
@@ -1691,7 +1733,40 @@ bool Wlan::StartDhcp() {
         return false;
     }
 
-    return RunCommand(dhcptool + " " + iface + " >/tmp/dhcptool.log 2>&1");
+    bool ok = RunCommand(dhcptool + " " + iface + " >/tmp/dhcptool.log 2>&1");
+    if (ok)
+        WriteResolvConf(iface);
+    return ok;
+}
+
+// bionic resolves names via /etc/resolv.conf in recovery (no netd). dhcptool
+// sets net.<iface>.dns1/2 but writes no resolv.conf, so hostname lookups
+// (the WLAN test's DNS check; any future client) failed until this existed.
+// /etc is a symlink to /system/etc on the ramdisk - per-boot, rewritten on
+// every connect.
+void Wlan::WriteResolvConf(const std::string& iface) {
+    char dns1[PROPERTY_VALUE_MAX] = {0};
+    char dns2[PROPERTY_VALUE_MAX] = {0};
+    property_get(("net." + iface + ".dns1").c_str(), dns1, "");
+    property_get(("net." + iface + ".dns2").c_str(), dns2, "");
+
+    if (dns1[0] == '\0' && dns2[0] == '\0') {
+        LOGINFO("WLAN: no DHCP DNS servers set; skipping /etc/resolv.conf\n");
+        return;
+    }
+
+    std::ofstream f("/etc/resolv.conf", std::ios::out | std::ios::trunc);
+    if (!f.is_open()) {
+        gui_print("WLAN: failed to write /etc/resolv.conf\n");
+        return;
+    }
+
+    if (dns1[0] != '\0')
+        f << "nameserver " << dns1 << "\n";
+    if (dns2[0] != '\0')
+        f << "nameserver " << dns2 << "\n";
+
+    LOGINFO("WLAN: wrote /etc/resolv.conf (dns1=%s dns2=%s)\n", dns1, dns2);
 }
 
 bool Wlan::StopDhcp() {

@@ -66,6 +66,7 @@ private:
     static bool StopInitSupplicantService();
     static bool StartDhcp();
     static bool StopDhcp();
+    static void WriteResolvConf(const std::string& iface);
 
 #ifdef OF_WLAN_AP
     static bool StartApDhcpServer();
