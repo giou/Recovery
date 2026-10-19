@@ -775,7 +775,14 @@
 					<action function="page">nas_edit_pass</action>
 				</listitem>
 
+				<listitem name="Key file: %tw_nas_key%">
+					<condition var1="tw_nas_type" var2="sftp"/>
+					<icon res="wlan_locked"/>
+					<action function="page">nas_edit_key</action>
+				</listitem>
+
 				<listitem name="Share: %tw_nas_share%">
+					<condition var1="tw_nas_type" op="!=" var2="sftp"/>
 					<icon res="smb_share"/>
 					<action function="page">nas_edit_share</action>
 				</listitem>
@@ -786,6 +793,7 @@
 				</listitem>
 
 				<listitem name="Domain: %tw_nas_domain%">
+					<condition var1="tw_nas_type" op="!=" var2="sftp"/>
 					<icon res="smb_share"/>
 					<action function="page">nas_edit_domain</action>
 				</listitem>
@@ -866,13 +874,29 @@
 			<listbox style="group_list">
 				<placement x="0" y="%row3_2a_y%" w="%screen_w%" h="%bl_h2%"/>
 
-				<listitem name="No cache">
+				<listitem name="No cache (current)">
+					<condition var1="tw_nas_cache_mode" var2="off"/>
 					<icon res="rwa"/>
 					<action function="set">tw_nas_cache_mode=off</action>
 					<action function="page">nas_settings</action>
 				</listitem>
 
+				<listitem name="No cache">
+					<condition var1="tw_nas_cache_mode" op="!=" var2="off"/>
+					<icon res="rwa"/>
+					<action function="set">tw_nas_cache_mode=off</action>
+					<action function="page">nas_settings</action>
+				</listitem>
+
+				<listitem name="/data cache (current)">
+					<condition var1="tw_nas_cache_mode" var2="data"/>
+					<icon res="hard_disk"/>
+					<action function="set">tw_nas_cache_mode=data</action>
+					<action function="page">nas_settings</action>
+				</listitem>
+
 				<listitem name="/data cache">
+					<condition var1="tw_nas_cache_mode" op="!=" var2="data"/>
 					<icon res="hard_disk"/>
 					<action function="set">tw_nas_cache_mode=data</action>
 					<action function="page">nas_settings</action>
@@ -1037,6 +1061,46 @@
 				<placement x="%bg_storage_hdr_x%" y="%db_text3_y%" w="700" h="%input_height%"/>
 				<data name="tw_nas_pass" mask="*" maskvariable="pass_enter_mask"/>
 				<restrict maxlen="254"/>
+				<action function="page">nas_settings</action>
+			</input>
+
+			<button style="btn_dlg">
+				<placement x="%db_left_x%" y="%db_y%"/>
+				<text>{@cancel_btn}</text>
+				<action function="page">nas_settings</action>
+			</button>
+
+			<button style="btn_dlg_hl">
+				<placement x="%db_right_x%" y="%db_y%"/>
+				<text>{@ok_btn}</text>
+				<action function="page">nas_settings</action>
+			</button>
+
+			<action>
+				<touch key="back"/>
+				<action function="page">nas_settings</action>
+			</action>
+		</page>
+
+		<!-- NAS edit: SFTP key file -->
+		<page name="nas_edit_key">
+			<template name="dialog_body"/>
+			<template name="keyboardtemplate"/>
+
+			<button>
+				<placement x="%bg_storage_x%" y="%bg_storage_y%"/>
+				<image resource="dialog_bg"/>
+			</button>
+
+			<text style="text_dlg_title">
+				<placement x="%bg_storage_hdr_x%" y="%bg_storage_hdr_y%"/>
+				<text>SFTP key file</text>
+			</text>
+
+			<input>
+				<placement x="%bg_storage_hdr_x%" y="%db_text3_y%" w="700" h="%input_height%"/>
+				<data name="tw_nas_key"/>
+				<restrict maxlen="128"/>
 				<action function="page">nas_settings</action>
 			</input>
 
