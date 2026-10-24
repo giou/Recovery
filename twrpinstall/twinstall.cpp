@@ -25,9 +25,12 @@
 #endif
 
 #include <ctype.h>
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <signal.h>
+#include <stdlib.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
@@ -282,14 +285,32 @@ static int Run_Update_Binary(const char *path, int* wipe_cache, zip_type ztype) 
 	return INSTALL_SUCCESS;
 }
 
-// The vendor TEE/vibrator services start from /vendor at boot and keep it
-// busy, so the OTA installer's vendor unmount fails before it can write
-// super. Stop them and wait (bounded) for the stop; the next boot restarts
-// them. Nothing in the install needs the TEE.
+// The vendor TEE/vibrator services and the WLAN daemons start from /vendor
+// at boot and keep it busy, so an OTA install cannot unmount /vendor while
+// they run. Stop the init services, kill the nohup WLAN daemons (qrtr-ns,
+// cnss-daemon) and wait (bounded) before the install unmounts /vendor. The
+// next boot restarts them; the install does not need them.
 static void Fox_Stop_Vendor_Holders() {
-	const char* services[] = {"vendor.qseecomd", "gatekeeper-1-0", "keymaster-4-0", "vendor.qti.vibrator"};
+	const char* services[] = {"vendor.qseecomd", "gatekeeper-1-0", "keymaster-4-0", "vendor.qti.vibrator", "wpa_supplicant", "wlan_bringup"};
 	for (const char* svc : services)
 		property_set("ctl.stop", svc);
+	DIR* proc = opendir("/proc");
+	if (proc != nullptr) {
+		struct dirent* entry;
+		while ((entry = readdir(proc)) != nullptr) {
+			if (entry->d_name[0] < '0' || entry->d_name[0] > '9')
+				continue;
+			std::string exe = std::string("/proc/") + entry->d_name + "/exe";
+			char target[PATH_MAX] = {0};
+			ssize_t len = readlink(exe.c_str(), target, sizeof(target) - 1);
+			if (len > 0 && strncmp(target, "/vendor/", 8) == 0) {
+				pid_t pid = atoi(entry->d_name);
+				if (pid > 1)
+					kill(pid, SIGKILL);
+			}
+		}
+		closedir(proc);
+	}
 	for (int i = 0; i < 50; i++) {
 		bool running = false;
 		for (const char* svc : services) {
@@ -302,10 +323,10 @@ static void Fox_Stop_Vendor_Holders() {
 			}
 		}
 		if (!running)
-			return;
+			break;
 		usleep(100000);
 	}
-	LOGERR("Fox: vendor services still running after stop; the vendor unmount may fail\n");
+	usleep(500000);
 }
 
 int TWinstall_zip(const char *path, int *wipe_cache, bool check_for_digest)
@@ -421,6 +442,13 @@ int TWinstall_zip(const char *path, int *wipe_cache, bool check_for_digest)
 				}
 				usleep(100000);
 			}
+		}
+		// The WLAN stack can leave the mount busy even after its daemons
+		// exit; detach it (TWRP's own vendor fallback) so the OTA can write
+		// super. The install is local; WLAN is restarted on the next boot.
+		if (!vendor_unmounted && umount2("/vendor", MNT_DETACH) == 0) {
+			LOGINFO("Fox: detached busy /vendor before the OTA install\n");
+			vendor_unmounted = true;
 		}
 		if (!vendor_unmounted) {
 			gui_msg("unmount_vendor_err=Failed to unmount Vendor");
