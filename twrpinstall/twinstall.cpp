@@ -406,15 +406,23 @@ int TWinstall_zip(const char *path, int *wipe_cache, bool check_for_digest)
 	if (PartitionManager.Is_Mounted_By_Path("/vendor")) {
 		gui_msg("unmount_vendor=Unmounting Vendor...");
 		Fox_Stop_Vendor_Holders();
-		// Child mounts keep /vendor busy; unmount them first. firmware_mnt is
-		// the WLAN/modem mount, dsp/bt_firmware are separate vendor mounts.
-		PartitionManager.UnMount_By_Path("/vendor/firmware_mnt", false);
-		PartitionManager.UnMount_By_Path("/vendor/dsp", false);
-		PartitionManager.UnMount_By_Path("/vendor/bt_firmware", false);
-		if (PartitionManager.UnMount_By_Path("/vendor", false)) {
-		   	//unlink("/vendor");
-		   	//mkdir("/vendor", 0755);
-		} else {
+		// The fstab mounts firmware_mnt/dsp/bt_firmware as separate mounts;
+		// the partition list does not always map them, so umount(2) them
+		// directly, otherwise the parent /vendor stays busy.
+		umount("/vendor/firmware_mnt");
+		umount("/vendor/dsp");
+		umount("/vendor/bt_firmware");
+		bool vendor_unmounted = PartitionManager.UnMount_By_Path("/vendor", false);
+		if (!vendor_unmounted) {
+			for (int i = 0; i < 10; i++) {
+				if (umount("/vendor") == 0) {
+					vendor_unmounted = true;
+					break;
+				}
+				usleep(100000);
+			}
+		}
+		if (!vendor_unmounted) {
 			gui_msg("unmount_vendor_err=Failed to unmount Vendor");
 			return -1;
 		}
