@@ -1053,13 +1053,16 @@ int TWPartitionManager::UnMount_By_Path(string Path, bool Display_Error, int fla
       		return false;
   	#endif
 
-	// Iterate through all partitions
+	// Unmount subpartitions first: a mounted child (e.g. /vendor/firmware_mnt)
+	// keeps the parent busy, so the parent umount fails with EBUSY.
+	for (iter = Partitions.begin(); iter != Partitions.end(); iter++) {
+		if ((*iter)->Is_SubPartition && (*iter)->SubPartition_Of == Local_Path)
+			(*iter)->UnMount(Display_Error, flags);
+	}
 	for (iter = Partitions.begin(); iter != Partitions.end(); iter++) {
 		if ((*iter)->Mount_Point == Local_Path || (!(*iter)->Symlink_Mount_Point.empty() && (*iter)->Symlink_Mount_Point == Local_Path)) {
 			ret = (*iter)->UnMount(Display_Error, flags);
 			found = true;
-		} else if ((*iter)->Is_SubPartition && (*iter)->SubPartition_Of == Local_Path) {
-			(*iter)->UnMount(Display_Error, flags);
 		}
 	}
 	if (found) {
