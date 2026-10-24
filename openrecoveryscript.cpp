@@ -539,8 +539,10 @@ int OpenRecoveryScript::Install_Command(string Zip) {
 	int ret_val = 0, wipe_cache = 0;
 	std::vector<PartitionList> Storage_List;
 	string Full_Path;
+	bool mapped_zip = false;
 
 	if (Zip.substr(0, 1) == "@") {
+		mapped_zip = true;
 		// This is a special file that contains a map of blocks on the data partition
 		Full_Path = Zip.substr(1);
 		if (!PartitionManager.Mount_By_Path(Full_Path, true) || !TWFunc::Path_Exists(Full_Path)) {
@@ -578,7 +580,26 @@ int OpenRecoveryScript::Install_Command(string Zip) {
 			gui_msg(Msg("installing_zip=Installing zip file '{1}'")(Zip));
 	}
 
+	bool recovery_backed_up = false;
+	if (mapped_zip) {
+		// An OTA package flashes the recovery partition. Keep the exact
+		// running OrangeFox image and restore it after the install.
+		if (TWFunc::Exec_Cmd("dd if=/dev/block/bootdevice/by-name/recovery of=/tmp/fox-recovery-backup.img bs=4M") == 0)
+			recovery_backed_up = true;
+		else
+			LOGERR("Unable to back up the recovery partition before the OTA install\n");
+	}
+
 	ret_val = TWinstall_zip(Zip.c_str(), &wipe_cache);
+
+	if (recovery_backed_up) {
+		if (TWFunc::Exec_Cmd("dd if=/tmp/fox-recovery-backup.img of=/dev/block/bootdevice/by-name/recovery bs=4M; sync") == 0)
+			LOGINFO("Restored the OrangeFox recovery image after the OTA install\n");
+		else
+			LOGERR("Unable to restore the recovery partition after the OTA install\n");
+		unlink("/tmp/fox-recovery-backup.img");
+	}
+
 	if (ret_val != 0) {
 		LOGINFO ("OpenRecoveryScript::Install_Command() error.\n");
 		gui_msg(Msg(msg::kError, "zip_err=Error installing zip file '{1}'")(Zip));

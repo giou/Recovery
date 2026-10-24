@@ -282,6 +282,32 @@ static int Run_Update_Binary(const char *path, int* wipe_cache, zip_type ztype) 
 	return INSTALL_SUCCESS;
 }
 
+// The vendor TEE/vibrator services start from /vendor at boot and keep it
+// busy, so the OTA installer's vendor unmount fails before it can write
+// super. Stop them and wait (bounded) for the stop; the next boot restarts
+// them. Nothing in the install needs the TEE.
+static void Fox_Stop_Vendor_Holders() {
+	const char* services[] = {"vendor.qseecomd", "gatekeeper-1-0", "keymaster-4-0", "vendor.qti.vibrator"};
+	for (const char* svc : services)
+		property_set("ctl.stop", svc);
+	for (int i = 0; i < 50; i++) {
+		bool running = false;
+		for (const char* svc : services) {
+			std::string prop = std::string("init.svc.") + svc;
+			char value[PROP_VALUE_MAX] = {0};
+			property_get(prop.c_str(), value, "");
+			if (strcmp(value, "running") == 0) {
+				running = true;
+				break;
+			}
+		}
+		if (!running)
+			return;
+		usleep(100000);
+	}
+	LOGERR("Fox: vendor services still running after stop; the vendor unmount may fail\n");
+}
+
 int TWinstall_zip(const char *path, int *wipe_cache, bool check_for_digest)
 {
   int ret_val, zip_verify = 1, unmount_system = 1, reflashtwrp = 0, unmount_vendor = 1;
@@ -379,6 +405,12 @@ int TWinstall_zip(const char *path, int *wipe_cache, bool check_for_digest)
    if (unmount_vendor) {
 	if (PartitionManager.Is_Mounted_By_Path("/vendor")) {
 		gui_msg("unmount_vendor=Unmounting Vendor...");
+		Fox_Stop_Vendor_Holders();
+		// Child mounts keep /vendor busy; unmount them first. firmware_mnt is
+		// the WLAN/modem mount, dsp/bt_firmware are separate vendor mounts.
+		PartitionManager.UnMount_By_Path("/vendor/firmware_mnt", false);
+		PartitionManager.UnMount_By_Path("/vendor/dsp", false);
+		PartitionManager.UnMount_By_Path("/vendor/bt_firmware", false);
 		if (PartitionManager.UnMount_By_Path("/vendor", false)) {
 		   	//unlink("/vendor");
 		   	//mkdir("/vendor", 0755);
