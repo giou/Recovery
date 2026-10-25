@@ -87,9 +87,9 @@ bool ScanFoundNetworks() {
 // update_dynamic_partitions fail. Skip the autostart for that boot only; the
 // next normal boot brings the WLAN back.
 //
-// twrp.cpp clears the BCB before the GUI starts, so TWFunc snapshots the
-// OTA flag from the BCB first. Do not fall back to a property or
-// /cache/recovery/command.
+// twrp.cpp snapshots the OTA flag from the BCB before the GUI loads (and
+// before it clears the BCB); the worker reads that flag. Do not fall back to
+// a property or /cache/recovery/command.
 bool OtaInstallBoot() {
 	return TWFunc::Is_Ota_Install_Boot();
 }

@@ -1098,11 +1098,15 @@ void TWFunc::Update_Log_File(void) {
 }
 
 static bool g_ota_install_boot = false;
+static bool g_ota_snapshot_done = false;
 
-void TWFunc::Clear_Bootloader_Message() {
+void TWFunc::Snapshot_Ota_Install_Boot() {
+	if (g_ota_snapshot_done)
+		return;
 	std::string err;
 	bootloader_message boot = {};
 	if (read_bootloader_message(&boot, &err)) {
+		g_ota_snapshot_done = true;
 		std::string command(boot.command, strnlen(boot.command, sizeof(boot.command)));
 		std::string recovery(boot.recovery, strnlen(boot.recovery, sizeof(boot.recovery)));
 		g_ota_install_boot = command.find("--update_package") != std::string::npos ||
@@ -1112,6 +1116,11 @@ void TWFunc::Clear_Bootloader_Message() {
 	} else {
 		LOGINFO("Fox: cannot read BCB before clearing: %s\n", err.c_str());
 	}
+}
+
+void TWFunc::Clear_Bootloader_Message() {
+	Snapshot_Ota_Install_Boot();
+	std::string err;
 	if (!clear_bootloader_message(&err)) {
 	   LOGINFO("%s\n", err.c_str());
 	}
