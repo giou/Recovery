@@ -917,8 +917,8 @@ ifeq ($(OF_ENABLE_WLAN),1)
         wpa_cli \
         dhcpdbg \
         ttyd_src \
-        rclone_prebuilt \
-        fusermount3
+        fox_cloud_mount_rclone \
+        fox_cloud_mount_fusermount3
 
     RECOVERY_BINARY_SOURCE_FILES += $(TARGET_OUT_VENDOR_EXECUTABLES)/hw/wpa_supplicant
     RECOVERY_BINARY_SOURCE_FILES += $(TARGET_OUT_VENDOR_EXECUTABLES)/wpa_cli
