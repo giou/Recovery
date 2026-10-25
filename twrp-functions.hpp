@@ -101,6 +101,7 @@ public:
 
 	static void List_Mounts();
 	static void Clear_Bootloader_Message();
+	static bool Is_Ota_Install_Boot();
 
 	static bool Repack_Image(string mount_point);
 	static bool Unpack_Image(string mount_point);

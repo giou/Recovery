@@ -43,6 +43,7 @@
 #include <cctype>
 #include <algorithm>
 #include <ctime>
+#include <cstring>
 #include <locale>
 #include <codecvt>
 #include <selinux/label.h>
@@ -1096,11 +1097,28 @@ void TWFunc::Update_Log_File(void) {
 	sync();
 }
 
+static bool g_ota_install_boot = false;
+
 void TWFunc::Clear_Bootloader_Message() {
 	std::string err;
+	bootloader_message boot = {};
+	if (read_bootloader_message(&boot, &err)) {
+		std::string command(boot.command, strnlen(boot.command, sizeof(boot.command)));
+		std::string recovery(boot.recovery, strnlen(boot.recovery, sizeof(boot.recovery)));
+		g_ota_install_boot = command.find("--update_package") != std::string::npos ||
+		                     recovery.find("--update_package") != std::string::npos;
+		if (g_ota_install_boot)
+			LOGINFO("Fox: OTA install boot detected in the BCB\n");
+	} else {
+		LOGINFO("Fox: cannot read BCB before clearing: %s\n", err.c_str());
+	}
 	if (!clear_bootloader_message(&err)) {
 	   LOGINFO("%s\n", err.c_str());
 	}
+}
+
+bool TWFunc::Is_Ota_Install_Boot() {
+	return g_ota_install_boot;
 }
 
 void TWFunc::Update_Intent_File(string Intent)

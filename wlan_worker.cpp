@@ -9,11 +9,11 @@
 #include <string>
 #include <thread>
 
-#include <bootloader_message/bootloader_message.h>
 #include <sys/stat.h>
 
 #include "data.hpp"
 #include "twcommon.h"
+#include "twrp-functions.hpp"
 #include "wlan.hpp"
 #include "fox_adbd.hpp"
 #include "gui/pages.hpp"  // gui_toast
@@ -87,23 +87,11 @@ bool ScanFoundNetworks() {
 // update_dynamic_partitions fail. Skip the autostart for that boot only; the
 // next normal boot brings the WLAN back.
 //
-// The BCB is the authoritative source: the Updater writes --update_package
-// there. Do not fall back to a property or /cache/recovery/command: both were
-// proven wrong (R12.0_9/R12.0_11: WLAN started before the property; the
-// command file is absent for the Updater boot).
+// twrp.cpp clears the BCB before the GUI starts, so TWFunc snapshots the
+// OTA flag from the BCB first. Do not fall back to a property or
+// /cache/recovery/command.
 bool OtaInstallBoot() {
-	bootloader_message boot = {};
-	std::string err;
-	if (!read_bootloader_message(&boot, &err)) {
-		LOGERR("Fox: cannot read BCB while checking OTA boot: %s\n", err.c_str());
-		return false;
-	}
-	// The Updater keeps boot.command as "boot-recovery" and writes the option
-	// into boot.recovery; get_args() writes the parsed options back there too.
-	std::string command(boot.command, strnlen(boot.command, sizeof(boot.command)));
-	std::string recovery(boot.recovery, strnlen(boot.recovery, sizeof(boot.recovery)));
-	return command.find("--update_package") != std::string::npos ||
-	       recovery.find("--update_package") != std::string::npos;
+	return TWFunc::Is_Ota_Install_Boot();
 }
 
 // Bring the radio's network list up to date: settle ~2s, scan, surface results
