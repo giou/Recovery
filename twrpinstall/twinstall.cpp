@@ -340,7 +340,6 @@ static void Fox_Stop_Vendor_Holders() {
 			break;
 		usleep(100000);
 	}
-	usleep(500000);
 }
 
 int TWinstall_zip(const char *path, int *wipe_cache, bool check_for_digest)
@@ -449,20 +448,14 @@ int TWinstall_zip(const char *path, int *wipe_cache, bool check_for_digest)
 		umount("/vendor/bt_firmware");
 		bool vendor_unmounted = PartitionManager.UnMount_By_Path("/vendor", false);
 		if (!vendor_unmounted) {
-			for (int i = 0; i < 10; i++) {
-				if (umount("/vendor") == 0) {
-					vendor_unmounted = true;
-					break;
-				}
-				usleep(100000);
+			// /vendor is a read-only image and is restarted on the next boot;
+			// lazy detach is safer than an arbitrary EBUSY retry loop.
+			if (umount2("/vendor", MNT_DETACH) == 0) {
+				LOGINFO("Fox: detached busy /vendor before the OTA install\n");
+				vendor_unmounted = true;
+			} else {
+				LOGERR("Fox: /vendor detach failed: %s\n", strerror(errno));
 			}
-		}
-		// The WLAN stack can leave the mount busy even after its daemons
-		// exit; detach it (TWRP's own vendor fallback) so the OTA can write
-		// super. The install is local; WLAN is restarted on the next boot.
-		if (!vendor_unmounted && umount2("/vendor", MNT_DETACH) == 0) {
-			LOGINFO("Fox: detached busy /vendor before the OTA install\n");
-			vendor_unmounted = true;
 		}
 		if (!vendor_unmounted) {
 			gui_msg("unmount_vendor_err=Failed to unmount Vendor");
