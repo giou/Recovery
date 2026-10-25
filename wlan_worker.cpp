@@ -9,6 +9,7 @@
 #include <string>
 #include <thread>
 
+#include <cutils/properties.h>
 #include <sys/stat.h>
 
 #include "data.hpp"
@@ -80,12 +81,22 @@ bool ScanFoundNetworks() {
 	return stat("/tmp/wlan/list.txt", &st) == 0 && st.st_size > 0;
 }
 
-// The Updater's OTA boots recovery with --update_package in the recovery
-// command file. That install needs no network, and a running WLAN stack
-// (wlan_bringup/wpa_supplicant/qrtr-ns/cnss-daemon) keeps the vendor dm busy,
-// which makes the OTA's update_dynamic_partitions fail. Skip the autostart
-// for that boot only; the next normal boot brings the WLAN back.
+// The Updater's OTA boots recovery with --update_package. That install needs
+// no network, and a running WLAN stack (wlan_bringup/wpa_supplicant/qrtr-ns/
+// cnss-daemon) keeps the vendor dm busy, which makes the OTA's
+// update_dynamic_partitions fail. Skip the autostart for that boot only; the
+// next normal boot brings the WLAN back.
+//
+// OpenRecoveryScript::Install_Command() sets sys.fox.ota_boot for the mapped
+// OTA before this worker autostarts; checking that property avoids the old
+// race where the command file was already gone by the time the worker ran.
 bool OtaInstallBoot() {
+	char value[PROPERTY_VALUE_MAX] = {0};
+	property_get("sys.fox.ota_boot", value, "");
+	if (value[0] == '1')
+		return true;
+
+	// Fallback for paths that do not go through the mapped OTA installer.
 	std::ifstream f("/cache/recovery/command");
 	std::string line;
 	while (std::getline(f, line)) {
