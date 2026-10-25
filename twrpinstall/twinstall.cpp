@@ -25,12 +25,16 @@
 #endif
 
 #include <ctype.h>
+#ifdef OF_ENABLE_WLAN
 #include <dirent.h>
+#endif
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
+#ifdef OF_ENABLE_WLAN
 #include <signal.h>
 #include <stdlib.h>
+#endif
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
@@ -38,6 +42,7 @@
 #include <unistd.h>
 #include <iostream>
 #include <fstream>
+#include <vector>
 
 #include <string.h>
 #include <stdio.h>
@@ -285,15 +290,23 @@ static int Run_Update_Binary(const char *path, int* wipe_cache, zip_type ztype) 
 	return INSTALL_SUCCESS;
 }
 
-// The vendor TEE/vibrator services and the WLAN daemons start from /vendor
-// at boot and keep it busy, so an OTA install cannot unmount /vendor while
-// they run. Stop the init services, kill the nohup WLAN daemons (qrtr-ns,
-// cnss-daemon) and wait (bounded) before the install unmounts /vendor. The
-// next boot restarts them; the install does not need them.
+// The vendor TEE/vibrator services keep /vendor busy, so an OTA install
+// cannot unmount it while they run. The WLAN build additionally starts
+// wpa_supplicant/wlan_bringup and the nohup qrtr-ns/cnss-daemon, which also
+// hold /vendor; those are handled only when OF_ENABLE_WLAN is set (the
+// standard build has no WLAN stack). Stop everything, wait (bounded); the
+// next boot restarts it. The install does not need any of it.
 static void Fox_Stop_Vendor_Holders() {
-	const char* services[] = {"vendor.qseecomd", "gatekeeper-1-0", "keymaster-4-0", "vendor.qti.vibrator", "wpa_supplicant", "wlan_bringup"};
+	std::vector<const char*> services = {"vendor.qseecomd", "gatekeeper-1-0", "keymaster-4-0", "vendor.qti.vibrator"};
+#ifdef OF_ENABLE_WLAN
+	services.push_back("wpa_supplicant");
+	services.push_back("wlan_bringup");
+#endif
 	for (const char* svc : services)
 		property_set("ctl.stop", svc);
+#ifdef OF_ENABLE_WLAN
+	// qrtr-ns/cnss-daemon are started with nohup by wlan_bringup, not as init
+	// services; kill any process running from /vendor so the mount can go.
 	DIR* proc = opendir("/proc");
 	if (proc != nullptr) {
 		struct dirent* entry;
@@ -311,6 +324,7 @@ static void Fox_Stop_Vendor_Holders() {
 		}
 		closedir(proc);
 	}
+#endif
 	for (int i = 0; i < 50; i++) {
 		bool running = false;
 		for (const char* svc : services) {
