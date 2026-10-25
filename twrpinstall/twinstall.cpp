@@ -306,23 +306,55 @@ static void Fox_Stop_Vendor_Holders() {
 		property_set("ctl.stop", svc);
 #ifdef OF_ENABLE_WLAN
 	// qrtr-ns/cnss-daemon are started with nohup by wlan_bringup, not as init
-	// services; kill any process running from /vendor so the mount can go.
-	DIR* proc = opendir("/proc");
-	if (proc != nullptr) {
-		struct dirent* entry;
-		while ((entry = readdir(proc)) != nullptr) {
-			if (entry->d_name[0] < '0' || entry->d_name[0] > '9')
-				continue;
-			std::string exe = std::string("/proc/") + entry->d_name + "/exe";
-			char target[PATH_MAX] = {0};
-			ssize_t len = readlink(exe.c_str(), target, sizeof(target) - 1);
-			if (len > 0 && strncmp(target, "/vendor/", 8) == 0) {
+	// services; the bring-up script is /system/bin/sh, so killing only
+	// /vendor exes misses the respawner. Kill the script, its daemons and
+	// anything running from /vendor until none remain; the install does not
+	// need WLAN and the next boot restarts it.
+	for (int pass = 0; pass < 50; pass++) {
+		bool found = false;
+		DIR* proc = opendir("/proc");
+		if (proc != nullptr) {
+			struct dirent* entry;
+			while ((entry = readdir(proc)) != nullptr) {
+				if (entry->d_name[0] < '0' || entry->d_name[0] > '9')
+					continue;
 				pid_t pid = atoi(entry->d_name);
-				if (pid > 1)
+				if (pid <= 1)
+					continue;
+				bool match = false;
+				std::string exe = std::string("/proc/") + entry->d_name + "/exe";
+				char target[PATH_MAX] = {0};
+				ssize_t len = readlink(exe.c_str(), target, sizeof(target) - 1);
+				if (len > 0 && strncmp(target, "/vendor/", 8) == 0)
+					match = true;
+				if (!match) {
+					std::string path = std::string("/proc/") + entry->d_name + "/cmdline";
+					int fd = open(path.c_str(), O_RDONLY);
+					if (fd >= 0) {
+						char cmdline[256] = {0};
+						ssize_t n = read(fd, cmdline, sizeof(cmdline) - 1);
+						close(fd);
+						for (ssize_t i = 0; i < n; i++) {
+							if (cmdline[i] == '\0')
+								cmdline[i] = ' ';
+						}
+						if (n > 0 && (strstr(cmdline, "wlan_bringup") ||
+							strstr(cmdline, "qrtr-ns") ||
+							strstr(cmdline, "cnss-daemon") ||
+							strstr(cmdline, "wpa_supplicant")))
+							match = true;
+					}
+				}
+				if (match) {
 					kill(pid, SIGKILL);
+					found = true;
+				}
 			}
+			closedir(proc);
 		}
-		closedir(proc);
+		if (!found)
+			break;
+		usleep(100000);
 	}
 #endif
 	for (int i = 0; i < 50; i++) {
