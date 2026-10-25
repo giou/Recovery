@@ -159,6 +159,19 @@ static std::vector<std::string> get_args(const int argc, char** const argv, std:
     }
   }
 
+  // Fox: the Updater's mapped OTA carries --update_package in the BCB (or in
+  // the command file fallback above). Mark the OTA boot here, before the WLAN
+  // worker autostarts. Install_Command() runs later, after the WLAN worker
+  // has already started, so its property set was too late (R12.0_9 test:
+  // "WLAN: triggering supplicant bring-up" preceded OpenRecoveryScript).
+  for (const auto& arg : args) {
+    if (arg.find("--update_package") != std::string::npos) {
+      android::base::SetProperty("sys.fox.ota_boot", "1");
+      LOG(INFO) << "Fox: OTA boot detected at startup; WLAN autostart will be skipped";
+      break;
+    }
+  }
+
   // Write the arguments (excluding the filename in args[0]) back into the
   // bootloader control block. So the device will always boot into recovery to
   // finish the pending work, until FinishRecovery() is called.
