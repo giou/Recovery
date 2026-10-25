@@ -98,9 +98,12 @@ bool OtaInstallBoot() {
 		LOGERR("Fox: cannot read BCB while checking OTA boot: %s\n", err.c_str());
 		return false;
 	}
-	std::string command(boot.command,
-	                    strnlen(boot.command, sizeof(boot.command)));
-	return command.find("--update_package") != std::string::npos;
+	// The Updater keeps boot.command as "boot-recovery" and writes the option
+	// into boot.recovery; get_args() writes the parsed options back there too.
+	std::string command(boot.command, strnlen(boot.command, sizeof(boot.command)));
+	std::string recovery(boot.recovery, strnlen(boot.recovery, sizeof(boot.recovery)));
+	return command.find("--update_package") != std::string::npos ||
+	       recovery.find("--update_package") != std::string::npos;
 }
 
 // Bring the radio's network list up to date: settle ~2s, scan, surface results
