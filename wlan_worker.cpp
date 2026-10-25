@@ -4,6 +4,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <deque>
+#include <fstream>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -11,6 +12,7 @@
 #include <sys/stat.h>
 
 #include "data.hpp"
+#include "twcommon.h"
 #include "wlan.hpp"
 #include "fox_adbd.hpp"
 #include "gui/pages.hpp"  // gui_toast
@@ -78,6 +80,21 @@ bool ScanFoundNetworks() {
 	return stat("/tmp/wlan/list.txt", &st) == 0 && st.st_size > 0;
 }
 
+// The Updater's OTA boots recovery with --update_package in the recovery
+// command file. That install needs no network, and a running WLAN stack
+// (wlan_bringup/wpa_supplicant/qrtr-ns/cnss-daemon) keeps the vendor dm busy,
+// which makes the OTA's update_dynamic_partitions fail. Skip the autostart
+// for that boot only; the next normal boot brings the WLAN back.
+bool OtaInstallBoot() {
+	std::ifstream f("/cache/recovery/command");
+	std::string line;
+	while (std::getline(f, line)) {
+		if (line.find("--update_package") != std::string::npos)
+			return true;
+	}
+	return false;
+}
+
 // Bring the radio's network list up to date: settle ~2s, scan, surface results
 // on the wlan page, and toast if nothing was found.
 void SettleAndScan() {
@@ -121,6 +138,11 @@ void Handle(WlanWorker::Cmd cmd) {
 		// normal path; of_adbd_auto ("Network ADB automatically") gates the
 		// pre-decrypt path on its own, since saved credentials on encrypted
 		// /data are unreadable when this first runs.
+		if (OtaInstallBoot()) {
+			LOGINFO("Fox: OTA install boot; skipping WLAN autostart\n");
+			SetState("disabled");
+			break;
+		}
 		if (DataManager::GetIntValue("of_wlan_auto_enable") != 1
 		    && DataManager::GetIntValue("of_adbd_auto") != 1)
 			break;

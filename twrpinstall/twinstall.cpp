@@ -25,16 +25,10 @@
 #endif
 
 #include <ctype.h>
-#ifdef OF_ENABLE_WLAN
-#include <dirent.h>
-#endif
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
-#ifdef OF_ENABLE_WLAN
-#include <signal.h>
 #include <stdlib.h>
-#endif
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
@@ -291,72 +285,12 @@ static int Run_Update_Binary(const char *path, int* wipe_cache, zip_type ztype) 
 }
 
 // The vendor TEE/vibrator services keep /vendor busy, so an OTA install
-// cannot unmount it while they run. The WLAN build additionally starts
-// wpa_supplicant/wlan_bringup and the nohup qrtr-ns/cnss-daemon, which also
-// hold /vendor; those are handled only when OF_ENABLE_WLAN is set (the
-// standard build has no WLAN stack). Stop everything, wait (bounded); the
-// next boot restarts it. The install does not need any of it.
+// cannot unmount it while they run. Stop them and wait (bounded) for the
+// stop; the next boot restarts them. Nothing in the install needs the TEE.
 static void Fox_Stop_Vendor_Holders() {
-	std::vector<const char*> services = {"vendor.qseecomd", "gatekeeper-1-0", "keymaster-4-0", "vendor.qti.vibrator"};
-#ifdef OF_ENABLE_WLAN
-	services.push_back("wpa_supplicant");
-	services.push_back("wlan_bringup");
-#endif
+	const char* services[] = {"vendor.qseecomd", "gatekeeper-1-0", "keymaster-4-0", "vendor.qti.vibrator"};
 	for (const char* svc : services)
 		property_set("ctl.stop", svc);
-#ifdef OF_ENABLE_WLAN
-	// qrtr-ns/cnss-daemon are started with nohup by wlan_bringup, not as init
-	// services; the bring-up script is /system/bin/sh, so killing only
-	// /vendor exes misses the respawner. Kill the script, its daemons and
-	// anything running from /vendor until none remain; the install does not
-	// need WLAN and the next boot restarts it.
-	for (int pass = 0; pass < 50; pass++) {
-		bool found = false;
-		DIR* proc = opendir("/proc");
-		if (proc != nullptr) {
-			struct dirent* entry;
-			while ((entry = readdir(proc)) != nullptr) {
-				if (entry->d_name[0] < '0' || entry->d_name[0] > '9')
-					continue;
-				pid_t pid = atoi(entry->d_name);
-				if (pid <= 1)
-					continue;
-				bool match = false;
-				std::string exe = std::string("/proc/") + entry->d_name + "/exe";
-				char target[PATH_MAX] = {0};
-				ssize_t len = readlink(exe.c_str(), target, sizeof(target) - 1);
-				if (len > 0 && strncmp(target, "/vendor/", 8) == 0)
-					match = true;
-				if (!match) {
-					std::string path = std::string("/proc/") + entry->d_name + "/cmdline";
-					int fd = open(path.c_str(), O_RDONLY);
-					if (fd >= 0) {
-						char cmdline[256] = {0};
-						ssize_t n = read(fd, cmdline, sizeof(cmdline) - 1);
-						close(fd);
-						for (ssize_t i = 0; i < n; i++) {
-							if (cmdline[i] == '\0')
-								cmdline[i] = ' ';
-						}
-						if (n > 0 && (strstr(cmdline, "wlan_bringup") ||
-							strstr(cmdline, "qrtr-ns") ||
-							strstr(cmdline, "cnss-daemon") ||
-							strstr(cmdline, "wpa_supplicant")))
-							match = true;
-					}
-				}
-				if (match) {
-					kill(pid, SIGKILL);
-					found = true;
-				}
-			}
-			closedir(proc);
-		}
-		if (!found)
-			break;
-		usleep(100000);
-	}
-#endif
 	for (int i = 0; i < 50; i++) {
 		bool running = false;
 		for (const char* svc : services) {
@@ -369,10 +303,10 @@ static void Fox_Stop_Vendor_Holders() {
 			}
 		}
 		if (!running)
-			break;
+			return;
 		usleep(100000);
 	}
-	usleep(500000);
+	LOGERR("Fox: vendor services still running after stop; the vendor unmount may fail\n");
 }
 
 int TWinstall_zip(const char *path, int *wipe_cache, bool check_for_digest)
