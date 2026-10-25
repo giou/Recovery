@@ -13,7 +13,7 @@
 
 #include "data.hpp"
 #include "twcommon.h"
-#include "twrp-functions.hpp"
+#include "twinstall/get_args.h"
 #include "wlan.hpp"
 #include "fox_adbd.hpp"
 #include "gui/pages.hpp"  // gui_toast
@@ -87,11 +87,11 @@ bool ScanFoundNetworks() {
 // update_dynamic_partitions fail. Skip the autostart for that boot only; the
 // next normal boot brings the WLAN back.
 //
-// twrp.cpp snapshots the OTA flag from the BCB before the GUI loads (and
-// before it clears the BCB); the worker reads that flag. Do not fall back to
-// a property or /cache/recovery/command.
+// startupArgs::parse reads the BCB before the GUI; args records the OTA flag
+// in the same pass. The worker reads that flag. Do not fall back to a property
+// or /cache/recovery/command.
 bool OtaInstallBoot() {
-	return TWFunc::Is_Ota_Install_Boot();
+	return args::Is_Ota_Boot();
 }
 
 // Bring the radio's network list up to date: settle ~2s, scan, surface results

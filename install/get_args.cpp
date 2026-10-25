@@ -1,6 +1,10 @@
 #include "twinstall/get_args.h"
 
+#include <cstring>
+
 std::string stage;
+
+static bool g_ota_boot = false;
 
 // command line args come from, in decreasing precedence:
 //   - the actual command line
@@ -17,6 +21,15 @@ std::vector<std::string> args::get_args(const int *argc, char*** const argv) {
     // If fails, leave a zeroed bootloader_message.
     boot = {};
   }
+
+  // BCB only: check the raw block before the command-file fallback below.
+  std::string bcb_command(boot.command, strnlen(boot.command, sizeof(boot.command)));
+  std::string bcb_recovery(boot.recovery, strnlen(boot.recovery, sizeof(boot.recovery)));
+  g_ota_boot = bcb_command.find("--update_package") != std::string::npos ||
+               bcb_recovery.find("--update_package") != std::string::npos;
+  if (g_ota_boot)
+    printf("Fox: OTA install boot detected in the BCB\n");
+
   stage = std::string(boot.stage);
 
   std::string boot_command;
@@ -71,4 +84,8 @@ std::vector<std::string> args::get_args(const int *argc, char*** const argv) {
   }
 
   return args;
+}
+
+bool args::Is_Ota_Boot() {
+  return g_ota_boot;
 }

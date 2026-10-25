@@ -14,4 +14,5 @@ extern std::string stage;
 class args {
     public:
         static std::vector<std::string> get_args(const int *argc, char*** const argv);
+        static bool Is_Ota_Boot();
 };

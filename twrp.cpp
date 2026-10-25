@@ -528,9 +528,6 @@ int main(int argc, char **argv) {
 
 	startupArgs startup;
 	startup.parse(&argc, &argv);
-	// Snapshot the OTA flag before the GUI loads (and before twrp clears the
-	// BCB); the WLAN autostart page action runs during gui_loadResources().
-	TWFunc::Snapshot_Ota_Install_Boot();
 	android::base::SetProperty(TW_FASTBOOT_MODE_PROP, startup.Get_Fastboot_Mode() ? "1" : "0");
 	printf("=> Linking mtab\n");
 	symlink("/proc/mounts", "/etc/mtab");

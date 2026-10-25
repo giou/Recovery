@@ -100,9 +100,7 @@ public:
 	static bool PackRepackImage_MagiskBoot(bool do_unpack, bool is_boot);       // Unpacking/repacking process for boot/recovery images, using magiskboot
 
 	static void List_Mounts();
-	static void Snapshot_Ota_Install_Boot();
 	static void Clear_Bootloader_Message();
-	static bool Is_Ota_Install_Boot();
 
 	static bool Repack_Image(string mount_point);
 	static bool Unpack_Image(string mount_point);
