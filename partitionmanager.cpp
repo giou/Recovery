@@ -2546,15 +2546,23 @@ int TWPartitionManager::Decrypt_Device(string Password, int user_id) {
 		gui_msg(Msg("decrypting_user_fbe=Attempting to decrypt FBE for user {1}...")(user_id));
 		// The gatekeeper HAL occasionally returns a transient error instead of
 		// OK/reject ("GateKeeper response error" right after "using secdis to
-		// decrypt spblob") and an immediate re-verify succeeds - seen in four
-		// sessions 2026-10-15/16, predating any restore damage. Retry exactly
-		// once: a genuinely wrong password fails both times, so at most one
-		// extra failed attempt is ever spent.
-		bool decrypted = android::keystore::Decrypt_User(user_id, Password);
-		if (!decrypted) {
-			LOGINFO("Decrypt_User failed, retrying once\n");
-			usleep(300000);
-			decrypted = android::keystore::Decrypt_User(user_id, Password);
+		// decrypt spblob"). Retry only when the HAL marks the result Retry;
+		// a bad credential is not retried. The HAL timeout, when supplied, is
+		// the only delay used.
+		android::keystore::DecryptResult decrypt_result =
+			android::keystore::DecryptResult::BadCredential;
+		int retry_after_ms = 0;
+		bool decrypted = android::keystore::Decrypt_User(
+			user_id, Password, &decrypt_result, &retry_after_ms);
+		if (!decrypted && decrypt_result == android::keystore::DecryptResult::Retry) {
+			LOGINFO("Decrypt_User transient failure; retrying once (HAL timeout %d ms)\n",
+			        retry_after_ms);
+			if (retry_after_ms > 0)
+				usleep(retry_after_ms * 1000);
+			decrypted = android::keystore::Decrypt_User(
+				user_id, Password, &decrypt_result, nullptr);
+		} else if (!decrypted) {
+			LOGINFO("Decrypt_User rejected the credential; not retrying\n");
 		}
 		if (decrypted) {
 			gui_msg(Msg("decrypt_user_success_fbe=User {1} Decrypted Successfully")(user_id));
