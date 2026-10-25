@@ -87,9 +87,11 @@ bool ScanFoundNetworks() {
 // update_dynamic_partitions fail. Skip the autostart for that boot only; the
 // next normal boot brings the WLAN back.
 //
-// OpenRecoveryScript::Install_Command() sets sys.fox.ota_boot for the mapped
-// OTA before this worker autostarts; checking that property avoids the old
-// race where the command file was already gone by the time the worker ran.
+// recovery_main.cpp sets sys.fox.ota_boot at startup when the BCB/command
+// carries --update_package (before this worker autostarts);
+// OpenRecoveryScript::Install_Command() also sets it for the mapped installer.
+// Checking the property here avoids the old race where the command file was
+// already gone and the Install_Command property was set too late.
 bool OtaInstallBoot() {
 	char value[PROPERTY_VALUE_MAX] = {0};
 	property_get("sys.fox.ota_boot", value, "");
