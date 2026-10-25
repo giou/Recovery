@@ -98,13 +98,15 @@ events for WebUSB/JSON callers. In the Rust `fox` client these map through the
 Gated entirely by `OF_ENABLE_WLAN=1` in the device tree:
 - `wlan.cpp` is added to `LOCAL_SRC_FILES` in `Android.mk` under the
   `ifeq ($(OF_ENABLE_WLAN),1)` block, with `-DOF_ENABLE_WLAN`.
-- `orangefox.mk` requires `external/wpa_supplicant_8` (clone
-  `android16-s2-release`) and adds `wpa_supplicant`, `wpa_cli`, `dhcptool` to
+- `orangefox.mk` uses the official manifest's `external/wpa_supplicant_8`
+  (`android16-s2-release`) and adds `wpa_supplicant`, `wpa_cli`, `dhcptool` to
   `TWRP_REQUIRED_MODULES`, plus the wifi supplicant VINTF manifest and the
   relevant HIDL/AIDL `.so` libs to `RECOVERY_LIBRARY_SOURCE_FILES`.
 - Network Storage (NAS) additionally needs `/system/bin/rclone` +
-  `/system/bin/fusermount3` (both cloned via `twrp.dependencies`; the CI fails
-  if a wlan ramdisk lacks them — see the `nas` op in `docs/fox-rpc-schema.md`).
+  `/system/bin/fusermount3`, installed by the official `external/rclone`
+  (`fox_cloud_mount_rclone`) and `external/libfuse3`
+  (`fox_cloud_mount_fusermount3`) modules. The CI fails if a wlan ramdisk
+  lacks them — see the `nas` op in `docs/fox-rpc-schema.md`.
 - The device tree must provide, load and manage the actual WiFi drivers.
 
 Hotspot support adds `OF_WLAN_AP=1` (only meaningful with `OF_ENABLE_WLAN`):
