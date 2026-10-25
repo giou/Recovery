@@ -1480,13 +1480,26 @@ int TWPartitionManager::Run_Backup(bool adbbackup) {
 	part_settings.img_bytes_remaining = part_settings.img_bytes;
 	part_settings.file_bytes_remaining = part_settings.file_bytes;
 
-	gui_msg("backup_started=[BACKUP STARTED]");
-
 	int is_decrypted = 0;
 	int is_encrypted = 0;
 
 	DataManager::GetValue(TW_IS_DECRYPTED, is_decrypted);
 	DataManager::GetValue(TW_IS_ENCRYPTED, is_encrypted);
+
+	// Pre-decrypt "internal storage" resolves to bare /data/media, which is
+	// invisible in the user-0 tree after decryption. Refuse that destination
+	// instead of creating a hidden backup; OTG/NAS and post-decrypt internal
+	// storage stay available.
+	if (!adbbackup && is_encrypted && !is_decrypted &&
+	    storage != NULL && storage->Has_Data_Media) {
+		LOGINFO("Blocked pre-decrypt internal backup to '%s'\n",
+		        part_settings.Backup_Folder.c_str());
+		gui_err("fox_predecrypt_internal_backup=Decrypt data first: pre-decrypt internal backups are blocked. Use OTG or NAS.");
+		return false;
+	}
+
+	gui_msg("backup_started=[BACKUP STARTED]");
+
 	if (!adbbackup || (!is_encrypted || (is_encrypted && is_decrypted))) {
 		gui_msg(Msg("backup_folder= * Backup Folder: {1}")(part_settings.Backup_Folder));
 		if (!TWFunc::Create_Dir_Recursive(part_settings.Backup_Folder, 0777, AID_MEDIA_RW, AID_MEDIA_RW)) {
