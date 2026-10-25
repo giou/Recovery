@@ -5,13 +5,11 @@
 #include <condition_variable>
 #include <cstring>
 #include <deque>
-#include <fstream>
 #include <mutex>
 #include <string>
 #include <thread>
 
 #include <bootloader_message/bootloader_message.h>
-#include <cutils/properties.h>
 #include <sys/stat.h>
 
 #include "data.hpp"
@@ -89,39 +87,20 @@ bool ScanFoundNetworks() {
 // update_dynamic_partitions fail. Skip the autostart for that boot only; the
 // next normal boot brings the WLAN back.
 //
-// recovery_main.cpp sets sys.fox.ota_boot at startup when the BCB/command
-// carries --update_package (before this worker autostarts);
-// OpenRecoveryScript::Install_Command() also sets it for the mapped installer.
-// Checking the property here avoids the old race where the command file was
-// already gone and the Install_Command property was set too late.
+// The BCB is the authoritative source: the Updater writes --update_package
+// there. Do not fall back to a property or /cache/recovery/command: both were
+// proven wrong (R12.0_9/R12.0_11: WLAN started before the property; the
+// command file is absent for the Updater boot).
 bool OtaInstallBoot() {
-	char value[PROPERTY_VALUE_MAX] = {0};
-	property_get("sys.fox.ota_boot", value, "");
-	if (value[0] == '1')
-		return true;
-
-	// The Updater writes --update_package into the BCB, not the command file,
-	// and this worker starts before recovery_main can set the property
-	// (R12.0_11 test: WLAN came up before OpenRecoveryScript). Read the BCB
-	// directly; the command file remains as a fallback for other paths.
 	bootloader_message boot = {};
 	std::string err;
-	if (read_bootloader_message(&boot, &err)) {
-		std::string command(boot.command,
-		                    strnlen(boot.command, sizeof(boot.command)));
-		if (command.find("--update_package") != std::string::npos)
-			return true;
-	} else {
-		LOGINFO("Fox: could not read BCB while checking OTA boot: %s\n", err.c_str());
+	if (!read_bootloader_message(&boot, &err)) {
+		LOGERR("Fox: cannot read BCB while checking OTA boot: %s\n", err.c_str());
+		return false;
 	}
-
-	std::ifstream f("/cache/recovery/command");
-	std::string line;
-	while (std::getline(f, line)) {
-		if (line.find("--update_package") != std::string::npos)
-			return true;
-	}
-	return false;
+	std::string command(boot.command,
+	                    strnlen(boot.command, sizeof(boot.command)));
+	return command.find("--update_package") != std::string::npos;
 }
 
 // Bring the radio's network list up to date: settle ~2s, scan, surface results

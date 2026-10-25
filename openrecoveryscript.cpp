@@ -543,10 +543,6 @@ int OpenRecoveryScript::Install_Command(string Zip) {
 
 	if (Zip.substr(0, 1) == "@") {
 		mapped_zip = true;
-		// A mapped install is the Updater's OTA boot. Mark it before the WLAN
-		// worker autostarts; the worker checks this property and skips the
-		// WLAN stack so it cannot hold the vendor dm during the install.
-		property_set("sys.fox.ota_boot", "1");
 		// This is a special file that contains a map of blocks on the data partition
 		Full_Path = Zip.substr(1);
 		if (!PartitionManager.Mount_By_Path(Full_Path, true) || !TWFunc::Path_Exists(Full_Path)) {
