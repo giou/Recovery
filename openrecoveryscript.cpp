@@ -609,8 +609,8 @@ int OpenRecoveryScript::Install_Command(string Zip) {
 	} else {
 		if (wipe_cache)
 			PartitionManager.Wipe_By_Path("/cache");
-		// The mapped OTA zip is consumed; clear it so a later normal
-		// recovery boot is not mistaken for an OTA boot.
+		// The mapped OTA zip is consumed; remove the map so a later
+		// recovery boot does not try to install it again.
 		if (mapped_zip)
 			unlink("/cache/recovery/block.map");
 	}
