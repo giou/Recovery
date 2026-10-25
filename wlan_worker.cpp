@@ -3,12 +3,14 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <cstring>
 #include <deque>
 #include <fstream>
 #include <mutex>
 #include <string>
 #include <thread>
 
+#include <bootloader_message/bootloader_message.h>
 #include <cutils/properties.h>
 #include <sys/stat.h>
 
@@ -98,7 +100,21 @@ bool OtaInstallBoot() {
 	if (value[0] == '1')
 		return true;
 
-	// Fallback for paths that do not go through the mapped OTA installer.
+	// The Updater writes --update_package into the BCB, not the command file,
+	// and this worker starts before recovery_main can set the property
+	// (R12.0_11 test: WLAN came up before OpenRecoveryScript). Read the BCB
+	// directly; the command file remains as a fallback for other paths.
+	bootloader_message boot = {};
+	std::string err;
+	if (read_bootloader_message(&boot, &err)) {
+		std::string command(boot.command,
+		                    strnlen(boot.command, sizeof(boot.command)));
+		if (command.find("--update_package") != std::string::npos)
+			return true;
+	} else {
+		LOGINFO("Fox: could not read BCB while checking OTA boot: %s\n", err.c_str());
+	}
+
 	std::ifstream f("/cache/recovery/command");
 	std::string line;
 	while (std::getline(f, line)) {
