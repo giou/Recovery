@@ -285,11 +285,11 @@ static int Run_Update_Binary(const char *path, int* wipe_cache, zip_type ztype) 
 	return INSTALL_SUCCESS;
 }
 
-// The vendor TEE/vibrator services hold /vendor on some boots, and a mapped
-// OTA cannot unmap the vendor dm while they do. Only the OTA path stops them:
-// that boot reboots afterwards, while a plain zip must keep them alive (a
-// restarted HAL answers gatekeeper but the synthetic-password unwrap fails
-// until the next boot).
+// The vendor TEE/vibrator services hold /vendor, and a package that rewrites
+// dynamic partitions needs the vendor dm released before its updater runs.
+// Only such a package stops them (see Fox_Zip_Touches_Dynamic_Partitions and
+// the OTA flag); a plain zip keeps them alive, because a restarted HAL answers
+// gatekeeper but the synthetic-password unwrap fails until keystore2 rebinds.
 // Returns true when at least one running service was stopped.
 static bool Fox_Stop_Vendor_Holders() {
 	const char* services[] = {"vendor.qseecomd", "gatekeeper-1-0", "keymaster-4-0", "vendor.qti.vibrator"};
@@ -370,6 +370,25 @@ static void Fox_Restart_Vendor_Holders() {
 	else
 		LOGERR("Fox: the TEE restart is incomplete (gatekeeper=%d keystore2=%d); decrypt fails until the next boot\n",
 		       (int)running, (int)keystore);
+}
+
+// A package that rewrites dynamic partitions must have the vendor dm released,
+// not merely unmounted: open files on /vendor keep the device open, and libdm's
+// DM_DEV_REMOVE then fails with EBUSY even though the mount is already gone.
+// AOSP and LineageOS OTAs name the operand list differently, so accept either.
+static bool Fox_Zip_Touches_Dynamic_Partitions(ZipArchiveHandle Zip) {
+	const char* signals[] = {
+		"dynamic_partitions_info.txt",
+		"dynamic_partitions_op_list",
+		"super_empty.img",
+		"unsparse_super_empty.img",
+	};
+	for (const char* name : signals) {
+		ZipEntry64 entry;
+		if (FindEntry(Zip, name, &entry) == 0)
+			return true;
+	}
+	return false;
 }
 
 class FoxVendorHolderRestart
@@ -491,21 +510,18 @@ int TWinstall_zip(const char *path, int *wipe_cache, bool check_for_digest)
 		umount("/vendor/firmware_mnt");
 		umount("/vendor/dsp");
 		umount("/vendor/bt_firmware");
-		bool vendor_unmounted = PartitionManager.UnMount_By_Path("/vendor", false);
-		if (!vendor_unmounted && args::Is_Ota_Boot()) {
-			// Only a mapped OTA needs the vendor dm released for its updater,
-			// and that boot reboots afterwards. A plain zip does not: the
-			// running TEE services do not block a clean unmount, and stopping
-			// them costs the session's decrypt path (the restarted HALs answer
-			// gatekeeper but the synthetic-password unwrap fails until reboot).
+		// A package that rewrites super/vendor needs the vendor dm released,
+		// so the services running from it are stopped before the unmount. A
+		// plain zip keeps them: they do not block the unmount, and stopping
+		// them costs the session's decrypt path (see the restart helper).
+		if (args::Is_Ota_Boot() || Fox_Zip_Touches_Dynamic_Partitions(Zip))
 			vendor_restart.stopped = Fox_Stop_Vendor_Holders();
-			vendor_unmounted = PartitionManager.UnMount_By_Path("/vendor", false);
-		}
+		bool vendor_unmounted = PartitionManager.UnMount_By_Path("/vendor", false);
 		if (!vendor_unmounted) {
 			// /vendor is a read-only image and is restarted on the next boot;
 			// lazy detach is safer than an arbitrary EBUSY retry loop.
 			if (umount2("/vendor", MNT_DETACH) == 0) {
-				LOGINFO("Fox: detached busy /vendor before the OTA install\n");
+				LOGINFO("Fox: detached busy /vendor before the install\n");
 				vendor_unmounted = true;
 			} else {
 				LOGERR("Fox: /vendor detach failed: %s\n", strerror(errno));
