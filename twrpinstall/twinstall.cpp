@@ -327,6 +327,10 @@ static bool Fox_Stop_Vendor_Holders() {
 // Restarts what Fox_Stop_Vendor_Holders stopped. The services cannot start
 // while /vendor is unmounted, so remount it first when the install left it
 // detached. Called from every exit path of TWinstall_zip.
+// keystore2 keeps binder proxies to the stopped HALs; a restarted HAL is a new
+// instance, so the spblob unwrap fails ("Begin Operation failed") until
+// keystore2 rebinds. Verified on device: this restart makes the same PIN
+// decrypt successfully in the same session.
 static void Fox_Restart_Vendor_Holders() {
 	property_set("ctl.start", "vendor.qseecomd");
 	for (int i = 0; i < 20; i++) {
@@ -349,10 +353,23 @@ static void Fox_Restart_Vendor_Holders() {
 		}
 		usleep(100000);
 	}
-	if (running)
-		LOGINFO("Fox: restarted the vendor TEE services after the install\n");
+	property_set("ctl.stop", "keystore2");
+	property_set("ctl.start", "keystore2");
+	bool keystore = false;
+	for (int i = 0; i < 20; i++) {
+		char value[PROP_VALUE_MAX] = {0};
+		property_get("init.svc.keystore2", value, "");
+		if (strcmp(value, "running") == 0) {
+			keystore = true;
+			break;
+		}
+		usleep(100000);
+	}
+	if (running && keystore)
+		LOGINFO("Fox: restarted the vendor TEE services and keystore2 after the install\n");
 	else
-		LOGERR("Fox: the vendor TEE services did not restart; decrypt fails until the next boot\n");
+		LOGERR("Fox: the TEE restart is incomplete (gatekeeper=%d keystore2=%d); decrypt fails until the next boot\n",
+		       (int)running, (int)keystore);
 }
 
 class FoxVendorHolderRestart
