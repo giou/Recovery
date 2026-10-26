@@ -51,6 +51,7 @@
 #include "otautil/sysutil.h"
 #include <ziparchive/zip_archive.h>
 #include "twinstall/install.h"
+#include "twinstall/get_args.h"
 #include "twinstall/verifier.h"
 #include "variables.h"
 #include "data.hpp"
@@ -284,11 +285,11 @@ static int Run_Update_Binary(const char *path, int* wipe_cache, zip_type ztype) 
 	return INSTALL_SUCCESS;
 }
 
-// The vendor TEE/vibrator services keep /vendor busy, so an OTA install
-// cannot unmount it while they run. Stop them only when the clean unmount
-// actually fails, and restart them when the install ends: gatekeeper and
-// keymaster live on the /vendor image, so a session that leaves them stopped
-// cannot decrypt until the next boot.
+// The vendor TEE/vibrator services hold /vendor on some boots, and a mapped
+// OTA cannot unmap the vendor dm while they do. Only the OTA path stops them:
+// that boot reboots afterwards, while a plain zip must keep them alive (a
+// restarted HAL answers gatekeeper but the synthetic-password unwrap fails
+// until the next boot).
 // Returns true when at least one running service was stopped.
 static bool Fox_Stop_Vendor_Holders() {
 	const char* services[] = {"vendor.qseecomd", "gatekeeper-1-0", "keymaster-4-0", "vendor.qti.vibrator"};
@@ -474,8 +475,12 @@ int TWinstall_zip(const char *path, int *wipe_cache, bool check_for_digest)
 		umount("/vendor/dsp");
 		umount("/vendor/bt_firmware");
 		bool vendor_unmounted = PartitionManager.UnMount_By_Path("/vendor", false);
-		if (!vendor_unmounted) {
-			// A clean unmount means nothing held /vendor: leave the TEE alone.
+		if (!vendor_unmounted && args::Is_Ota_Boot()) {
+			// Only a mapped OTA needs the vendor dm released for its updater,
+			// and that boot reboots afterwards. A plain zip does not: the
+			// running TEE services do not block a clean unmount, and stopping
+			// them costs the session's decrypt path (the restarted HALs answer
+			// gatekeeper but the synthetic-password unwrap fails until reboot).
 			vendor_restart.stopped = Fox_Stop_Vendor_Holders();
 			vendor_unmounted = PartitionManager.UnMount_By_Path("/vendor", false);
 		}
