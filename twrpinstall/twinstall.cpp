@@ -25,9 +25,11 @@
 #endif
 
 #include <ctype.h>
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -285,6 +287,39 @@ static int Run_Update_Binary(const char *path, int* wipe_cache, zip_type ztype) 
 	return INSTALL_SUCCESS;
 }
 
+// Any process whose executable lives on /vendor keeps the vendor dm open even
+// after the mount is gone, and libdm's DM_DEV_REMOVE then fails with EBUSY.
+// wlan_bringup starts qrtr-ns/cnss-daemon with nohup, so ctl.stop cannot reach
+// them; sweep /proc until no /vendor executable is left.
+static void Fox_Kill_Vendor_Processes() {
+	for (int pass = 0; pass < 50; pass++) {
+		bool found = false;
+		DIR* proc = opendir("/proc");
+		if (proc == nullptr)
+			return;
+		struct dirent* entry;
+		while ((entry = readdir(proc)) != nullptr) {
+			if (entry->d_name[0] < '0' || entry->d_name[0] > '9')
+				continue;
+			pid_t pid = atoi(entry->d_name);
+			if (pid <= 1)
+				continue;
+			std::string exe = std::string("/proc/") + entry->d_name + "/exe";
+			char target[PATH_MAX] = {0};
+			ssize_t len = readlink(exe.c_str(), target, sizeof(target) - 1);
+			if (len > 0 && strncmp(target, "/vendor/", 8) == 0) {
+				found = true;
+				kill(pid, SIGKILL);
+			}
+		}
+		closedir(proc);
+		if (!found)
+			return;
+		usleep(100000);
+	}
+	LOGERR("Fox: processes from /vendor are still present after the kill sweep\n");
+}
+
 // The vendor TEE/vibrator services hold /vendor, and a package that rewrites
 // dynamic partitions needs the vendor dm released before its updater runs.
 // Only such a package stops them (see Fox_Zip_Touches_Dynamic_Partitions and
@@ -292,8 +327,15 @@ static int Run_Update_Binary(const char *path, int* wipe_cache, zip_type ztype) 
 // gatekeeper but the synthetic-password unwrap fails until keystore2 rebinds.
 // Returns true when at least one running service was stopped.
 static bool Fox_Stop_Vendor_Holders() {
-	const char* services[] = {"vendor.qseecomd", "gatekeeper-1-0", "keymaster-4-0", "vendor.qti.vibrator"};
+	std::vector<const char*> services = {"vendor.qseecomd", "gatekeeper-1-0", "keymaster-4-0", "vendor.qti.vibrator"};
+#ifdef OF_ENABLE_WLAN
+	// The WLAN stack runs from /vendor for the whole session and pins it. A
+	// dynamic-partition install does not need it; the next boot brings it back.
+	services.push_back("wpa_supplicant");
+	services.push_back("wlan_bringup");
+#endif
 	bool stopped = false;
+	bool wlan_stopped = false;
 	for (const char* svc : services) {
 		std::string prop = std::string("init.svc.") + svc;
 		char value[PROP_VALUE_MAX] = {0};
@@ -301,10 +343,14 @@ static bool Fox_Stop_Vendor_Holders() {
 		if (strcmp(value, "running") != 0)
 			continue;
 		stopped = true;
+		if (strcmp(svc, "wpa_supplicant") == 0 || strcmp(svc, "wlan_bringup") == 0)
+			wlan_stopped = true;
 		property_set("ctl.stop", svc);
 	}
 	if (!stopped)
 		return false;
+	if (wlan_stopped)
+		LOGINFO("Fox: stopped the WLAN stack for the install; the next boot restores it\n");
 	for (int i = 0; i < 50; i++) {
 		bool running = false;
 		for (const char* svc : services) {
@@ -317,10 +363,10 @@ static bool Fox_Stop_Vendor_Holders() {
 			}
 		}
 		if (!running)
-			return true;
+			break;
 		usleep(100000);
 	}
-	LOGERR("Fox: vendor services still running after stop; the vendor unmount may fail\n");
+	Fox_Kill_Vendor_Processes();
 	return true;
 }
 
