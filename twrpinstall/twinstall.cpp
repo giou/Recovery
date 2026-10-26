@@ -285,12 +285,25 @@ static int Run_Update_Binary(const char *path, int* wipe_cache, zip_type ztype) 
 }
 
 // The vendor TEE/vibrator services keep /vendor busy, so an OTA install
-// cannot unmount it while they run. Stop them and wait (bounded) for the
-// stop; the next boot restarts them. Nothing in the install needs the TEE.
-static void Fox_Stop_Vendor_Holders() {
+// cannot unmount it while they run. Stop them only when the clean unmount
+// actually fails, and restart them when the install ends: gatekeeper and
+// keymaster live on the /vendor image, so a session that leaves them stopped
+// cannot decrypt until the next boot.
+// Returns true when at least one running service was stopped.
+static bool Fox_Stop_Vendor_Holders() {
 	const char* services[] = {"vendor.qseecomd", "gatekeeper-1-0", "keymaster-4-0", "vendor.qti.vibrator"};
-	for (const char* svc : services)
+	bool stopped = false;
+	for (const char* svc : services) {
+		std::string prop = std::string("init.svc.") + svc;
+		char value[PROP_VALUE_MAX] = {0};
+		property_get(prop.c_str(), value, "");
+		if (strcmp(value, "running") != 0)
+			continue;
+		stopped = true;
 		property_set("ctl.stop", svc);
+	}
+	if (!stopped)
+		return false;
 	for (int i = 0; i < 50; i++) {
 		bool running = false;
 		for (const char* svc : services) {
@@ -303,16 +316,51 @@ static void Fox_Stop_Vendor_Holders() {
 			}
 		}
 		if (!running)
-			return;
+			return true;
 		usleep(100000);
 	}
 	LOGERR("Fox: vendor services still running after stop; the vendor unmount may fail\n");
+	return true;
 }
+
+// Restarts what Fox_Stop_Vendor_Holders stopped. The services cannot start
+// while /vendor is unmounted, so remount it first when the install left it
+// detached. Called from every exit path of TWinstall_zip.
+static void Fox_Restart_Vendor_Holders() {
+	property_set("ctl.start", "vendor.qseecomd");
+	for (int i = 0; i < 20; i++) {
+		char value[PROP_VALUE_MAX] = {0};
+		property_get("init.svc.vendor.qseecomd", value, "");
+		if (strcmp(value, "running") == 0)
+			break;
+		usleep(100000);
+	}
+	property_set("ctl.start", "gatekeeper-1-0");
+	property_set("ctl.start", "keymaster-4-0");
+	property_set("ctl.start", "vendor.qti.vibrator");
+	LOGINFO("Fox: restarted the vendor TEE services after the install\n");
+}
+
+class FoxVendorHolderRestart
+{
+public:
+	bool stopped = false;
+
+	~FoxVendorHolderRestart()
+	{
+		if (!stopped)
+			return;
+		if (!PartitionManager.Is_Mounted_By_Path("/vendor"))
+			PartitionManager.Mount_By_Path("/vendor", false);
+		Fox_Restart_Vendor_Holders();
+	}
+};
 
 int TWinstall_zip(const char *path, int *wipe_cache, bool check_for_digest)
 {
   int ret_val, zip_verify = 1, unmount_system = 1, reflashtwrp = 0, unmount_vendor = 1;
   bool run_rom_scripts = false;
+  FoxVendorHolderRestart vendor_restart;
 
   if (TWFunc::Block_Operations_Until_Reboot())
 	return INSTALL_CORRUPT;
@@ -406,7 +454,6 @@ int TWinstall_zip(const char *path, int *wipe_cache, bool check_for_digest)
    if (unmount_vendor) {
 	if (PartitionManager.Is_Mounted_By_Path("/vendor")) {
 		gui_msg("unmount_vendor=Unmounting Vendor...");
-		Fox_Stop_Vendor_Holders();
 		// The fstab mounts firmware_mnt/dsp/bt_firmware as separate mounts;
 		// the partition list does not always map them, so umount(2) them
 		// directly, otherwise the parent /vendor stays busy.
@@ -414,6 +461,11 @@ int TWinstall_zip(const char *path, int *wipe_cache, bool check_for_digest)
 		umount("/vendor/dsp");
 		umount("/vendor/bt_firmware");
 		bool vendor_unmounted = PartitionManager.UnMount_By_Path("/vendor", false);
+		if (!vendor_unmounted) {
+			// A clean unmount means nothing held /vendor: leave the TEE alone.
+			vendor_restart.stopped = Fox_Stop_Vendor_Holders();
+			vendor_unmounted = PartitionManager.UnMount_By_Path("/vendor", false);
+		}
 		if (!vendor_unmounted) {
 			// /vendor is a read-only image and is restarted on the next boot;
 			// lazy detach is safer than an arbitrary EBUSY retry loop.
