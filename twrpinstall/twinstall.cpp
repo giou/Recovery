@@ -338,7 +338,20 @@ static void Fox_Restart_Vendor_Holders() {
 	property_set("ctl.start", "gatekeeper-1-0");
 	property_set("ctl.start", "keymaster-4-0");
 	property_set("ctl.start", "vendor.qti.vibrator");
-	LOGINFO("Fox: restarted the vendor TEE services after the install\n");
+	bool running = false;
+	for (int i = 0; i < 20; i++) {
+		char value[PROP_VALUE_MAX] = {0};
+		property_get("init.svc.gatekeeper-1-0", value, "");
+		if (strcmp(value, "running") == 0) {
+			running = true;
+			break;
+		}
+		usleep(100000);
+	}
+	if (running)
+		LOGINFO("Fox: restarted the vendor TEE services after the install\n");
+	else
+		LOGERR("Fox: the vendor TEE services did not restart; decrypt fails until the next boot\n");
 }
 
 class FoxVendorHolderRestart
