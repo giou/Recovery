@@ -439,44 +439,28 @@ static bool Fox_Zip_Touches_Dynamic_Partitions(ZipArchiveHandle Zip) {
 }
 
 // A package that carries a recovery image overwrites the partition OrangeFox
-// lives on — every LineageOS OTA does. That used to be handled only for the
-// mapped '@block.map' install in OpenRecoveryScript::Install_Command, so a
-// manual flash from the GUI or `fox flash` silently replaced the recovery.
-// Decide from the package here, at the one point every install path goes
-// through, and keep an exact dd copy: the repacker would rebuild the image
-// with the compiled kernel instead of restoring what was actually installed.
-static bool Fox_Zip_Ships_Recovery(ZipArchiveHandle Zip) {
-	const char* signals[] = {
-		"recovery.img",
-		"recovery.transfer.list",
-	};
-	for (const char* name : signals) {
-		ZipEntry64 entry;
-		if (FindEntry(Zip, name, &entry) == 0)
-			return true;
-	}
-	return false;
-}
-
+// lives on — every LineageOS OTA does. Zip introspection proved unreliable for
+// that (FindEntry finds dynamic_partitions_op_list in the same archive but not
+// recovery.img), so decide from the partition instead: keep an exact dd copy
+// before the install and put it back afterwards if the package changed it.
+// This covers every install path (GUI, ORS, fox flash) and any package layout.
 class FoxRecoverySurvival
 {
 public:
-	// Returns false when the package writes recovery but the copy failed; the
-	// caller must abort rather than let the package replace the recovery.
-	bool Save_If_Package_Writes_Recovery(ZipArchiveHandle Zip) {
-		if (!Fox_Zip_Ships_Recovery(Zip))
+	// Returns false when the copy failed; the caller must abort rather than
+	// let an install run that it cannot undo.
+	bool Save_Before_Install() {
+		if (DataManager::GetIntValue(TW_AUTO_REFLASHTWRP_VAR) == 0) {
+			LOGINFO("Fox: recovery survival is off (tw_auto_reflashtwrp=0)\n");
 			return true;
-		if (DataManager::GetIntValue(TW_AUTO_REFLASHTWRP_VAR) == 0)
-			return true;
-		// This tree's TWPartition has no block-device getter; use the same
-		// by-name node as the flash recipe and init.recovery.qcom.rc.
+		}
+		// Same by-name node the flash recipe and init.recovery.qcom.rc use.
 		device = "/dev/block/bootdevice/by-name/recovery";
 		if (TWFunc::Exec_Cmd("dd if=" + device + " of=/tmp/fox-recovery-backup.img bs=4M", false) != 0) {
 			LOGERR("Fox: unable to back up the recovery partition\n");
 			return false;
 		}
 		backed_up = true;
-		LOGINFO("Fox: backed up the recovery partition before the install\n");
 		return true;
 	}
 
@@ -484,6 +468,11 @@ public:
 	{
 		if (!backed_up)
 			return;
+		if (TWFunc::Exec_Cmd("cmp -s /tmp/fox-recovery-backup.img " + device, false) == 0) {
+			LOGINFO("Fox: the install left the recovery partition untouched\n");
+			unlink("/tmp/fox-recovery-backup.img");
+			return;
+		}
 		if (TWFunc::Exec_Cmd("dd if=/tmp/fox-recovery-backup.img of=" + device + " bs=4M; sync", false) != 0) {
 			LOGERR("Fox: unable to restore the recovery partition; backup kept at /tmp/fox-recovery-backup.img\n");
 			return;
@@ -597,10 +586,10 @@ int TWinstall_zip(const char *path, int *wipe_cache, bool check_for_digest)
       return INSTALL_CORRUPT;
     }
 
-    // Save the recovery partition before a package that ships its own can
-    // overwrite it; the guard puts it back on every exit path.
+    // Keep an exact copy of the recovery partition; the guard compares it on
+    // exit and puts it back if the package overwrote it.
     FoxRecoverySurvival recovery_survival;
-    if (!recovery_survival.Save_If_Package_Writes_Recovery(Zip)) {
+    if (!recovery_survival.Save_Before_Install()) {
       gui_err("fox_recovery_backup_failed=Unable to back up the recovery partition; install aborted");
       return -1;
     }
