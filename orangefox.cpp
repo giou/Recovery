@@ -1113,7 +1113,12 @@ void Fox_Post_Zip_Install(const int result)
 	#endif
 	//---- Virtual A/B compensations ---- //
 #ifdef AB_OTA_UPDATER
-	if (DataManager::GetIntValue(TW_AUTO_REFLASHTWRP_VAR) && TWFunc::IsRecoveryOverwritten()) {
+	// Not on a device with a dedicated recovery partition: there the installer
+	// keeps the exact image (FoxRecoverySurvival) and the repacker would
+	// rebuild the ramdisk onto the ROM's kernel, undoing that.
+	if (DataManager::GetIntValue(TW_AUTO_REFLASHTWRP_VAR)
+	    && DataManager::GetIntValue("fox_has_recovery_partition") == 0
+	    && TWFunc::IsRecoveryOverwritten()) {
 		twrpRepacker repacker;
 		repacker.Flash_Current_Twrp();
 		TWFunc::IsRecoveryOverwritten(true);

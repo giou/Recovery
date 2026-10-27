@@ -369,7 +369,13 @@ int Fox_Fifo::Cmd_Flash(const Json::Value& args) {
 	// Reflash OrangeFox after a successful flash when enabled (default mirrors
 	// the GUI's tw_auto_reflashtwrp). The direct installer path above does not
 	// trigger the auto-reflash that the GUI flash flow performs, so do it here.
-	if (rc == 0 && DataManager::GetIntValue(TW_AUTO_REFLASHTWRP_VAR) != 0) {
+	// Skipped on devices with a dedicated recovery partition: there the
+	// installer keeps the exact image, and the repacker would rebuild the
+	// ramdisk onto whatever kernel the partition holds (after a ROM flash, the
+	// ROM's), replacing the tested image. `fox reflash` stays available as the
+	// explicit command for anyone who wants the repack.
+	if (rc == 0 && DataManager::GetIntValue(TW_AUTO_REFLASHTWRP_VAR) != 0
+	    && DataManager::GetIntValue("fox_has_recovery_partition") == 0) {
 		twrpRepacker repacker;
 		if (!repacker.Flash_Current_Twrp())
 			gui_print("fox: warning: OrangeFox reflash failed\n");
