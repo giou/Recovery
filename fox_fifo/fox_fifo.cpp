@@ -421,8 +421,11 @@ int Fox_Fifo::Cmd_Backup(const Json::Value& args) {
 
 	// Mirror the GUI's pre-decrypt guard: internal storage lives inside /data, so
 	// an internal destination cannot work until the data partition is decrypted.
-	// Without this the caller only sees "Unable to locate storage device".
-	if (storage == "internal" && DataManager::GetIntValue(TW_IS_ENCRYPTED) != 0) {
+	// tw_is_encrypted stays 1 after decryption (it describes the partition), so
+	// both flags are required — same condition as Run_Backup uses.
+	if (storage == "internal" &&
+	    DataManager::GetIntValue(TW_IS_ENCRYPTED) != 0 &&
+	    DataManager::GetIntValue(TW_IS_DECRYPTED) == 0) {
 		gui_print("fox: decrypt data first: pre-decrypt internal backups are blocked. Use OTG or NAS.\n");
 		return 1;
 	}
