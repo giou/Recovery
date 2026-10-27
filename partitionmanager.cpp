@@ -2443,7 +2443,7 @@ int TWPartitionManager::Decrypt_Device(string Password, int user_id) {
 		bool decrypted = android::keystore::Decrypt_User(
 			user_id, Password, &decrypt_result, &retry_after_ms);
 		if (!decrypted && decrypt_result == android::keystore::DecryptResult::Retry) {
-			LOGINFO("Decrypt_User transient failure; retrying once (HAL timeout %d ms)\n",
+			LOGINFO("Gatekeeper did not report a bad credential; retrying once (HAL timeout %d ms)\n",
 			        retry_after_ms);
 			if (retry_after_ms > 0)
 				usleep(retry_after_ms * 1000);
