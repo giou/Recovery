@@ -424,7 +424,21 @@ bool twrpRepacker::Flash_Current_Twrp() {
 		}
 	}
 
-	std::string command = "cd / && /system/bin/cpio -H newc -o < " + ramdisk_list + " > /tmp/currentramdisk.cpio && /system/bin/gzip -f /tmp/currentramdisk.cpio";
+	std::string command = "cd / && /system/bin/cpio -H newc -o < " + ramdisk_list + " > /tmp/currentramdisk.cpio";
+	if (TWFunc::Exec_Cmd(command) != 0) {
+		gui_msg(Msg(msg::kError, "create_ramdisk_error=failed to create ramdisk to flash."));
+		return false;
+	}
+	// This writes the recovery partition, so refuse a ramdisk that cannot boot
+	// rather than leave the device needing fastboot.
+	if (TWFunc::Exec_Cmd("grep -qxF init " + ramdisk_list) != 0 ||
+	    TWFunc::Exec_Cmd("grep -qxF sbin " + ramdisk_list) != 0 ||
+	    TWFunc::Exec_Cmd("grep -qxF system/bin/sh " + ramdisk_list) != 0) {
+		LOGERR("Fox: the filtered ramdisk list lacks init/sbin/system/bin/sh; refusing to flash it\n");
+		gui_msg(Msg(msg::kError, "create_ramdisk_error=failed to create ramdisk to flash."));
+		return false;
+	}
+	command = "/system/bin/gzip -f /tmp/currentramdisk.cpio";
 	if (TWFunc::Exec_Cmd(command) != 0) {
 		gui_msg(Msg(msg::kError, "create_ramdisk_error=failed to create ramdisk to flash."));
 		return false;
