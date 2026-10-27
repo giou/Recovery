@@ -234,6 +234,11 @@ static int Fox_Current_ROM_IsMIUI = 0; // is the currently installed ROM a MIUI 
 #define TW_SKIP_DIGEST_CHECK_VAR    "tw_skip_digest_check"
 #define TW_SKIP_DIGEST_GENERATE_VAR "tw_skip_digest_generate"
 #define TW_SIGNED_ZIP_VERIFY_VAR    "tw_signed_zip_verify"
+// Keep the exact recovery image across an install that replaces it. Separate
+// from TW_AUTO_REFLASHTWRP_VAR, which drives the repacker (that one rebuilds
+// the ramdisk onto whatever kernel the partition holds, so it is not what we
+// want on a device with a dedicated recovery partition).
+#define FOX_KEEP_RECOVERY_VAR       "fox_keep_recovery"
 #define TW_INSTALL_REBOOT_VAR       "tw_install_reboot"
 #define TW_TIME_ZONE_VAR            "tw_time_zone"
 #define TW_RM_RF_VAR                "tw_rm_rf"
