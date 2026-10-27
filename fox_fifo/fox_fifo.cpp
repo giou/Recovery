@@ -111,6 +111,32 @@ static bool arg_bool(const Json::Value& a, const char* key, bool dflt = false) {
 	return dflt;
 }
 
+// Tri-state for options the fox CLI always sends, with JSON null when the user
+// passed no flag. "Present" is not "specified": reading null as false made
+// every plain `fox flash` disable signature verification and force the reflash
+// flag off, and every plain backup skip its digest.
+enum class FoxOptBool { Absent, True, False };
+
+static FoxOptBool arg_opt_bool(const Json::Value& a, const char* key) {
+	if (!arg_has(a, key))
+		return FoxOptBool::Absent;
+	const Json::Value& v = a[key];
+	if (v.isBool())
+		return v.asBool() ? FoxOptBool::True : FoxOptBool::False;
+	if (v.isIntegral())
+		return v.asInt64() != 0 ? FoxOptBool::True : FoxOptBool::False;
+	if (v.isString()) {
+		std::string s = v.asString();
+		std::transform(s.begin(), s.end(), s.begin(),
+			       [](unsigned char c) { return (char)std::tolower(c); });
+		if (s == "1" || s == "true" || s == "yes" || s == "on")
+			return FoxOptBool::True;
+		if (s == "0" || s == "false" || s == "no" || s == "off")
+			return FoxOptBool::False;
+	}
+	return FoxOptBool::Absent;
+}
+
 // Integer value for 'key', defaulting to 'dflt' when absent.
 static long arg_int(const Json::Value& a, const char* key, long dflt) {
 	if (!arg_has(a, key))
@@ -309,11 +335,9 @@ int Fox_Fifo::Cmd_Flash(const Json::Value& args) {
 	std::vector<std::string> a = arg_array(args, "zips");
 	// Signature verification, reflash-after-flash and unmount toggles. The
 	// verify/reflash fields only override the persistent (UI-configured) value
-	// when present, so omitting one keeps the same default the GUI would use.
-	bool verify = arg_has(args, "verify") && arg_bool(args, "verify");
-	bool no_verify = arg_has(args, "verify") && !arg_bool(args, "verify");
-	bool reflash = arg_has(args, "reflash") && arg_bool(args, "reflash");
-	bool no_reflash = arg_has(args, "reflash") && !arg_bool(args, "reflash");
+	// when the user actually specified one — the CLI sends null otherwise.
+	FoxOptBool verify = arg_opt_bool(args, "verify");
+	FoxOptBool reflash = arg_opt_bool(args, "reflash");
 	bool unmount_system = arg_bool(args, "unmount_system");
 	bool unmount_vendor = arg_bool(args, "unmount_vendor");
 
@@ -322,13 +346,13 @@ int Fox_Fifo::Cmd_Flash(const Json::Value& args) {
 		return 2;
 	}
 
-	if (no_verify)
+	if (verify == FoxOptBool::False)
 		DataManager::SetValue(TW_SIGNED_ZIP_VERIFY_VAR, 0);
-	else if (verify)
+	else if (verify == FoxOptBool::True)
 		DataManager::SetValue(TW_SIGNED_ZIP_VERIFY_VAR, 1);
-	if (reflash)
+	if (reflash == FoxOptBool::True)
 		DataManager::SetValue(TW_AUTO_REFLASHTWRP_VAR, 1);
-	else if (no_reflash)
+	else if (reflash == FoxOptBool::False)
 		DataManager::SetValue(TW_AUTO_REFLASHTWRP_VAR, 0);
 	if (unmount_system)
 		DataManager::SetValue(TW_UNMOUNT_SYSTEM, 1);
@@ -360,7 +384,7 @@ int Fox_Fifo::Cmd_Backup(const Json::Value& args) {
 	std::string storage = arg_str(args, "storage");
 	bool compress = arg_bool(args, "compress");
 	// digest generation is on by default; an explicit digest:false disables it.
-	bool no_digest = arg_has(args, "digest") && !arg_bool(args, "digest", true);
+	bool no_digest = arg_opt_bool(args, "digest") == FoxOptBool::False;
 	// Backup encryption is explicit: a password argument enables it, and no
 	// password means no encryption (never inherit a leftover GUI toggle).
 	bool encrypt = arg_bool(args, "encrypt");
@@ -460,7 +484,7 @@ int Fox_Fifo::Cmd_Restore(const Json::Value& args) {
 	if (name.empty())
 		name = path;
 	// digest check is on by default; an explicit digest_check:false skips it.
-	bool skip_digest = arg_has(args, "digest_check") && !arg_bool(args, "digest_check", true);
+	bool skip_digest = arg_opt_bool(args, "digest_check") == FoxOptBool::False;
 
 	if (name.empty()) {
 		gui_print("fox: restore requires --name <backup name> or --path <absolute path>\n");
