@@ -1240,7 +1240,7 @@
 		<string name="unmapping_super_devices">Unmapping Super Devices...</string>
 		<string name="unmap_super_devices_complete">Unmapped all Super Devices</string>
 
-		<string name="auto_reflashtwrp_chk">Reflash OrangeFox after flashing a ROM</string>
+		<string name="auto_reflashtwrp_chk">Keep OrangeFox after a ROM flash</string>
 		<string name="modified_ramdisk_error">ramdisk files have been modified, unable to create ramdisk to flash. fastboot boot OrangeFox and try this option again or go back to Files and install img file as Recovery Ramdisk using Install Ramdisk button.</string>
 		<string name="create_ramdisk_error">failed to create ramdisk to flash.</string>
 		<string name="reflash_twrp">Flash current OrangeFox</string>
