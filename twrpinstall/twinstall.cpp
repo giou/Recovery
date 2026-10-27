@@ -438,6 +438,69 @@ static bool Fox_Zip_Touches_Dynamic_Partitions(ZipArchiveHandle Zip) {
 	return false;
 }
 
+// A package that carries a recovery image overwrites the partition OrangeFox
+// lives on — every LineageOS OTA does. That used to be handled only for the
+// mapped '@block.map' install in OpenRecoveryScript::Install_Command, so a
+// manual flash from the GUI or `fox flash` silently replaced the recovery.
+// Decide from the package here, at the one point every install path goes
+// through, and keep an exact dd copy: the repacker would rebuild the image
+// with the compiled kernel instead of restoring what was actually installed.
+static bool Fox_Zip_Ships_Recovery(ZipArchiveHandle Zip) {
+	const char* signals[] = {
+		"recovery.img",
+		"recovery.transfer.list",
+	};
+	for (const char* name : signals) {
+		ZipEntry64 entry;
+		if (FindEntry(Zip, name, &entry) == 0)
+			return true;
+	}
+	return false;
+}
+
+class FoxRecoverySurvival
+{
+public:
+	// Returns false when the package writes recovery but the copy failed; the
+	// caller must abort rather than let the package replace the recovery.
+	bool Save_If_Package_Writes_Recovery(ZipArchiveHandle Zip) {
+		if (!Fox_Zip_Ships_Recovery(Zip))
+			return true;
+		if (DataManager::GetIntValue(TW_AUTO_REFLASHTWRP_VAR) == 0)
+			return true;
+		TWPartition* part = PartitionManager.Find_Partition_By_Path("/recovery");
+		device = (part != nullptr && !part->Get_Block_Device().empty())
+			 ? part->Get_Block_Device() : "/dev/block/bootdevice/by-name/recovery";
+		if (TWFunc::Exec_Cmd("dd if=" + device + " of=/tmp/fox-recovery-backup.img bs=4M", false) != 0) {
+			LOGERR("Fox: unable to back up the recovery partition\n");
+			return false;
+		}
+		backed_up = true;
+		LOGINFO("Fox: backed up the recovery partition before the install\n");
+		return true;
+	}
+
+	~FoxRecoverySurvival()
+	{
+		if (!backed_up)
+			return;
+		if (TWFunc::Exec_Cmd("dd if=/tmp/fox-recovery-backup.img of=" + device + " bs=4M; sync", false) != 0) {
+			LOGERR("Fox: unable to restore the recovery partition; backup kept at /tmp/fox-recovery-backup.img\n");
+			return;
+		}
+		if (TWFunc::Exec_Cmd("cmp -s /tmp/fox-recovery-backup.img " + device, false) != 0) {
+			LOGERR("Fox: the restored recovery differs from the backup; kept at /tmp/fox-recovery-backup.img\n");
+			return;
+		}
+		unlink("/tmp/fox-recovery-backup.img");
+		LOGINFO("Fox: restored the OrangeFox recovery image after the install\n");
+	}
+
+private:
+	bool backed_up = false;
+	std::string device;
+};
+
 class FoxVendorHolderRestart
 {
 public:
@@ -532,6 +595,14 @@ int TWinstall_zip(const char *path, int *wipe_cache, bool check_for_digest)
       set_miui_install_status(OTA_CORRUPT, true);
       gui_err("zip_corrupt=Zip file is corrupt!");
       return INSTALL_CORRUPT;
+    }
+
+    // Save the recovery partition before a package that ships its own can
+    // overwrite it; the guard puts it back on every exit path.
+    FoxRecoverySurvival recovery_survival;
+    if (!recovery_survival.Save_If_Package_Writes_Recovery(Zip)) {
+      gui_err("fox_recovery_backup_failed=Unable to back up the recovery partition; install aborted");
+      return -1;
     }
 
     if (unmount_system) {

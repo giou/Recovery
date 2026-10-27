@@ -580,27 +580,7 @@ int OpenRecoveryScript::Install_Command(string Zip) {
 			gui_msg(Msg("installing_zip=Installing zip file '{1}'")(Zip));
 	}
 
-	bool recovery_backed_up = false;
-	if (mapped_zip && DataManager::GetIntValue(TW_AUTO_REFLASHTWRP_VAR) != 0) {
-		if (TWFunc::Exec_Cmd("dd if=/dev/block/bootdevice/by-name/recovery of=/tmp/fox-recovery-backup.img bs=4M") != 0) {
-			LOGERR("Unable to back up the recovery partition; aborting the OTA install\n");
-			gui_print("error: unable to back up the recovery partition; OTA install aborted\n");
-			return 1;
-		}
-		recovery_backed_up = true;
-	}
-
 	ret_val = TWinstall_zip(Zip.c_str(), &wipe_cache);
-
-	if (recovery_backed_up) {
-		if (TWFunc::Exec_Cmd("dd if=/tmp/fox-recovery-backup.img of=/dev/block/bootdevice/by-name/recovery bs=4M; sync") == 0) {
-			LOGINFO("Restored the OrangeFox recovery image after the OTA install\n");
-			unlink("/tmp/fox-recovery-backup.img");
-		} else {
-			LOGERR("Unable to restore the recovery partition; backup kept at /tmp/fox-recovery-backup.img\n");
-			gui_print("error: unable to restore OrangeFox; backup kept at /tmp/fox-recovery-backup.img\n");
-		}
-	}
 
 	if (ret_val != 0) {
 		LOGINFO ("OpenRecoveryScript::Install_Command() error.\n");
