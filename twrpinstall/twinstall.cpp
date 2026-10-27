@@ -53,7 +53,6 @@
 #include "otautil/sysutil.h"
 #include <ziparchive/zip_archive.h>
 #include "twinstall/install.h"
-#include "twinstall/get_args.h"
 #include "twinstall/verifier.h"
 #include "variables.h"
 #include "data.hpp"
@@ -560,7 +559,9 @@ int TWinstall_zip(const char *path, int *wipe_cache, bool check_for_digest)
 		// so the services running from it are stopped before the unmount. A
 		// plain zip keeps them: they do not block the unmount, and stopping
 		// them costs the session's decrypt path (see the restart helper).
-		if (args::Is_Ota_Boot() || Fox_Zip_Touches_Dynamic_Partitions(Zip))
+		// The package itself is the signal, not how the install was started:
+		// a mapped OTA carries the same operand list as a manual flash.
+		if (Fox_Zip_Touches_Dynamic_Partitions(Zip))
 			vendor_restart.stopped = Fox_Stop_Vendor_Holders();
 		bool vendor_unmounted = PartitionManager.UnMount_By_Path("/vendor", false);
 		if (!vendor_unmounted) {
