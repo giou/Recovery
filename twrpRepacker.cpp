@@ -19,6 +19,7 @@
 	along with TWRP.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <fstream>
 #include <string>
 
 #include "data.hpp"
@@ -392,7 +393,38 @@ bool twrpRepacker::Flash_Current_Twrp() {
 	}
 	#endif
 
-	std::string command = "cd / && /system/bin/cpio -H newc -o < ramdisk-files.txt > /tmp/currentramdisk.cpio && /system/bin/gzip -f /tmp/currentramdisk.cpio";
+	// ramdisk-files.txt is generated at build time from the build rootfs. At
+	// runtime some entries can legitimately be absent: dangling odm/* and
+	// vendor_dlkm/etc symlinks, adb_keys when no key is baked in, generated
+	// stamps. cpio exits non-zero on the first missing path, which used to make
+	// this fail outright. Build the archive from what actually exists and say
+	// what was dropped.
+	std::string ramdisk_list = "/tmp/ramdisk-files.runtime.txt";
+	{
+		std::ifstream in("/ramdisk-files.txt");
+		std::ofstream out(ramdisk_list);
+		std::string entry;
+		int missing = 0, kept = 0;
+		while (std::getline(in, entry)) {
+			if (entry.empty())
+				continue;
+			if (!TWFunc::Path_Exists(entry[0] == '/' ? entry : "/" + entry)) {
+				++missing;
+				continue;
+			}
+			out << entry << "\n";
+			++kept;
+		}
+		out.close();
+		if (missing > 0)
+			LOGINFO("Fox: skipped %i ramdisk file(s) that are not present in this build\n", missing);
+		if (kept == 0) {
+			gui_msg(Msg(msg::kError, "create_ramdisk_error=failed to create ramdisk to flash."));
+			return false;
+		}
+	}
+
+	std::string command = "cd / && /system/bin/cpio -H newc -o < " + ramdisk_list + " > /tmp/currentramdisk.cpio && /system/bin/gzip -f /tmp/currentramdisk.cpio";
 	if (TWFunc::Exec_Cmd(command) != 0) {
 		gui_msg(Msg(msg::kError, "create_ramdisk_error=failed to create ramdisk to flash."));
 		return false;
