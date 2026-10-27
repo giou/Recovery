@@ -1300,6 +1300,8 @@ void DataManager::SetDefaultValues()
   mPersist.SetValue(TW_TIME_ZONE_GUIOFFSET, "0");
   mPersist.SetValue(TW_TIME_ZONE_GUIDST, "1");
   mPersist.SetValue(TW_AUTO_REFLASHTWRP_VAR, "1");
+  // Default on: a ROM flash must not silently take OrangeFox with it.
+  mPersist.SetValue(FOX_KEEP_RECOVERY_VAR, "1");
 
   // avb2.0 disable
   // by patching boot image
@@ -1503,6 +1505,17 @@ void DataManager::SetDefaultValues()
   mConst.SetValue("tw_has_boot_slots", "1");
 #else
   mConst.SetValue("tw_has_boot_slots", "0");
+#endif
+
+  // A dedicated recovery partition exists (this device): the installer can keep
+  // its exact image across a ROM flash, so the theme offers that checkbox.
+#ifdef FOX_VENDOR_BOOT_RECOVERY
+  mConst.SetValue("fox_has_recovery_partition", "0");
+#else
+  if (TWFunc::Path_Exists("/dev/block/bootdevice/by-name/recovery"))
+    mConst.SetValue("fox_has_recovery_partition", "1");
+  else
+    mConst.SetValue("fox_has_recovery_partition", "0");
 #endif
 
 #ifdef TW_NO_LEGACY_PROPS

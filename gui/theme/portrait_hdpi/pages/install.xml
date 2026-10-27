@@ -55,11 +55,9 @@
 				</listitem>
 				<listitem name="{@auto_reflashtwrp_chk}">
 					<condition var1="fox_branch" op="&gt;=" var2="11"/>
-					<condition var1="fox_vab_device" var2="1"/>
-					<condition var1="tw_has_boot_slots" var2="1"/>
-					<condition var1="tw_has_repack_tools" var2="1"/>
+					<condition var1="fox_has_recovery_partition" var2="1"/>
 					<condition var1="fox_disable_reflash_current" op="!=" var2="1"/>
-					<data variable="tw_auto_reflashtwrp"/>
+					<data variable="fox_keep_recovery"/>
 				</listitem>
 				<listitem name="{@unmount_sys_install}">
 					<data variable="tw_unmount_system"/>
@@ -226,11 +224,9 @@
 				</listitem>
 				<listitem name="{@auto_reflashtwrp_chk}">
 					<condition var1="fox_branch" op="&gt;=" var2="11"/>
-					<condition var1="fox_vab_device" var2="1"/>
-					<condition var1="tw_has_boot_slots" var2="1"/>
-					<condition var1="tw_has_repack_tools" var2="1"/>
+					<condition var1="fox_has_recovery_partition" var2="1"/>
 					<condition var1="fox_disable_reflash_current" op="!=" var2="1"/>
-					<data variable="tw_auto_reflashtwrp"/>
+					<data variable="fox_keep_recovery"/>
 				</listitem>
 				<listitem name="{@unmount_sys_install}">
 					<data variable="tw_unmount_system"/>

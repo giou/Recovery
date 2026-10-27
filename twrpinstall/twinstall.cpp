@@ -450,12 +450,14 @@ public:
 	// Returns false when the copy failed; the caller must abort rather than
 	// let an install run that it cannot undo.
 	bool Save_Before_Install() {
-		// Not gated on tw_auto_reflashtwrp. During a ROM flash /data is still
-		// encrypted, the GUI's install page binds that checkbox to 0 because
-		// the persisted value lives on /data, and the engine therefore sees 0
-		// even when the setting is on — the guard would silently never run.
-		// Keeping the recovery is a safety property, not a preference, and the
-		// copy costs 128M of tmpfs plus ~0.1s.
+		// "Keep OrangeFox after a ROM flash", on by default. It is deliberately
+		// a separate variable from tw_auto_reflashtwrp: that one drives the
+		// repacker, which rebuilds the ramdisk onto whatever kernel the
+		// partition holds instead of restoring the exact image we tested.
+		if (DataManager::GetIntValue(FOX_KEEP_RECOVERY_VAR) == 0) {
+			LOGINFO("Fox: recovery survival is off (fox_keep_recovery=0)\n");
+			return true;
+		}
 		// Same by-name node the flash recipe and init.recovery.qcom.rc use.
 		device = "/dev/block/bootdevice/by-name/recovery";
 		if (TWFunc::Exec_Cmd("dd if=" + device + " of=/tmp/fox-recovery-backup.img bs=4M", false) != 0) {
