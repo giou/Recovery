@@ -369,13 +369,17 @@ int Fox_Fifo::Cmd_Flash(const Json::Value& args) {
 	// Reflash OrangeFox after a successful flash when enabled (default mirrors
 	// the GUI's tw_auto_reflashtwrp). The direct installer path above does not
 	// trigger the auto-reflash that the GUI flash flow performs, so do it here.
-	// Skipped on devices with a dedicated recovery partition: there the
-	// installer keeps the exact image, and the repacker would rebuild the
-	// ramdisk onto whatever kernel the partition holds (after a ROM flash, the
-	// ROM's), replacing the tested image. `fox reflash` stays available as the
-	// explicit command for anyone who wants the repack.
-	if (rc == 0 && DataManager::GetIntValue(TW_AUTO_REFLASHTWRP_VAR) != 0
-	    && DataManager::GetIntValue("fox_has_recovery_partition") == 0) {
+	// The fox_has_recovery_partition gate suppresses only the implicit default:
+	// there the installer keeps the exact image, and the repacker would rebuild
+	// the ramdisk onto whatever kernel the partition holds (after a ROM flash,
+	// the ROM's), replacing the tested image. An explicit `reflash: true` is a
+	// request, not a default, so it is obeyed either way.
+	bool reflash_requested = (reflash == FoxOptBool::True);
+	bool reflash_configured = DataManager::GetIntValue(TW_AUTO_REFLASHTWRP_VAR) != 0;
+	if (rc == 0 && (reflash_requested ||
+	                (reflash_configured && DataManager::GetIntValue("fox_has_recovery_partition") == 0))) {
+		if (reflash_requested)
+			gui_print("Fox: re-packing OrangeFox at your request (--reflash-orangefox)\n");
 		twrpRepacker repacker;
 		if (!repacker.Flash_Current_Twrp())
 			gui_print("fox: warning: OrangeFox reflash failed\n");
@@ -423,6 +427,14 @@ int Fox_Fifo::Cmd_Backup(const Json::Value& args) {
 	if (storage.empty() && path.empty()) {
 		storage = "internal";
 		storage_defaulted = true;
+	}
+
+	// Mirror the GUI's pre-decrypt guard: internal storage lives inside /data, so
+	// an internal destination cannot work until the data partition is decrypted.
+	// Without this the caller only sees "Unable to locate storage device".
+	if (storage == "internal" && DataManager::GetIntValue(TW_IS_ENCRYPTED) != 0) {
+		gui_print("fox: decrypt data first: pre-decrypt internal backups are blocked. Use OTG or NAS.\n");
+		return 1;
 	}
 
 	if (!storage.empty()) {
