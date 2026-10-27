@@ -326,13 +326,15 @@ static void Fox_Kill_Vendor_Processes() {
 // gatekeeper but the synthetic-password unwrap fails until keystore2 rebinds.
 // Returns true when at least one running service was stopped.
 static bool Fox_Stop_Vendor_Holders() {
-	std::vector<const char*> services = {"vendor.qseecomd", "gatekeeper-1-0", "keymaster-4-0", "vendor.qti.vibrator"};
-#ifdef OF_ENABLE_WLAN
-	// The WLAN stack runs from /vendor for the whole session and pins it. A
-	// dynamic-partition install does not need it; the next boot brings it back.
-	services.push_back("wpa_supplicant");
-	services.push_back("wlan_bringup");
-#endif
+	// wpa_supplicant is a supervised service: killing it lets init respawn it
+	// straight back onto /vendor, so it has to be stopped by name. wlan_bringup
+	// is the oneshot that starts it and may still be inside its wait loop.
+	// Both are no-ops without the WLAN stack (the properties are unset).
+	// Never gate this on OF_ENABLE_WLAN: libtwrpinstall is a Soong module and
+	// does not inherit the define (orangefox.mk adds it to the recovery module
+	// only), so the gate would be silently dead code.
+	std::vector<const char*> services = {"vendor.qseecomd", "gatekeeper-1-0", "keymaster-4-0", "vendor.qti.vibrator",
+					     "wpa_supplicant", "wlan_bringup"};
 	bool stopped = false;
 	bool wlan_stopped = false;
 	for (const char* svc : services) {
