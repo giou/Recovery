@@ -450,10 +450,12 @@ public:
 	// Returns false when the copy failed; the caller must abort rather than
 	// let an install run that it cannot undo.
 	bool Save_Before_Install() {
-		if (DataManager::GetIntValue(TW_AUTO_REFLASHTWRP_VAR) == 0) {
-			LOGINFO("Fox: recovery survival is off (tw_auto_reflashtwrp=0)\n");
-			return true;
-		}
+		// Not gated on tw_auto_reflashtwrp. During a ROM flash /data is still
+		// encrypted, the GUI's install page binds that checkbox to 0 because
+		// the persisted value lives on /data, and the engine therefore sees 0
+		// even when the setting is on — the guard would silently never run.
+		// Keeping the recovery is a safety property, not a preference, and the
+		// copy costs 128M of tmpfs plus ~0.1s.
 		// Same by-name node the flash recipe and init.recovery.qcom.rc use.
 		device = "/dev/block/bootdevice/by-name/recovery";
 		if (TWFunc::Exec_Cmd("dd if=" + device + " of=/tmp/fox-recovery-backup.img bs=4M", false) != 0) {
