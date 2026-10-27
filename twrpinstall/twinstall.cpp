@@ -468,9 +468,9 @@ public:
 			return true;
 		if (DataManager::GetIntValue(TW_AUTO_REFLASHTWRP_VAR) == 0)
 			return true;
-		TWPartition* part = PartitionManager.Find_Partition_By_Path("/recovery");
-		device = (part != nullptr && !part->Get_Block_Device().empty())
-			 ? part->Get_Block_Device() : "/dev/block/bootdevice/by-name/recovery";
+		// This tree's TWPartition has no block-device getter; use the same
+		// by-name node as the flash recipe and init.recovery.qcom.rc.
+		device = "/dev/block/bootdevice/by-name/recovery";
 		if (TWFunc::Exec_Cmd("dd if=" + device + " of=/tmp/fox-recovery-backup.img bs=4M", false) != 0) {
 			LOGERR("Fox: unable to back up the recovery partition\n");
 			return false;
