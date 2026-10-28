@@ -2437,21 +2437,34 @@ int TWPartitionManager::Decrypt_Device(string Password, int user_id) {
 		// decrypt spblob"). Retry only when the HAL marks the result Retry;
 		// a bad credential is not retried. The HAL timeout, when supplied, is
 		// the only delay used.
-		android::keystore::DecryptResult decrypt_result =
-			android::keystore::DecryptResult::BadCredential;
-		int retry_after_ms = 0;
-		bool decrypted = android::keystore::Decrypt_User(
-			user_id, Password, &decrypt_result, &retry_after_ms);
-		if (!decrypted && decrypt_result == android::keystore::DecryptResult::Retry) {
+		// One credential attempt with the single retry the HAL's classification
+		// allows. Shared by the primary user and the secondary-user loop below
+		// so both treat a Retry the same way and never spend a wrong credential
+		// on a transient result.
+		auto decrypt_with_retry = [](int uid, const std::string& pw) -> bool {
+			android::keystore::DecryptResult res = android::keystore::DecryptResult::BadCredential;
+			int wait_ms = 0;
+			if (android::keystore::Decrypt_User(uid, pw, &res, &wait_ms))
+				return true;
+			if (res != android::keystore::DecryptResult::Retry) {
+				LOGINFO("Decrypt_User rejected the credential; not retrying\n");
+				return false;
+			}
 			LOGINFO("Gatekeeper did not report a bad credential; retrying once (HAL timeout %d ms)\n",
-			        retry_after_ms);
-			if (retry_after_ms > 0)
-				usleep(retry_after_ms * 1000);
-			decrypted = android::keystore::Decrypt_User(
-				user_id, Password, &decrypt_result, nullptr);
-		} else if (!decrypted) {
-			LOGINFO("Decrypt_User rejected the credential; not retrying\n");
-		}
+			        wait_ms);
+			// The HAL supplies this value; clamp it and promote before
+			// multiplying so a bogus timeout cannot overflow or freeze recovery.
+			if (wait_ms > 0) {
+				long long delay_us = (long long)wait_ms * 1000LL;
+				const long long max_delay_us = 30LL * 1000 * 1000;
+				if (delay_us > max_delay_us)
+					delay_us = max_delay_us;
+				usleep((useconds_t)delay_us);
+			}
+			return android::keystore::Decrypt_User(uid, pw, &res, nullptr);
+		};
+
+		bool decrypted = decrypt_with_retry(user_id, Password);
 		if (decrypted) {
 			gui_msg(Msg("decrypt_user_success_fbe=User {1} Decrypted Successfully")(user_id));
 			Mark_User_Decrypted(user_id);
@@ -2464,8 +2477,8 @@ int TWPartitionManager::Decrypt_Device(string Password, int user_id) {
 
 					int tmp_user_id = atoi((*iter).userId.c_str());
 					gui_msg(Msg("decrypting_user_fbe=Attempting to decrypt FBE for user {1}...")(tmp_user_id));
-					if (android::keystore::Decrypt_User(tmp_user_id, Password) ||
-					(Password != "!" && android::keystore::Decrypt_User(tmp_user_id, "!"))) { // "!" means default password
+					if (decrypt_with_retry(tmp_user_id, Password) ||
+					(Password != "!" && decrypt_with_retry(tmp_user_id, "!"))) { // "!" means default password
 						gui_msg(Msg("decrypt_user_success_fbe=User {1} Decrypted Successfully")(tmp_user_id));
 						Mark_User_Decrypted(tmp_user_id);
 					} else {
