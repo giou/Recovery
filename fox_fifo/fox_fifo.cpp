@@ -429,11 +429,14 @@ int Fox_Fifo::Cmd_Backup(const Json::Value& args) {
 		storage_defaulted = true;
 	}
 
-	// Mirror the GUI's pre-decrypt guard: internal storage lives inside /data, so
-	// an internal destination cannot work until the data partition is decrypted.
-	// tw_is_encrypted stays 1 after decryption (it describes the partition), so
-	// both flags are required — same condition as Run_Backup uses.
-	if (storage == "internal" &&
+	// Mirror the GUI's pre-decrypt guard, by destination rather than by alias:
+	// internal storage lives inside /data, so an internal target cannot work
+	// until the data partition is decrypted. Resolving first also covers
+	// `emulated`, `/sdcard` and an absolute --path; tw_is_encrypted alone is not
+	// enough because it stays 1 after decryption (it describes the partition).
+	std::string resolved_dest = path.empty() ? DataManager::GetCurrentStoragePath() : path;
+	TWPartition* dest_part = resolved_dest.empty() ? NULL : PartitionManager.Find_Partition_By_Path(resolved_dest);
+	if (dest_part != NULL && dest_part->Has_Data_Media &&
 	    DataManager::GetIntValue(TW_IS_ENCRYPTED) != 0 &&
 	    DataManager::GetIntValue(TW_IS_DECRYPTED) == 0) {
 		gui_print("fox: decrypt data first: pre-decrypt internal backups are blocked. Use OTG or NAS.\n");

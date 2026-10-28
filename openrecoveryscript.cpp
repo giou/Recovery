@@ -586,13 +586,22 @@ int OpenRecoveryScript::Install_Command(string Zip) {
 		LOGINFO ("OpenRecoveryScript::Install_Command() error.\n");
 		gui_msg(Msg(msg::kError, "zip_err=Error installing zip file '{1}'")(Zip));
 		ret_val = 1;
-	} else {
-		if (wipe_cache)
-			PartitionManager.Wipe_By_Path("/cache");
-		// The mapped OTA zip is consumed; remove the map so a later
-		// recovery boot does not try to install it again.
-		if (mapped_zip)
-			unlink("/cache/recovery/block.map");
+	} else if (wipe_cache) {
+		PartitionManager.Wipe_By_Path("/cache");
+	}
+
+	// The mapped OTA zip is consumed either way: leaving the map behind makes
+	// the next recovery boot retry the same install, and a package that keeps
+	// failing then loops. Remove the path the command actually named (it may be
+	// any @<path>, not just the canonical one) and never fail the install over
+	// the cleanup.
+	if (mapped_zip) {
+		std::string map_path = Full_Path.empty() ? "/cache/recovery/block.map" : Full_Path;
+		if (!PartitionManager.Mount_By_Path("/cache", false)) {
+			LOGERR("OpenRecoveryScript: unable to mount /cache to remove '%s'\n", map_path.c_str());
+		} else if (unlink(map_path.c_str()) != 0 && errno != ENOENT) {
+			LOGERR("OpenRecoveryScript: unable to remove '%s' (%s)\n", map_path.c_str(), strerror(errno));
+		}
 	}
 
 	TWFunc::Dump_Current_Settings();

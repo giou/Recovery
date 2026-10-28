@@ -139,7 +139,10 @@ void Handle(WlanWorker::Cmd cmd) {
 		// /data are unreadable when this first runs.
 		if (OtaInstallBoot()) {
 			LOGINFO("Fox: OTA install boot; skipping WLAN autostart\n");
-			SetState("disabled");
+			// SettledState() reports "disabled" only when the radio is off and
+			// preserves "enabled"/"connected", so an OTA boot cannot overwrite
+			// a state the user already changed.
+			SetState(SettledState());
 			break;
 		}
 		if (DataManager::GetIntValue("of_wlan_auto_enable") != 1
