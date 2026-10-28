@@ -429,20 +429,6 @@ int Fox_Fifo::Cmd_Backup(const Json::Value& args) {
 		storage_defaulted = true;
 	}
 
-	// Mirror the GUI's pre-decrypt guard, by destination rather than by alias:
-	// internal storage lives inside /data, so an internal target cannot work
-	// until the data partition is decrypted. Resolving first also covers
-	// `emulated`, `/sdcard` and an absolute --path; tw_is_encrypted alone is not
-	// enough because it stays 1 after decryption (it describes the partition).
-	std::string resolved_dest = path.empty() ? DataManager::GetCurrentStoragePath() : path;
-	TWPartition* dest_part = resolved_dest.empty() ? NULL : PartitionManager.Find_Partition_By_Path(resolved_dest);
-	if (dest_part != NULL && dest_part->Has_Data_Media &&
-	    DataManager::GetIntValue(TW_IS_ENCRYPTED) != 0 &&
-	    DataManager::GetIntValue(TW_IS_DECRYPTED) == 0) {
-		gui_print("fox: decrypt data first: pre-decrypt internal backups are blocked. Use OTG or NAS.\n");
-		return 1;
-	}
-
 	if (!storage.empty()) {
 		if (!Resolve_Storage(storage, path)) {
 			if (!storage_defaulted) {
@@ -465,8 +451,19 @@ int Fox_Fifo::Cmd_Backup(const Json::Value& args) {
 	// only check paths that map to a known partition, so an arbitrary --path
 	// outside the partition table is left to the caller.
 	std::string dest = path.empty() ? DataManager::GetCurrentStoragePath() : path;
-	if (!dest.empty() && PartitionManager.Find_Partition_By_Path(dest) != NULL &&
-	    !PartitionManager.Is_Mounted_By_Path(dest)) {
+	TWPartition* dest_part = dest.empty() ? NULL : PartitionManager.Find_Partition_By_Path(dest);
+	// Mirror the GUI's pre-decrypt guard, by resolved destination rather than by
+	// alias: internal storage lives inside /data, so it cannot be written until
+	// data is decrypted. Testing the partition covers `emulated`, `/sdcard` and
+	// an absolute --path; tw_is_encrypted alone is not enough because it stays 1
+	// after decryption (it describes the partition).
+	if (dest_part != NULL && dest_part->Has_Data_Media &&
+	    DataManager::GetIntValue(TW_IS_ENCRYPTED) != 0 &&
+	    DataManager::GetIntValue(TW_IS_DECRYPTED) == 0) {
+		gui_print("fox: decrypt data first: pre-decrypt internal backups are blocked. Use OTG or NAS.\n");
+		return 1;
+	}
+	if (dest_part != NULL && !PartitionManager.Is_Mounted_By_Path(dest)) {
 		gui_print("fox: backup destination '%s' is not mounted; aborting.\n", dest.c_str());
 		gui_print("fox: mount it first, run 'fox decrypt' if storage is encrypted, "
 		          "or pass --storage/--path.\n");
