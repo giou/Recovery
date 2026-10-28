@@ -447,7 +447,7 @@ int Fox_Fifo::Cmd_Backup(const Json::Value& args) {
 	// data is decrypted. Testing the partition covers `emulated`, `/sdcard` and
 	// an absolute --path; tw_is_encrypted alone is not enough because it stays 1
 	// after decryption (it describes the partition).
-	if (dest_part != NULL && dest_part->Has_Data_Media &&
+	if (dest_part != NULL && dest_part->Has_Data_Media_Partition() &&
 	    DataManager::GetIntValue(TW_IS_ENCRYPTED) != 0 &&
 	    DataManager::GetIntValue(TW_IS_DECRYPTED) == 0) {
 		gui_print("fox: decrypt data first: pre-decrypt internal backups are blocked. Use OTG or NAS.\n");
