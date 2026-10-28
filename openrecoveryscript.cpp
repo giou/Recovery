@@ -592,15 +592,15 @@ int OpenRecoveryScript::Install_Command(string Zip) {
 
 	// The mapped OTA zip is consumed either way: leaving the map behind makes
 	// the next recovery boot retry the same install, and a package that keeps
-	// failing then loops. Remove the path the command actually named (it may be
-	// any @<path>, not just the canonical one) and never fail the install over
-	// the cleanup.
-	if (mapped_zip) {
-		std::string map_path = Full_Path.empty() ? "/cache/recovery/block.map" : Full_Path;
-		if (!PartitionManager.Mount_By_Path("/cache", false)) {
-			LOGERR("OpenRecoveryScript: unable to mount /cache to remove '%s'\n", map_path.c_str());
-		} else if (unlink(map_path.c_str()) != 0 && errno != ENOENT) {
-			LOGERR("OpenRecoveryScript: unable to remove '%s' (%s)\n", map_path.c_str(), strerror(errno));
+	// failing then loops. Try the removal directly first — /cache is not a
+	// partition on every device, so gating on its mount would skip the unlink
+	// exactly where the map matters. Never fail the install over the cleanup.
+	if (mapped_zip && !Full_Path.empty()) {
+		if (unlink(Full_Path.c_str()) != 0 && errno != ENOENT) {
+			if (!PartitionManager.Mount_By_Path("/cache", false) ||
+			    (unlink(Full_Path.c_str()) != 0 && errno != ENOENT))
+				LOGERR("OpenRecoveryScript: unable to remove '%s' (%s)\n",
+				       Full_Path.c_str(), strerror(errno));
 		}
 	}
 
