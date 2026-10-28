@@ -21,6 +21,7 @@
 
 #include <fstream>
 #include <string>
+#include <sys/stat.h>
 
 #include "data.hpp"
 #include "partitions.hpp"
@@ -400,28 +401,56 @@ bool twrpRepacker::Flash_Current_Twrp() {
 	// this fail outright. Build the archive from what actually exists and say
 	// what was dropped.
 	std::string ramdisk_list = "/tmp/ramdisk-files.runtime.txt";
-	{
-		std::ifstream in("/ramdisk-files.txt");
-		std::ofstream out(ramdisk_list);
-		std::string entry;
-		int missing = 0, kept = 0;
-		while (std::getline(in, entry)) {
-			if (entry.empty())
-				continue;
-			if (!TWFunc::Path_Exists(entry[0] == '/' ? entry : "/" + entry)) {
-				++missing;
-				continue;
-			}
-			out << entry << "\n";
-			++kept;
+	std::ifstream in("/ramdisk-files.txt");
+	std::ofstream out(ramdisk_list);
+	if (!in.is_open() || !out.is_open()) {
+		LOGERR("Fox: cannot open the ramdisk file list for reading or writing\n");
+		gui_msg(Msg(msg::kError, "create_ramdisk_error=failed to create ramdisk to flash."));
+		return false;
+	}
+	std::string entry;
+	int missing = 0, kept = 0;
+	bool has_init = false, has_sbin = false, has_sh = false;
+	while (std::getline(in, entry)) {
+		if (entry.empty())
+			continue;
+		// lstat, not stat: cpio archives a symlink by its own dentry, so a
+		// dangling link (odm/*, vendor_dlkm/etc) is a valid, needed entry.
+		std::string full = entry[0] == '/' ? entry : "/" + entry;
+		struct stat lst;
+		if (lstat(full.c_str(), &lst) != 0) {
+			++missing;
+			continue;
 		}
-		out.close();
-		if (missing > 0)
-			LOGINFO("Fox: skipped %i ramdisk file(s) that are not present in this build\n", missing);
-		if (kept == 0) {
-			gui_msg(Msg(msg::kError, "create_ramdisk_error=failed to create ramdisk to flash."));
-			return false;
-		}
+		out << entry << "\n";
+		++kept;
+		std::string norm = entry;
+		while (norm.compare(0, 2, "./") == 0)
+			norm.erase(0, 2);
+		if (!norm.empty() && norm[0] == '/')
+			norm.erase(0, 1);
+		if (norm == "init")
+			has_init = true;
+		else if (norm == "sbin")
+			has_sbin = true;
+		else if (norm == "system/bin/sh")
+			has_sh = true;
+	}
+	out.close();
+	if (out.fail() || in.bad()) {
+		LOGERR("Fox: failed while writing the ramdisk file list\n");
+		gui_msg(Msg(msg::kError, "create_ramdisk_error=failed to create ramdisk to flash."));
+		return false;
+	}
+	if (missing > 0)
+		LOGINFO("Fox: skipped %i ramdisk file(s) that are not present in this build\n", missing);
+	// Checked here, before cpio runs: a ramdisk without these cannot boot, and
+	// this writes the recovery partition.
+	if (kept == 0 || !has_init || !has_sbin || !has_sh) {
+		LOGERR("Fox: the ramdisk list is incomplete (init=%d sbin=%d sh=%d, %d entries); refusing to flash it\n",
+		       (int)has_init, (int)has_sbin, (int)has_sh, kept);
+		gui_msg(Msg(msg::kError, "create_ramdisk_error=failed to create ramdisk to flash."));
+		return false;
 	}
 
 	std::string command = "cd / && /system/bin/cpio -H newc -o < " + ramdisk_list + " > /tmp/currentramdisk.cpio";
@@ -429,17 +458,19 @@ bool twrpRepacker::Flash_Current_Twrp() {
 		gui_msg(Msg(msg::kError, "create_ramdisk_error=failed to create ramdisk to flash."));
 		return false;
 	}
-	// This writes the recovery partition, so refuse a ramdisk that cannot boot
-	// rather than leave the device needing fastboot.
-	if (TWFunc::Exec_Cmd("grep -qxF init " + ramdisk_list) != 0 ||
-	    TWFunc::Exec_Cmd("grep -qxF sbin " + ramdisk_list) != 0 ||
-	    TWFunc::Exec_Cmd("grep -qxF system/bin/sh " + ramdisk_list) != 0) {
-		LOGERR("Fox: the filtered ramdisk list lacks init/sbin/system/bin/sh; refusing to flash it\n");
+	struct stat ast;
+	if (stat("/tmp/currentramdisk.cpio", &ast) != 0 || ast.st_size <= 0) {
+		LOGERR("Fox: cpio produced no usable archive; refusing to flash it\n");
 		gui_msg(Msg(msg::kError, "create_ramdisk_error=failed to create ramdisk to flash."));
 		return false;
 	}
 	command = "/system/bin/gzip -f /tmp/currentramdisk.cpio";
 	if (TWFunc::Exec_Cmd(command) != 0) {
+		gui_msg(Msg(msg::kError, "create_ramdisk_error=failed to create ramdisk to flash."));
+		return false;
+	}
+	if (stat("/tmp/currentramdisk.cpio.gz", &ast) != 0 || ast.st_size <= 0) {
+		LOGERR("Fox: the compressed ramdisk is missing or empty; refusing to flash it\n");
 		gui_msg(Msg(msg::kError, "create_ramdisk_error=failed to create ramdisk to flash."));
 		return false;
 	}

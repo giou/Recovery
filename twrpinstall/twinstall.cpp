@@ -348,8 +348,13 @@ static bool Fox_Stop_Vendor_Holders() {
 			wlan_stopped = true;
 		property_set("ctl.stop", svc);
 	}
-	if (!stopped)
+	if (!stopped) {
+		// The six supervised services were already down, but the sweep targets
+		// processes init does not supervise (nohup qrtr-ns/cnss-daemon from
+		// wlan_bringup); they can still hold the vendor dm.
+		Fox_Kill_Vendor_Processes();
 		return false;
+	}
 	if (wlan_stopped)
 		LOGINFO("Fox: stopped the WLAN stack for the install; the next boot restores it\n");
 	for (int i = 0; i < 50; i++) {
@@ -400,7 +405,17 @@ static void Fox_Restart_Vendor_Holders() {
 		}
 		usleep(100000);
 	}
+	// Stop keystore2 and wait for init to actually take it down: ctl.start
+	// immediately after ctl.stop can be dropped or race the stop, leaving the
+	// old instance (and its stale binder proxies) in place.
 	property_set("ctl.stop", "keystore2");
+	for (int i = 0; i < 20; i++) {
+		char value[PROP_VALUE_MAX] = {0};
+		property_get("init.svc.keystore2", value, "");
+		if (strcmp(value, "running") != 0)
+			break;
+		usleep(100000);
+	}
 	property_set("ctl.start", "keystore2");
 	bool keystore = false;
 	for (int i = 0; i < 20; i++) {
@@ -447,9 +462,20 @@ static bool Fox_Zip_Touches_Dynamic_Partitions(ZipArchiveHandle Zip) {
 class FoxRecoverySurvival
 {
 public:
+	FoxRecoverySurvival() = default;
+	FoxRecoverySurvival(const FoxRecoverySurvival&) = delete;
+	FoxRecoverySurvival& operator=(const FoxRecoverySurvival&) = delete;
+
 	// Returns false when the copy failed; the caller must abort rather than
 	// let an install run that it cannot undo.
 	bool Save_Before_Install() {
+		// No recovery partition (recovery lives in boot or vendor_boot): there
+		// is nothing to preserve here, and the dd below would fail and abort
+		// every install on such a device.
+		if (DataManager::GetIntValue("fox_has_recovery_partition") == 0) {
+			LOGINFO("Fox: no recovery partition; nothing to keep\n");
+			return true;
+		}
 		// "Keep OrangeFox after a ROM flash", on by default. It is deliberately
 		// a separate variable from tw_auto_reflashtwrp: that one drives the
 		// repacker, which rebuilds the ramdisk onto whatever kernel the
@@ -497,14 +523,21 @@ private:
 class FoxVendorHolderRestart
 {
 public:
+	FoxVendorHolderRestart() = default;
+	FoxVendorHolderRestart(const FoxVendorHolderRestart&) = delete;
+	FoxVendorHolderRestart& operator=(const FoxVendorHolderRestart&) = delete;
+
 	bool stopped = false;
 
 	~FoxVendorHolderRestart()
 	{
 		if (!stopped)
 			return;
-		if (!PartitionManager.Is_Mounted_By_Path("/vendor"))
-			PartitionManager.Mount_By_Path("/vendor", false);
+		// The services cannot bind before /vendor is back; say so when the
+		// remount fails instead of starting them into a missing mount.
+		if (!PartitionManager.Is_Mounted_By_Path("/vendor") &&
+		    !PartitionManager.Mount_By_Path("/vendor", false))
+			LOGERR("Fox: /vendor did not remount; the TEE services may not start\n");
 		Fox_Restart_Vendor_Holders();
 	}
 };
