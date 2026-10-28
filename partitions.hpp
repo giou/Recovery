@@ -196,6 +196,10 @@ public:
 	string Adopted_GUID;
 	unsigned int Adopted_Mount_Delay;
 
+	// Public view of the /data/media flag: callers outside the partition class
+	// (the CLI) need it to tell an internal destination from OTG/USB.
+	bool Has_Data_Media_Partition() const { return Has_Data_Media; }
+
 protected:
 	bool Has_Data_Media;                                                      // Indicates presence of /data/media, may affect wiping and backup methods
 	void Setup_Data_Media();                                                  // Sets up a partition as a /data/media emulated storage partition
