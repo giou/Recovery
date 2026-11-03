@@ -32,6 +32,8 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <sys/mman.h>
+#include <sys/ioctl.h>
+#include <linux/fs.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <sys/mount.h>
@@ -454,11 +456,16 @@ static bool Fox_Zip_Touches_Dynamic_Partitions(ZipArchiveHandle Zip) {
 }
 
 // A package that carries a recovery image overwrites the partition OrangeFox
-// lives on — every LineageOS OTA does. Zip introspection proved unreliable for
-// that (FindEntry finds dynamic_partitions_op_list in the same archive but not
-// recovery.img), so decide from the partition instead: keep an exact dd copy
-// before the install and put it back afterwards if the package changed it.
-// This covers every install path (GUI, ORS, fox flash) and any package layout.
+// lives on — every LineageOS OTA does, with a plain edify line:
+//   package_extract_file("recovery.img", "/dev/block/bootdevice/by-name/recovery")
+// Zip introspection proved unreliable for detecting that (FindEntry finds
+// dynamic_partitions_op_list in the same archive but not recovery.img), so work
+// from the partition itself. Preferred: bind a scratch file over the by-name
+// node for the duration of the install, so the write lands in /tmp and the
+// partition is never touched — no window where a crash leaves the ROM's recovery
+// behind. TWRP's mount wrapper treats a file source as a loop image, so this
+// calls mount(2) directly. When the redirect is not possible, fall back to an
+// exact dd copy that is put back only if the partition changed.
 class FoxRecoverySurvival
 {
 public:
@@ -466,8 +473,8 @@ public:
 	FoxRecoverySurvival(const FoxRecoverySurvival&) = delete;
 	FoxRecoverySurvival& operator=(const FoxRecoverySurvival&) = delete;
 
-	// Returns false when the copy failed; the caller must abort rather than
-	// let an install run that it cannot undo.
+	// Returns false when the partition cannot be protected; the caller must
+	// abort rather than let an install run that it cannot undo.
 	bool Save_Before_Install() {
 		// No recovery partition (recovery lives in boot or vendor_boot): there
 		// is nothing to preserve here, and the dd below would fail and abort
@@ -486,6 +493,9 @@ public:
 		}
 		// Same by-name node the flash recipe and init.recovery.qcom.rc use.
 		device = "/dev/block/bootdevice/by-name/recovery";
+		hash_before = Hash_Partition();
+		if (Redirect_Write())
+			return true;
 		if (TWFunc::Exec_Cmd("dd if=" + device + " of=/tmp/fox-recovery-backup.img bs=4M", false) != 0) {
 			LOGERR("Fox: unable to back up the recovery partition\n");
 			return false;
@@ -496,6 +506,23 @@ public:
 
 	~FoxRecoverySurvival()
 	{
+		if (redirected) {
+			if (umount2(device.c_str(), MNT_DETACH) != 0)
+				LOGERR("Fox: could not detach the scratch mount on %s (%s)\n", device.c_str(), strerror(errno));
+			struct stat st;
+			unsigned long long written = 0;
+			if (stat(decoy.c_str(), &st) == 0)
+				written = (unsigned long long)st.st_blocks * 512ULL;
+			unlink(decoy.c_str());
+			std::string after = Hash_Partition();
+			bool unchanged = !hash_before.empty() && after == hash_before;
+			LOGINFO("Fox: the package's recovery write went to the scratch file (%llu bytes); the partition was %s\n",
+			        written, unchanged ? "left byte-identical" : "CHANGED");
+			if (!unchanged && !hash_before.empty())
+				LOGERR("Fox: the recovery partition changed despite the redirect (before %s, after %s)\n",
+				       hash_before.c_str(), after.c_str());
+			return;
+		}
 		if (!backed_up)
 			return;
 		if (TWFunc::Exec_Cmd("cmp -s /tmp/fox-recovery-backup.img " + device, false) == 0) {
@@ -516,8 +543,69 @@ public:
 	}
 
 private:
+	// sha256 of the partition, or empty when it cannot be read.
+	std::string Hash_Partition() {
+		if (TWFunc::Exec_Cmd("sha256sum " + device + " 2>/dev/null | cut -d' ' -f1 > /tmp/fox-recovery.hash", false) != 0)
+			return "";
+		std::ifstream in("/tmp/fox-recovery.hash");
+		std::string hash;
+		std::getline(in, hash);
+		unlink("/tmp/fox-recovery.hash");
+		return hash;
+	}
+
+	// Bind a scratch file over the recovery node so the package's write cannot
+	// reach the partition. Returns false (with nothing mounted) when the node or
+	// the mount is unavailable, so the caller can fall back to the exact copy.
+	bool Redirect_Write() {
+		int fd = open(device.c_str(), O_RDONLY | O_CLOEXEC);
+		if (fd < 0)
+			return false;
+		unsigned long long size = 0;
+		bool sized = ioctl(fd, BLKGETSIZE64, &size) == 0 && size > 0;
+		close(fd);
+		if (!sized) {
+			LOGINFO("Fox: cannot size %s; keeping an exact copy instead\n", device.c_str());
+			return false;
+		}
+
+		decoy = "/tmp/fox-recovery-decoy.img";
+		int dfd = open(decoy.c_str(), O_RDWR | O_CREAT | O_TRUNC | O_CLOEXEC, 0600);
+		if (dfd < 0) {
+			LOGINFO("Fox: cannot create the scratch file (%s); keeping an exact copy instead\n", strerror(errno));
+			return false;
+		}
+		if (ftruncate(dfd, (off_t)size) != 0) {
+			close(dfd);
+			unlink(decoy.c_str());
+			LOGINFO("Fox: cannot size the scratch file (%s); keeping an exact copy instead\n", strerror(errno));
+			return false;
+		}
+		close(dfd);
+
+		if (mount(decoy.c_str(), device.c_str(), nullptr, MS_BIND, nullptr) != 0) {
+			LOGINFO("Fox: cannot redirect the recovery write (%s); keeping an exact copy instead\n", strerror(errno));
+			unlink(decoy.c_str());
+			return false;
+		}
+		// The node must now resolve to a regular file; anything else means the
+		// bind did not take and the write would reach the partition.
+		struct stat st;
+		if (stat(device.c_str(), &st) != 0 || !S_ISREG(st.st_mode)) {
+			LOGINFO("Fox: the scratch mount did not take on %s; keeping an exact copy instead\n", device.c_str());
+			umount2(device.c_str(), MNT_DETACH);
+			unlink(decoy.c_str());
+			return false;
+		}
+		redirected = true;
+		return true;
+	}
+
 	bool backed_up = false;
+	bool redirected = false;
 	std::string device;
+	std::string decoy;
+	std::string hash_before;
 };
 
 class FoxVendorHolderRestart
